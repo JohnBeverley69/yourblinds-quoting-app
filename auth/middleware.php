@@ -550,6 +550,18 @@ function factory_console_user(): bool
     return $cid > 0 && is_factory_client($cid) && factory_user_is_office();
 }
 
+/**
+ * Send a Factory Console user from a retail-shaped screen (sales dashboard,
+ * pipeline, orders list, retail calendar) to its console equivalent. GET only, so
+ * a form post to the old page still works. No-op for everyone else.
+ */
+function factory_console_redirect(string $to): void
+{
+    if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'GET' || !factory_console_user()) return;
+    header('Location: ' . $to);
+    exit;
+}
+
 function requireFactoryOffice(): void
 {
     requireFactory();

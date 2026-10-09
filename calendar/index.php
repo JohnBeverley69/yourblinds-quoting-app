@@ -8,6 +8,7 @@ require __DIR__ . '/../_partials/calendar_money.php';
 require __DIR__ . '/../_partials/slot_window.php';
 
 requireLogin();
+factory_console_redirect('/factory/calendar.php');    // the factory office's calendar is the office one
 
 // One-shot flash from new.php / delete.php (they redirect here). Read and
 // cleared up front so it shows on THIS page, not on the next unrelated

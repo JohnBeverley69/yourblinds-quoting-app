@@ -28,16 +28,14 @@ return [
       <p>To see where everything is at a glance, open <strong>Work &rarr; Pipeline</strong>.</p>'],
 
     ['all', 'Getting started', 'Why does the menu have Retail and Trade?', 'menu sidebar navigation retail trade two quotes orders twice duplicate same page wholesale missing section cant see trade where is',
-     '<p>Because the app does two different jobs, and the menu keeps them apart. It is grouped <strong>Work</strong> / <strong>Retail</strong> / <strong>Trade</strong> / <strong>Setup</strong> / <strong>Platform</strong>.</p>
+     '<p>Because the app does two different jobs, and the menu keeps them apart. It is grouped <strong>Work</strong> / <strong>Retail</strong> / <strong>Setup</strong> / <strong>Platform</strong>.</p>
       <ul>
       <li><strong>Work</strong> &mdash; the everyday screens that belong to both: Dashboard, Calendar, Pipeline and Factory.</li>
       <li><strong>Retail</strong> &mdash; your own end customers: Customers, Quotes, Orders and Payments.</li>
-      <li><strong>Trade</strong> &mdash; other businesses you supply as the factory: Trade accounts, Quotes, Orders, Invoices, Statements and Commissions.</li>
       <li><strong>Setup</strong> &mdash; Products, Users, Settings, Trade terms and Billing.</li>
       <li><strong>Platform</strong> &mdash; running the whole system (catalogue, clients, billing plans, system health).</li>
       </ul>
-      <p><strong>Retail &rarr; Quotes and Trade &rarr; Quotes are the same screen</strong>, simply filtered &mdash; the heading tells you which you are on (<em>Retail Quotes</em>, <em>Trade Orders</em> and so on). So a job only ever appears in one of the two lists, depending on whether it was raised for a trade account or for a retail customer. Money is the one thing that really is in two places: retail payments on <strong>Retail &rarr; Payments</strong>, trade invoicing and payments under <strong>Trade</strong>.</p>
-      <p><strong>No Trade section?</strong> That is normal. The whole Trade block is only shown to the platform owner, so an ordinary admin or salesperson will not see it at all.</p>'],
+      <p><strong>The factory works from its own menu.</strong> The office staff of the factory that makes the blinds sign in to the <strong>Factory Console</strong> instead: Dashboard, Orders, Remakes and Calendar; Production (Incoming orders, Floor, Dispatch); Accounts (Trade accounts, Invoices, Bank, Statements, Commissions). Its Orders list holds every order placed with the factory, whoever placed it. An ordinary business never sees any of that.</p>'],
 
     ['all', 'Getting started', 'What is the Pipeline for?', 'pipeline board kanban columns drag drop move cards cannot move funnel column totals value mine only all time',
      '<p><strong>Work &rarr; Pipeline</strong> is a board that shows where every job has got to, in columns, so you can see the whole funnel in one screen instead of scrolling a list.</p>
@@ -51,18 +49,18 @@ return [
       </ul>'],
 
     ['super', 'Getting started', 'Where has an order got to? (Confirmed, In Production, Ready, Dispatched)', 'fulfilment stage progress where is my order confirmed in production ready dispatched pill chip factory made bought in',
-     '<p>Every placed order that contains something you make carries one <strong>fulfilment stage</strong>, and it is the single honest answer to "where is this order?". You will see it as a coloured pill on <strong>Work &rarr; Factory</strong> (the incoming orders list) and in the <em>Stage</em> column on a trade account\'s page (<strong>Trade &rarr; Trade accounts</strong>, then open the account).</p>
+     '<p>Every placed order that contains something you make carries one <strong>fulfilment stage</strong>, and it is the single honest answer to "where is this order?". You will see it as a coloured pill on <strong>Work &rarr; Factory</strong> (the incoming orders list) and in the <em>Stage</em> column on a trade account\'s page (<strong>Factory Console &rarr; Accounts &rarr; Invoices</strong>, then click the account&rsquo;s name) and in <strong>Factory Console &rarr; Orders</strong>.</p>
       <ul>
       <li><strong>Confirmed</strong> &mdash; the order is in, but nothing has started: not on the production floor and no bought-in items ordered yet.</li>
       <li><strong>In Production</strong> &mdash; work has begun. Either blinds have been released to the floor, or the bought-in items have been ordered from the supplier.</li>
       <li><strong>Ready</strong> &mdash; every blind you make has been made <em>and</em> every bought-in item has been received. This is the stage that lets you dispatch.</li>
       <li><strong>Dispatched</strong> &mdash; it has gone out, either marked dispatched on the floor or sent out on a delivery note.</li>
       </ul>
-      <p><strong>You do not set the stage by hand</strong> &mdash; the app works it out from the floor, the bought-in log and the delivery notes, and recalculates it whenever you change an order\'s status, place it with suppliers, or act on it under Trade &rarr; Invoices. If a stage looks wrong, fix the thing underneath it: scan the last blind off the floor, or tick the bought-in items as received.</p>
+      <p><strong>You do not set the stage by hand</strong> &mdash; the app works it out from the floor, the bought-in log and the delivery notes, and recalculates it whenever you change an order\'s status, place it with suppliers, or act on it under Factory Console &rarr; Invoices. If a stage looks wrong, fix the thing underneath it: scan the last blind off the floor, or tick the bought-in items as received.</p>
       <p>A dash instead of a stage means the order has nothing of yours in it, or it is still only a quote &mdash; stages start once an order is placed. On the Factory list the pill sits alongside a <em>made</em> count (click it to open the floor) and the bought-in tag: <em>n to order</em>, <em>ordered</em> or <em>received</em>.</p>'],
 
     ['super', 'Getting started', 'It won\'t let me dispatch — why?', 'cant dispatch wont let me dispatch not ready greyed out disabled button blocked mark dispatched delivery note print dn bought in awaiting',
-     '<p>Because the order is not <strong>Ready</strong> yet. The app refuses with <em>"Can\'t dispatch &mdash; the order isn\'t ready yet (every blind made and every bought-in item received)."</em> on <strong>Trade &rarr; Invoices</strong> (both <em>Mark dispatched</em> and <em>Print DN &amp; invoice</em>), and with <em>"Can\'t dispatch yet &mdash; the order isn\'t ready. Every blind must be made and every bought-in item received first."</em> on the factory side.</p>
+     '<p>Because the order is not <strong>Ready</strong> yet. The app refuses with <em>"Can\'t dispatch &mdash; the order isn\'t ready yet (every blind made and every bought-in item received)."</em> on <strong>Factory Console &rarr; Invoices</strong> (both <em>Mark dispatched</em> and <em>Print DN &amp; invoice</em>), and with <em>"Can\'t dispatch yet &mdash; the order isn\'t ready. Every blind must be made and every bought-in item received first."</em> on the factory side.</p>
       <p>Ready has two halves, and <strong>both</strong> must be true:</p>
       <ul>
       <li><strong>Everything you make is made.</strong> All of the order\'s in-house blinds have been finished on the production floor (or the order has been marked <em>made</em>).</li>
@@ -860,7 +858,7 @@ return [
       as “Coming soon”.</p>'],
 
     ['super', 'Accounts', 'How do I raise a delivery note and invoice for a trade account?', 'delivery note dn invoice trade wholesale raise dispatch print billing account order paperwork',
-     '<p>Go to <strong>Trade → Invoices</strong> in the left-hand menu (the page itself is headed
+     '<p>Go to <strong>Factory Console → Invoices</strong> in the left-hand menu (the page itself is headed
       <strong>Wholesale</strong>). Every placed trade-account order that contains your products is one row, with a
       status pill and one button for whatever comes next.</p>
       <p>What the button says depends on the flow mode set at the top of the page:</p>
