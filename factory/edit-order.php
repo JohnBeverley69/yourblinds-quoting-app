@@ -178,11 +178,11 @@ require __DIR__ . '/../_partials/factory_head.php';
         <div class="fe-hdr-fields">
             <div class="fld">
                 <label>Customer reference</label>
-                <input type="text" name="customer_reference" value="<?= e((string) ($order['customer_reference'] ?? '')) ?>" maxlength="120">
+                <input type="text" name="customer_reference" value="<?= e((string) ($order['customer_reference'] ?? '')) ?>" maxlength="100">
             </div>
             <div class="fld">
                 <label>Additional reference</label>
-                <input type="text" name="additional_reference" value="<?= e((string) ($order['additional_reference'] ?? '')) ?>" maxlength="120">
+                <input type="text" name="additional_reference" value="<?= e((string) ($order['additional_reference'] ?? '')) ?>" maxlength="100">
             </div>
             <?php if (array_key_exists('due_date', (array) $order)): ?>
                 <div class="fld">
