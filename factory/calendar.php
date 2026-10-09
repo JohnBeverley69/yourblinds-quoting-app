@@ -43,7 +43,18 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($act === 'done' || $act === 'undo') {
             oc_set_done($pdo, $factory, $id, $act === 'done', (int) ($user['user_id'] ?? 0));
-            header('Location: ' . (string) ($_POST['back'] ?? $back));
+            // Only ever bounce back to a path on this site. $_POST['back'] went
+            // into the Location header verbatim, so a posted absolute URL sent
+            // the user straight off the site. CSRF + requireFactoryOffice() mean
+            // that needed a logged-in office user's token, so this is hardening
+            // rather than a hole — but a redirect target is never something to
+            // take from the request on trust. "//evil.example" is excluded too:
+            // it is protocol-relative, so the browser treats it as off-site.
+            $backTo = (string) ($_POST['back'] ?? $back);
+            if ($backTo === '' || $backTo[0] !== '/' || strncmp($backTo, '//', 2) === 0) {
+                $backTo = $back;
+            }
+            header('Location: ' . $backTo);
             exit;
         }
     } catch (RuntimeException $e) {
