@@ -34,13 +34,17 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
             rm_approve($pdo, $factory, $id, (string) ($_POST['charge_mode'] ?? ''), (float) ($_POST['charge_amount'] ?? 0),
                        (string) ($_POST['supplier_name'] ?? ''), (string) ($_POST['due_date'] ?? ''), (int) ($user['user_id'] ?? 0));
             $r = rm_get($pdo, $factory, $id);
-            $_SESSION['flash_success'] = 'Approved — remake ' . ($r['remake_number'] ?? '') . ' is in Incoming orders as a new order.';
+            $sentTo = rm_notify_account($pdo, $factory, $id);
+            $_SESSION['flash_success'] = 'Approved — remake ' . ($r['remake_number'] ?? '') . ' is in Incoming orders as a new order.'
+                . ($sentTo !== '' ? ' The account has been emailed (' . $sentTo . ').' : '');
             header('Location: /factory/remakes.php?view=waiting');
             exit;
         }
         if (($_POST['_action'] ?? '') === 'decline') {
             rm_decline($pdo, $factory, $id, (string) ($_POST['decline_reason'] ?? ''), (int) ($user['user_id'] ?? 0));
-            $_SESSION['flash_success'] = 'Declined — the account sees your reason on their order.';
+            $sentTo = rm_notify_account($pdo, $factory, $id);
+            $_SESSION['flash_success'] = 'Declined — the account sees your reason on their order'
+                . ($sentTo !== '' ? ' and has been emailed (' . $sentTo . ').' : '.');
             header('Location: /factory/remakes.php?view=waiting');
             exit;
         }
@@ -90,6 +94,7 @@ if ($ready && $view === 'report') {
         }
     }
     foreach (['reason', 'account', 'supplier'] as $dim) uasort($rep[$dim], static fn ($a, $b) => $b['cost'] <=> $a['cost']);
+    $rep['area'] = rm_area_breakdown($pdo, $factory, $list);
 }
 
 $money = static fn ($n) => '£' . number_format((float) $n, 2);
@@ -194,7 +199,7 @@ $activeNav = 'remakes';
             <?= csrf_field() ?>
             <input type="hidden" name="_action" value="decline">
             <input type="hidden" name="remake_id" value="<?= $rid ?>">
-            <label for="rmDec<?= $rid ?>">Or decline — why? <span class="rm-sub">(the account sees this)</span></label>
+            <label for="rmDec<?= $rid ?>">Or decline — why? <span class="rm-sub">(the account sees this and is emailed it)</span></label>
             <input type="text" id="rmDec<?= $rid ?>" name="decline_reason" maxlength="255" placeholder="e.g. Measured by you — size made as ordered">
             <div><button class="btn">Decline</button></div>
           </form>
@@ -278,6 +283,22 @@ $activeNav = 'remakes';
           <?php endif; ?>
         </section>
       <?php endforeach; ?>
+      <section class="rm-wrap" style="padding:.75rem 1rem">
+        <h3>By production area</h3>
+        <?php if (!$rep['area']): ?><p class="rm-sub">No remakes this month.</p><?php else: ?>
+        <div class="table-wrap"><table class="table">
+          <thead><tr><th>Area</th><th class="num">Remakes</th><th class="num">Blinds</th><th class="num">Value</th></tr></thead>
+          <tbody>
+          <?php foreach ($rep['area'] as $k => $d): ?>
+            <tr><td><?= e((string) $k) ?></td><td class="num"><?= (int) $d['n'] ?></td><td class="num"><?= (int) $d['blinds'] ?></td>
+                <td class="num"><?= e($money($d['cost'])) ?></td></tr>
+          <?php endforeach; ?>
+          </tbody>
+        </table></div>
+        <p class="rm-sub" style="margin:.4rem 0 0">Where the original blind was made. A blind made across two areas (e.g. headrail and fabric)
+          counts under each, with its value split between them.</p>
+        <?php endif; ?>
+      </section>
       <section class="rm-wrap" style="padding:.75rem 1rem">
         <h3>Supplier claims</h3>
         <?php if (!$rep['supplier']): ?><p class="rm-sub">No supplier claims this month.</p><?php else: ?>
