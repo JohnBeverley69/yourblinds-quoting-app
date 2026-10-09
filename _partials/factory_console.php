@@ -119,8 +119,12 @@ function fc_orders(PDO $pdo, int $factoryId): array
         } catch (Throwable $e) { /* invoices not migrated — no badge */ }
     }
 
+    require_once __DIR__ . '/remakes.php';
+    $remakeOf = rm_remake_orders($pdo, array_map(static fn ($r) => (int) $r['id'], $rows));
+
     foreach ($rows as &$r) {
         $id  = (int) $r['id'];
+        $r['remake_of'] = $remakeOf[$id] ?? '';
         $own = (int) $r['client_id'] === $factoryId;
         if (!in_array((string) $r['status'], $placed, true)) {
             $stage = 'notplaced';

@@ -28,7 +28,8 @@ $quote = qb_load_quote_or_404($quoteId, $clientId);
 qb_require_quote_access($quote, $user, current_user_permissions());
 $current = (string) $quote['status'];
 
-if (!in_array($target, qb_allowed_transitions($current), true)) {
+if (!in_array($target, qb_allowed_transitions($current), true)
+    || ($target === 'draft' && !empty($quote['remake_of_quote_id']))) {   // remake orders are the factory's to change
     qb_flash_redirect(
         '/quote-builder/edit.php?id=' . $quoteId,
         'error',

@@ -297,6 +297,11 @@ if (in_array('draft', $transitions, true) && (string) $quote['status'] !== 'draf
     $factoryHasIt = true;
     $transitions  = array_values(array_diff($transitions, ['draft']));
 }
+// A remake order is raised and priced by the factory — it can't be reopened here.
+if (!empty($quote['remake_of_quote_id'])) {
+    $factoryHasIt = true;
+    $transitions  = array_values(array_diff($transitions, ['draft']));
+}
 
 // Factory progress for an order placed with the factory ("With the factory:
 // In Production"). Not on the factory's own quotes — it has its own pages.
@@ -1105,6 +1110,36 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                 <?php endif; ?>
             </div>
         <?php endif; ?>
+
+        <?php
+        // Remakes (Factory Console stage 3): an account can report a fault on an
+        // order the factory supplied; the factory approves or declines it. Shown
+        // to the account only — the factory works remakes from its console.
+        if (!$offlineTemplate && !is_factory_client($clientId) && (int) ($quote['id'] ?? 0) > 0
+            && in_array((string) ($quote['status'] ?? ''), ['ordered', 'fitted', 'invoiced', 'paid'], true)):
+            require_once __DIR__ . '/../_partials/remakes.php';
+            $rmFactory = function_exists('factory_client_id') ? (int) factory_client_id() : 3;
+            $rmCan     = rm_ready(db()) && rm_order_lines(db(), $rmFactory, (int) $quote['id']);
+            $rmList    = $rmCan ? rm_for_order(db(), (int) $quote['id']) : [];
+            if ($rmCan): ?>
+            <div class="rm-account" style="margin:0 0 1rem;padding:.75rem 1rem;border:1px solid var(--border);border-left:4px solid #7c3aed;border-radius:10px;background:var(--bg-card)">
+                <div style="display:flex;justify-content:space-between;gap:.75rem;flex-wrap:wrap;align-items:center">
+                    <b>Something wrong with a blind?</b>
+                    <a href="/remakes/request.php?order=<?= (int) $quote['id'] ?>" class="btn btn-secondary">Report a problem</a>
+                </div>
+                <?php foreach ($rmList as $rmr):
+                    $rmState = $rmr['status'] === 'requested' ? 'Waiting for the factory to check it'
+                        : ($rmr['status'] === 'declined' ? 'Declined by the factory: ' . (string) $rmr['decline_reason']
+                        : 'Approved — being remade as ' . (string) $rmr['remake_number']
+                          . ($rmr['remake_stage'] ? ' (' . os_stage_label((string) $rmr['remake_stage']) . ')' : '')
+                          . ((float) $rmr['charge_amount'] > 0 ? ' · charge £' . number_format((float) $rmr['charge_amount'], 2) . ' + VAT' : ' · no charge')); ?>
+                    <div style="margin-top:.5rem;font-size:.9rem">
+                        <b><?= e(date('j M Y', strtotime((string) $rmr['created_at']))) ?> · <?= e((string) $rmr['reason_label']) ?></b> —
+                        <?= e($rmState) ?>
+                    </div>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; endif; ?>
 
         <?php if (!$hasCustomer && !$isDirectOrder): ?>
             <a class="needs-customer" href="#customer-details">

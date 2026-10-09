@@ -87,6 +87,8 @@ $activeNav = 'factory-orders';
       .fc-empty { padding:1.6rem 1rem; text-align:center; color:var(--text-faint); }
       a.fc-link { font-weight:600; color:var(--text-primary); text-decoration:none; }
       a.fc-link:hover { color:var(--link); text-decoration:underline; }
+      .fc-rm { margin-left:.45rem; font-size:.75rem; color:var(--link); text-decoration:none; white-space:nowrap; }
+      .fc-rm:hover { text-decoration:underline; }
       @media (max-width:720px){ .fc-hide-sm { display:none; } }
     </style>
 </head>
@@ -144,6 +146,7 @@ $activeNav = 'factory-orders';
             <tr>
               <td>
                 <a class="fc-link" href="<?= e($r['open_url']) ?>"><?= e((string) $r['quote_number']) ?></a>
+                <?php if ($r['remake_of'] !== ''): ?><?= rm_badge($r['remake_of']) ?><?php endif; ?>
                 <?php if (trim((string) ($r['end_customer_name'] ?? '')) !== ''): ?>
                   <div class="fc-sub"><?= e((string) $r['end_customer_name']) ?></div>
                 <?php endif; ?>
@@ -153,7 +156,8 @@ $activeNav = 'factory-orders';
               <td class="fc-hide-sm"><?= e(date('j M Y', strtotime((string) $r['created_at']))) ?></td>
               <td class="num"><?= (int) $r['blinds'] ?></td>
               <td class="num fc-hide-sm"><?= e($money($r['value'])) ?></td>
-              <td><?= fc_stage_pill($r['stage']) ?><?php if ($r['invoice'] !== ''): ?><span class="fc-inv" title="Invoiced"><?= e($r['invoice']) ?></span><?php endif; ?></td>
+              <td><?= fc_stage_pill($r['stage']) ?><?php if ($r['invoice'] !== ''): ?><span class="fc-inv" title="Invoiced"><?= e($r['invoice']) ?></span><?php endif; ?>
+                <?php if ($r['stage'] !== 'notplaced'): ?><a class="fc-rm" href="/factory/remake-new.php?order=<?= (int) $r['id'] ?>" title="Raise a remake on this order">&#8635; Remake</a><?php endif; ?></td>
             </tr>
           <?php endforeach; ?>
           </tbody>

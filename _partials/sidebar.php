@@ -277,12 +277,17 @@ $navSections = [
 $isFactoryConsole = function_exists('factory_console_user') && factory_console_user();
 if ($isFactoryConsole) {
     $dashTag = 'Factory Console';
+    // Remakes waiting for approval ride on the label (plain text: labels are escaped).
+    require_once __DIR__ . '/remakes.php';
+    $_ybRemakesWaiting = rm_waiting_count(db(), ar_factory_id());
+    $_ybRemakesLabel   = 'Remakes' . ($_ybRemakesWaiting > 0 ? ' (' . $_ybRemakesWaiting . ' to approve)' : '');
     $navSections = [
         [
             'name'  => 'Work',
             'items' => [
                 'factory-dashboard' => ['/factory/dashboard.php', 'Dashboard', true],
                 'factory-orders'    => ['/factory/orders.php',    'Orders',    true],
+                'remakes'           => ['/factory/remakes.php',   $_ybRemakesLabel, true],
             ],
         ],
         [

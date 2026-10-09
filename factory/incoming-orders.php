@@ -164,6 +164,10 @@ if (!empty($ids)) {
 require_once __DIR__ . '/../_partials/factory_order_colours.php';
 $ocolours = foc_colours($pdo, $MASTER);
 
+// Remake orders (Factory Console stage 3) — badge + their own row colour.
+require_once __DIR__ . '/../_partials/remakes.php';
+$remakeOf = !empty($ids) ? rm_remake_orders($pdo, $ids) : [];
+
 $newCount = 0;
 foreach ($orders as $o) {
     if (empty($o['factory_status'])) $newCount++;   // no factory_jobs row = new
@@ -386,11 +390,12 @@ require __DIR__ . '/../_partials/factory_head.php';
                 // Whole-row colour by state (New / In production / Ready / Dispatched
                 // / Invoiced / Paid), from the factory's configurable palette.
                 $ostate    = foc_state_for_order($stageBy[$qid] ?? null, $status);
+                if (isset($remakeOf[$qid]) && !in_array($ostate, ['dispatched', 'invoiced', 'paid'], true)) $ostate = 'remake';
                 $orowStyle = isset($ocolours[$ostate]) ? foc_row_style($ocolours[$ostate]['color']) : '';
             ?>
             <div class="io-item<?= ($stageBy[$qid] ?? '') === 'dispatched' ? ' done' : '' ?>" data-search="<?= e($searchKey) ?>" style="<?= e($orowStyle) ?>">
                 <div class="io-summary io-cols" role="button" tabindex="0" aria-expanded="false">
-                    <span class="ref"><?= e($ref) ?></span>
+                    <span class="ref"><?= e($ref) ?><?php if (isset($remakeOf[$qid])): ?> <?= rm_badge($remakeOf[$qid]) ?><?php endif; ?></span>
                     <span class="cust"><?= e($custLabel) ?><?php if ($accContact !== ''): ?> <span style="color:var(--text-faint,#6b7280);font-weight:400">· <?= e($accContact) ?></span><?php endif; ?><?php if (!empty($dupBy[$qid])): ?>
                         <span class="io-dup" title="Same customer reference (<?= e($custRef) ?>) as <?= e(implode(', ', $dupBy[$qid])) ?> — check it isn't the same order twice">&#9888; same ref as <?= e(implode(', ', $dupBy[$qid])) ?></span><?php endif; ?></span>
                     <span class="date"><?= e($fmtDate($o['created_at'] ?? null)) ?></span>
