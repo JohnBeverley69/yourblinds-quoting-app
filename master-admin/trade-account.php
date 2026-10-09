@@ -1352,6 +1352,35 @@ $activeNav = 'trade-accounts';
                 </details>
             <?php endif; ?>
         </section>
+
+        <?php
+        // Danger zone — delete the whole account (John 2026-10-09). Super-admin only
+        // (the page already requires it); the account name is typed to confirm.
+        require_once __DIR__ . '/../_partials/client_delete.php';
+        $delBlock = cl_delete_block_reason($pdo, (int) $clientId, (int) $myClient);
+        $delCount = $delBlock === '' ? cl_delete_preview($pdo, (int) $clientId) : [];
+        ?>
+        <section class="section" id="delete-account" style="border:1px solid #fecaca;border-radius:12px;padding:1rem 1.15rem;margin-top:1.5rem">
+            <h2 class="section-title" style="color:#b91c1c;margin-top:0">Danger zone</h2>
+            <?php if ($delBlock !== ''): ?>
+                <p style="margin:0;color:var(--text-muted)"><?= e($delBlock) ?></p>
+            <?php else: ?>
+                <?php $bits = []; foreach ($delCount as $lbl => $n) if ($n > 0) $bits[] = $n . ' ' . $lbl; ?>
+                <p style="margin:0 0 .6rem"><b>Delete this account</b> &mdash; permanently removes <?= e((string) $acc['company_name']) ?>, its logins,
+                   products and settings, and everything the factory holds for it
+                   (<?= $bits ? e(implode(', ', $bits)) : 'no orders, invoices or payments' ?>). This can&rsquo;t be undone.
+                   To stop them signing in but keep everything, use <b>Deactivate</b> at the top instead.</p>
+                <form method="post" action="/master-admin/delete-client.php" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;margin:0">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="client_id" value="<?= (int) $clientId ?>">
+                    <input type="hidden" name="return" value="trade-account">
+                    <label for="delConfirm" style="font-size:.875rem">Type <b><?= e((string) $acc['company_name']) ?></b> to confirm</label>
+                    <input type="text" id="delConfirm" name="confirm_name" autocomplete="off" required
+                           style="padding:.4rem .55rem;border:1px solid var(--border-strong);border-radius:8px;background:var(--bg-input);color:var(--text-body);font:inherit;min-width:14rem">
+                    <button type="submit" class="btn btn-danger">Delete account</button>
+                </form>
+            <?php endif; ?>
+        </section>
     </main>
 </div>
 <?php if ($tdReady): ?>
