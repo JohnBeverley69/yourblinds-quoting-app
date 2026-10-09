@@ -165,6 +165,7 @@ require __DIR__ . '/../_partials/factory_head.php';
         <strong><?= e((string) ($order['quote_number'] ?? ('#' . $qid))) ?></strong>
         &middot; <?= e((string) ($order['company_name'] ?? '')) ?>
         &middot; <?= count($items) ?> blind<?= count($items) === 1 ? '' : 's' ?>
+        &middot; <a href="/factory/remake-new.php?order=<?= (int) $qid ?>">&#8635; Raise a remake</a>
     </p>
     <?php if ($lineLock !== ''): ?>
         <div class="fe-flash err">The blinds on this order can't be changed — <?= e($lineLock) ?>. Raise a credit note or a new order instead. The references can still be corrected.</div>

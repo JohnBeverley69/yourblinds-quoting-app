@@ -290,6 +290,14 @@ function ar_placed_orders(PDO $pdo, int $factoryId, ?int $accountId = null, ?str
         }
     }
     unset($r);
+
+    // Remake orders bill their decided charge (0 when free) — see remakes.php.
+    if ($rows) {
+        require_once __DIR__ . '/remakes.php';
+        $charges = rm_charges_for_quotes($pdo, array_map(static fn ($r) => (int) $r['id'], $rows));
+        foreach ($rows as &$r) if (isset($charges[(int) $r['id']])) $r['wholesale_total'] = $charges[(int) $r['id']];
+        unset($r);
+    }
     return $rows;
 }
 
@@ -394,7 +402,7 @@ function ar_account_options(PDO $pdo, int $factoryId): array
  * has no captured trade_amount (a pre-2A order) — the caller should refuse to invoice
  * so retail never leaks in. Each line carries the trade→discount→net display fields.
  */
-function ar_invoice_lines_from_order(PDO $pdo, int $factoryId, int $quoteId): array
+function ar_invoice_lines_from_order(PDO $pdo, int $factoryId, int $quoteId, bool $applyRemakeCharge = true): array
 {
     $src   = ar_order_lines_for_doc($pdo, $factoryId, $quoteId);
     $lines = []; $uncaptured = false; $so = 0;
@@ -567,6 +575,35 @@ function ar_invoice_lines_from_order(PDO $pdo, int $factoryId, int $quoteId): ar
             // quotes.subtotal or quote_items.line_total absent on an un-migrated
             // database — bill the lines as they stand rather than failing to invoice.
             error_log('ar_invoice_lines_from_order: order-net reconcile skipped — ' . $e->getMessage());
+        }
+    }
+
+    // A REMAKE order bills exactly what the office decided to charge (0 when free),
+    // spread over its blinds by their value — so a free remake shows as £0 lines.
+    // See _partials/remakes.php. $applyRemakeCharge = false gives the plain trade
+    // value instead (used to cost a remake from the original order).
+    if ($applyRemakeCharge && $lines) {
+        require_once __DIR__ . '/remakes.php';
+        $charges = rm_charges_for_quotes($pdo, [$quoteId]);
+        if (isset($charges[$quoteId])) {
+            $charge = $charges[$quoteId];
+            $blind  = array_values(array_filter($lines, static fn ($l) => $l['line_type'] === 'blind'));
+            $weight = 0.0;
+            foreach ($blind as $l) $weight += max(0.01, (float) $l['line_net']);
+            $left = $charge; $n = count($blind); $i = 0; $out = [];
+            foreach ($blind as $l) {
+                $i++;
+                $net = $i === $n ? round($left, 2) : round($charge * max(0.01, (float) $l['line_net']) / ($weight ?: 1), 2);
+                $left -= $net;
+                $l['description']      = 'REMAKE — ' . $l['description'];
+                $l['line_net']         = $net;
+                $l['unit_net']         = round($net / max(1, (int) $l['quantity']), 2);
+                $l['list_trade_unit']  = $l['unit_net'];
+                $l['discount_percent'] = null;
+                $l['discount_amount']  = null;
+                $out[] = $l;
+            }
+            return ['lines' => $out, 'uncaptured' => false];
         }
     }
 

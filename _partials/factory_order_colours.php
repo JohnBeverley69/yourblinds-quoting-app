@@ -25,6 +25,7 @@ function foc_default_states(): array
         'dispatched'   => ['label' => 'Dispatched',         'color' => '#2563eb'],  // gone out
         'invoiced'     => ['label' => 'Invoiced',           'color' => '#ca8a04'],  // billed
         'paid'         => ['label' => 'Complete / paid',    'color' => '#64748b'],  // closed
+        'remake'       => ['label' => 'Remake',             'color' => '#7c3aed'],  // a remake until it goes out
     ];
 }
 

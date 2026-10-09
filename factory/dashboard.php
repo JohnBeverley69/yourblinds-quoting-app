@@ -73,6 +73,10 @@ if (ar_table_ready($pdo, 'factory_ar_invoices')) {
     } catch (Throwable $e) { $invWeek = $owed = null; }
 }
 
+require_once __DIR__ . '/../_partials/remakes.php';
+$rmWaiting = rm_waiting_count($pdo, $factory);
+$rmOpen    = rm_ready($pdo) ? count(rm_list($pdo, $factory, 'open')) : 0;
+
 $money = static fn ($n) => $n === null ? '—' : '£' . number_format((float) $n, 2);
 $tiles = [
     'new'           => ['New',              'Not received on the floor yet',     '/factory/incoming-orders.php'],
@@ -137,6 +141,7 @@ $activeNav = 'factory-dashboard';
   <?php endif; ?>
 
   <div class="fd-grid">
+    <a class="fd-tile" href="/factory/remakes.php" style="--fd-c:#7c3aed"><div class="fd-label">Remakes</div><div class="fd-value"><?= $rmOpen ?></div><div class="fd-sub"><?= $rmWaiting > 0 ? '<b style="color:#7c3aed">' . $rmWaiting . ' waiting for approval</b>' : 'In progress · none waiting' ?></div></a>
     <div class="fd-tile"><div class="fd-label">Blinds to make</div><div class="fd-value"><?= $blindsIn ?></div><div class="fd-sub">On orders not yet ready</div></div>
     <a class="fd-tile" href="/master-admin/dispatch.php"><div class="fd-label">Out today</div><div class="fd-value"><?= $outToday === null ? '—' : $outToday ?></div><div class="fd-sub">Delivery notes dispatched</div></a>
     <div class="fd-tile"><div class="fd-label">Orders this week</div><div class="fd-value"><?= $inThisWeek ?></div><div class="fd-sub">Placed since Monday</div></div>
