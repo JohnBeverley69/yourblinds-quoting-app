@@ -437,6 +437,29 @@ return [
                   <div class="chips"><span class="chip a-pop" style="--d:1.5s">&#128274; Locked</span><span class="chip a-pop" style="--d:7s">Order history</span></div>
                 </div>
 
+                <!-- 14 — quote or order: the money side -->
+                <div class="sc" data-scene="14" data-len="30">
+                  <div class="sct a-fade" style="--d:.2s">Quote or order? What it does to your profit figures</div>
+                  <div style="display:flex;gap:.9rem;flex-wrap:wrap;margin-top:.5rem">
+                    <div class="a-rise" style="--d:2s;border:1px solid var(--line,#e5e7eb);border-radius:10px;padding:.7rem .9rem;background:#fff;font-size:.74rem;line-height:1.7;min-width:13rem;flex:1">
+                      <b>New quote</b> &mdash; through the system<br>
+                      Your customer pays <b>&pound;150.00</b><br>
+                      You pay us <b>&pound;80.00</b><br>
+                      <span style="color:#047857;font-weight:800">Profit &pound;70.00 &middot; 47%</span>
+                    </div>
+                    <div class="a-rise" style="--d:9s;border:1px solid var(--line,#e5e7eb);border-radius:10px;padding:.7rem .9rem;background:#fff;font-size:.74rem;line-height:1.7;min-width:13rem;flex:1">
+                      <b>New order</b> &mdash; straight to us<br>
+                      Your customer pays <b>?</b> <span style="color:var(--faint)">(the system never sees it)</span><br>
+                      You pay us <b>&pound;80.00</b><br>
+                      <span style="color:#b45309;font-weight:800">Profit shows &pound;0.00</span>
+                    </div>
+                  </div>
+                  <div class="chips">
+                    <span class="chip bad a-pop" style="--d:15s">Orders lower your gross profit and margin %</span>
+                    <span class="chip ok a-pop" style="--d:22s">Want the profit tracked? Use New quote</span>
+                  </div>
+                </div>
+
               </div>
             </div>
           </div>',
@@ -511,7 +534,14 @@ return [
           <p><b>Afterwards.</b> A placed order is locked; <b>View PDF</b> and <b>Download PDF</b> appear. Placed orders are listed in <b>Order
              history</b> (the <b>&larr; Order history</b> link at the top of the New order screen). Need a change? <b>Reopen as draft</b> in Order actions
              works until the factory has taken the order in; after that it says <code>This order is already being made &mdash; contact the factory to
-             change it.</code></p>',
+             change it.</code></p>
+
+          <div class="heads"><span class="hi">&#163;</span><div><b>New quote or New order? The money side.</b> A <b>quote</b> that runs through the
+             system knows both figures &mdash; what your customer pays you and what you pay us &mdash; so the <b>Dashboard</b> can show your
+             <b>profit and margin</b> on it. A <b>direct order</b> only knows <b>your cost</b> (what you pay us); it never sees what you sold the blinds
+             for. So an order shows <b>no profit</b>, and because its value is your cost, it <b>pulls down your gross profit and margin %</b> &mdash;
+             and adds your cost into your sales figures. Use <b>New order</b> when you just want to send us an order; if you want the job&rsquo;s profit
+             tracked, build it as a <b>New quote</b> and use <b>&#128230; Save as order</b> when the customer says yes.</div></div>',
         'script'  => [
             ['1', 'An order, straight to us',  'Not every job needs a quote. If you already know what you want made, you can send an order straight to us, just as you would on the old portal. There is no retail customer to add, and nothing to send out for approval. You give it your reference, add the blinds, and place it. This guide walks through it, one step at a time.', 1],
             ['2', 'The New button',            'Everything starts from the New button, at the top of the menu. What it offers depends on what your login is allowed to do. If you can create quotes and orders, New opens a small menu with two choices: New quote, and New order. If you can only create orders, the button simply says New order, and takes you straight there.', 2],
@@ -526,5 +556,6 @@ return [
             ['11', 'Order details',            'Further down is a panel called Order details. Here you can change the name for the labels, the order reference, and the notes, and add an additional reference if you need one. Then press Save details. The order reference is still required, so if you empty it, you are told: the order reference is required.', 11],
             ['12', 'Place order',              'When every blind is on, press Place order. It asks first: place this order with us now? Press Yes, continue. If everything on it comes from our catalogue, it goes straight through. The status turns to ordered, and a green bar gives you the due date. If anything is bought in from another supplier, you are taken on, to finish sending it.', 12],
             ['13', 'Once it is placed',        'Once it is placed, the order is locked, and View PDF and Download PDF appear. You will find it in your Order history. Need to change something? Reopen as draft works until the factory has taken the order in. After that, you are told it is already being made, so contact the factory to change it.', 13],
+            ['14', 'Quote or order: the money side', 'One last thing: the money side. When a job goes through as a quote, the system knows what your customer is paying, and what you pay us, so it can work out your profit. When you just place an order, it only knows what you pay us. It never sees what you sold it for. So an order shows no profit, and it pulls down your gross profit and margin figures on the Dashboard. If you want the profit tracked, build it as a quote.', 14],
         ],
 ];
