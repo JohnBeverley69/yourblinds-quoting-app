@@ -497,3 +497,112 @@ function rm_get_account_name(PDO $pdo, int $accountId): string
     $st->execute([$accountId]);
     return (string) ($st->fetchColumn() ?: '');
 }
+
+/**
+ * Tell the account what happened to a remake THEY reported (approved or declined).
+ * Goes to the person who reported it, else the account's own email. Best-effort:
+ * never throws — the decision is already saved, the account also sees it on their
+ * order. Returns the address it went to, or '' when nothing was sent.
+ */
+function rm_notify_account(PDO $pdo, int $factory, int $id): string
+{
+    try {
+        $r = rm_get($pdo, $factory, $id);
+        if (!$r || $r['raised_by'] !== 'account' || !in_array($r['status'], ['approved', 'declined'], true)) return '';
+        $email = '';
+        if ((int) ($r['raised_by_user_id'] ?? 0) > 0) {
+            $st = $pdo->prepare('SELECT email FROM client_users WHERE id = ? LIMIT 1');
+            $st->execute([(int) $r['raised_by_user_id']]);
+            $email = trim((string) ($st->fetchColumn() ?: ''));
+        }
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            $st = $pdo->prepare('SELECT email FROM clients WHERE id = ? LIMIT 1');
+            $st->execute([(int) $r['account_client_id']]);
+            $email = trim((string) ($st->fetchColumn() ?: ''));
+        }
+        if (!filter_var($email, FILTER_VALIDATE_EMAIL)) return '';
+
+        $factoryName = rm_get_account_name($pdo, $factory);
+        $orderNo = (string) $r['source_number'];
+        $lines = [];
+        foreach (rm_items_for($pdo, $factory, [$r])[$id] ?? [] as $it) $lines[] = '  ' . $it['quantity'] . ' × ' . $it['label'];
+        $what = "Order {$orderNo} — {$r['reason_label']}\n" . implode("\n", $lines);
+
+        if ($r['status'] === 'approved') {
+            $subject = "Remake approved — order {$orderNo}";
+            $charge  = (float) $r['charge_amount'] > 0
+                ? 'There is a charge of £' . number_format((float) $r['charge_amount'], 2) . ' + VAT, which will be on your invoice.'
+                : 'There is no charge for this remake.';
+            $body = "Hello,\n\nWe've approved your remake request and it's going into production as order {$r['remake_number']}.\n\n"
+                  . $what . "\n\n" . $charge
+                  . ($r['due_date'] ? "\nWe expect it to be ready by " . date('j F Y', strtotime((string) $r['due_date'])) . '.' : '')
+                  . "\n\nYou can follow it on your order:\n{LINK}\n\nThanks,\n{$factoryName}";
+        } else {
+            $subject = "Remake request — order {$orderNo}";
+            $body = "Hello,\n\nWe've looked at your remake request and won't be remaking this one.\n\n"
+                  . $what . "\n\nOur reason: " . (string) $r['decline_reason']
+                  . "\n\nIf you'd like to talk it through, just reply to this email.\n\nYour order:\n{LINK}\n\nThanks,\n{$factoryName}";
+        }
+        $base = rtrim((string) (env('APP_URL', '') ?: 'https://yourblinds.uk'), '/');   // APP_URL, never the request Host
+        $url  = $base . '/quote-builder/edit.php?id=' . (int) $r['source_quote_id'];
+        $body = str_replace('{LINK}', $url, $body);
+
+        require_once __DIR__ . '/../mailer.php';
+        require_once __DIR__ . '/tenant_mail.php';
+        $opts = tenant_mail_opts($pdo, $factory);
+        $opts['links'] = [$url => 'View your order'];
+        return mailer_send($email, $subject, $body, null, null, $opts) ? $email : '';
+    } catch (Throwable $e) {
+        error_log('rm_notify_account: ' . $e->getMessage());
+        return '';
+    }
+}
+
+/**
+ * Remakes by PRODUCTION AREA (the bench). A remade blind is put against the
+ * area(s) that made the ORIGINAL — from its floor streams, else its blind job.
+ * A blind made across two benches (e.g. a vertical's headrail + fabric) counts
+ * under each, with its value split between them so the column still adds up.
+ * Blinds that never went through the floor (bought in, or not released) are
+ * listed as "Not made on the floor". Rows: name => [n, blinds, cost].
+ */
+function rm_area_breakdown(PDO $pdo, int $factory, array $remakes): array
+{
+    $out = [];
+    if (!$remakes) return $out;
+    $items = rm_items_for($pdo, $factory, $remakes);
+    $names = [];
+    try {
+        foreach ($pdo->query('SELECT id, name FROM production_areas')->fetchAll(PDO::FETCH_ASSOC) as $a) $names[(int) $a['id']] = (string) $a['name'];
+    } catch (Throwable $e) { /* no areas configured */ }
+    $unitBy = [];
+    foreach ($remakes as $r) {
+        $rid = (int) $r['id'];
+        $src = (int) $r['source_quote_id'];
+        if (!isset($unitBy[$src])) {
+            $unitBy[$src] = [];
+            foreach (rm_order_lines($pdo, $factory, $src) as $l) $unitBy[$src][$l['id']] = (float) $l['unit_trade'];
+        }
+        $seen = [];
+        foreach ($items[$rid] ?? [] as $it) {
+            $areas = [];
+            try {
+                $st = $pdo->prepare('SELECT DISTINCT COALESCE(s.area_id, j.area_id) FROM factory_blind_jobs j
+                                       LEFT JOIN factory_blind_streams s ON s.blind_job_id = j.id
+                                      WHERE j.quote_item_id = ? AND COALESCE(s.area_id, j.area_id) IS NOT NULL');
+                $st->execute([$it['source_item_id']]);
+                foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $aid) $areas[] = $names[(int) $aid] ?? ('Area ' . (int) $aid);
+            } catch (Throwable $e) { /* floor tables missing */ }
+            if (!$areas) $areas = ['Not made on the floor'];
+            $value = ($unitBy[$src][$it['source_item_id']] ?? 0.0) * $it['quantity'];
+            foreach ($areas as $a) {
+                $out[$a] ??= ['n' => 0, 'blinds' => 0, 'cost' => 0.0];
+                if (!isset($seen[$a])) { $out[$a]['n']++; $seen[$a] = true; }
+                $out[$a]['blinds'] += $it['quantity'];
+                $out[$a]['cost']   += $value / count($areas);
+            }
+        }
+    }
+    uasort($out, static fn ($a, $b) => $b['cost'] <=> $a['cost']);
+    return $out;
+}
