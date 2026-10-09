@@ -196,6 +196,13 @@ $isExpired   = quote_is_expired($quote);
 $canAccept   = in_array($status, ['sent'], true) && !$isExpired;
 $alreadyDone = in_array($status, ['accepted', 'declined', 'ordered', 'fitted', 'invoiced', 'paid'], true);
 
+// In-person signing (quote-builder/sign_start.php): the customer signs on the
+// salesperson's own tablet/phone. Only honoured for a logged-in user of THIS
+// business — anyone else with the link gets the normal page.
+$viewer   = current_user();
+$inPerson = !empty($_GET['in_person']) && $viewer
+         && (int) ($viewer['client_id'] ?? 0) === (int) $quote['client_id'];
+
 $tradeLines = array_values(array_filter([
     (string) ($quote['trade_addr1']    ?? ''),
     (string) ($quote['trade_addr2']    ?? ''),
@@ -336,6 +343,14 @@ if ($depositStored !== null) {
             border: 1px solid #d1d5db; border-radius: 8px; font: inherit;
             box-sizing: border-box;
         }
+        .sig-wrap { margin: 0.875rem 0 0.25rem; }
+        .sig-pad { display: block; width: 100%; height: 190px; background: #fff;
+                   border: 2px dashed #94a3b8; border-radius: 10px; touch-action: none; cursor: crosshair; }
+        .sig-row { display: flex; justify-content: space-between; align-items: center;
+                   font-size: 0.8125rem; color: #6b7280; margin-top: 0.3rem; }
+        .sig-row button { background: none; border: 0; color: #2563eb; font: inherit; cursor: pointer; padding: 0.25rem 0; }
+        .staff-back { text-align: center; margin: 1.25rem 0 0; font-size: 0.875rem; }
+        .staff-back a { color: #6b7280; }
         .accept-card .actions { display: flex; gap: 0.5rem; margin-top: 1rem; flex-wrap: wrap; }
         .accept-card button, .accept-card input[type="submit"] {
             padding: 0.625rem 1.25rem; font: inherit; font-weight: 600;
@@ -577,7 +592,8 @@ if ($depositStored !== null) {
         </div>
     <?php endif; ?>
 
-    <?php if ($alreadyDone && (string) $quote['status'] === 'accepted'): ?>
+    <?php if ($alreadyDone && ((string) $quote['status'] === 'accepted'
+              || ($inPerson && !empty($quote['accepted_at']) && (string) $quote['status'] !== 'declined'))): ?>
         <div class="accept-card accepted">
             <h2>Quote accepted ✓</h2>
             <p>Thanks <?= e((string) ($quote['acceptance_signature_name'] ?? $quote['end_customer_name'])) ?>!
@@ -608,15 +624,30 @@ if ($depositStored !== null) {
     <?php elseif ($canAccept): ?>
         <div class="accept-card">
             <h2>Accept this quote</h2>
+            <?php if ($inPerson): ?>
+            <p>Check your name, then sign in the box below with your finger to accept this quote.</p>
+            <?php else: ?>
             <p>Type your full name to confirm acceptance. We'll record it as your
                digital sign-off and let
                <?= e((string) ($quote['trade_company_name'] ?? 'your supplier')) ?> know.</p>
+            <?php endif; ?>
             <form method="post" action="/quote-history/accept.php">
                 <input type="hidden" name="token" value="<?= e($token) ?>">
+                <?php if ($inPerson): ?>
+                    <input type="hidden" name="in_person" value="1">
+                    <input type="hidden" name="signature_png" id="signature_png" value="">
+                <?php endif; ?>
                 <label for="signature_name">Your full name</label>
                 <input id="signature_name" name="signature_name" type="text"
                        maxlength="150" autocomplete="name"
                        value="<?= e((string) $quote['end_customer_name']) ?>">
+                <?php if ($inPerson): ?>
+                <div class="sig-wrap">
+                    <label for="sig-pad" style="margin-top:0">Your signature</label>
+                    <canvas id="sig-pad" class="sig-pad" aria-label="Signature box — sign with your finger"></canvas>
+                    <div class="sig-row"><span>Sign above</span><button type="button" id="sig-clear">Clear</button></div>
+                </div>
+                <?php endif; ?>
                 <?php if ($tcText !== ''): ?>
                 <label for="agree_terms"
                        style="display:flex;align-items:flex-start;gap:0.5rem;margin:0.875rem 0 0.25rem;
@@ -635,14 +666,20 @@ if ($depositStored !== null) {
                     <button type="submit" name="action" value="accept" class="btn-primary">
                         Accept quote
                     </button>
+                    <?php if (!$inPerson): ?>
                     <button type="submit" name="action" value="decline" class="btn-secondary"
                             formnovalidate
                             data-confirm-click="Decline this quote? Your supplier will be notified.">
                         Decline
                     </button>
+                    <?php endif; ?>
                 </div>
             </form>
         </div>
+    <?php endif; ?>
+
+    <?php if ($inPerson): ?>
+        <p class="staff-back"><a href="/quote-builder/edit.php?id=<?= (int) $quote['id'] ?>">&larr; Back to the quote</a></p>
     <?php endif; ?>
 
     <?php if ($tcText !== '' || $ppText !== ''): ?>
@@ -676,10 +713,50 @@ if ($depositStored !== null) {
     var err    = document.getElementById('accept-error');
     if (!accept || !err) return;
 
+    // In-person: a finger/mouse signature box (Pointer Events covers touch,
+    // pen and mouse). Drawn at device resolution so it isn't blurry.
+    var pad = document.getElementById('sig-pad'), sigOut = document.getElementById('signature_png');
+    var signed = false;
+    if (pad && sigOut) {
+        var ctx = pad.getContext('2d'), drawing = false, last = null;
+        var size = function () {
+            var r = pad.getBoundingClientRect(), d = window.devicePixelRatio || 1;
+            var keep = signed ? pad.toDataURL() : null;
+            pad.width = Math.round(r.width * d); pad.height = Math.round(r.height * d);
+            ctx.setTransform(d, 0, 0, d, 0, 0);
+            ctx.lineWidth = 2.4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#111827';
+            if (keep) { var im = new Image(); im.onload = function () { ctx.drawImage(im, 0, 0, r.width, r.height); }; im.src = keep; }
+        };
+        var pt = function (e) { var r = pad.getBoundingClientRect(); return { x: e.clientX - r.left, y: e.clientY - r.top }; };
+        pad.addEventListener('pointerdown', function (e) {
+            e.preventDefault(); drawing = true; last = pt(e);
+            try { pad.setPointerCapture(e.pointerId); } catch (x) {}
+            ctx.beginPath(); ctx.arc(last.x, last.y, 1.2, 0, Math.PI * 2); ctx.fillStyle = '#111827'; ctx.fill();
+            signed = true; err.style.display = 'none';
+        });
+        pad.addEventListener('pointermove', function (e) {
+            if (!drawing) return;
+            e.preventDefault();
+            var p = pt(e);
+            ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(p.x, p.y); ctx.stroke();
+            last = p;
+        });
+        ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (t) {
+            pad.addEventListener(t, function () { drawing = false; });
+        });
+        document.getElementById('sig-clear').addEventListener('click', function () {
+            ctx.clearRect(0, 0, pad.width, pad.height); signed = false; sigOut.value = '';
+        });
+        window.addEventListener('resize', size);
+        size();
+    }
+
     accept.addEventListener('click', function (e) {
         var msgs = [];
         if (name && name.value.trim() === '')  msgs.push('Please type your full name.');
+        if (pad && !signed)                    msgs.push('Please sign in the box.');
         if (terms && !terms.checked)           msgs.push('Please tick the box to agree to the Terms & Conditions.');
+        if (pad && signed && sigOut)           sigOut.value = pad.toDataURL('image/png');
         if (msgs.length) {
             e.preventDefault();
             err.textContent = msgs.join(' ');

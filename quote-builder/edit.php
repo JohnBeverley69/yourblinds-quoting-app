@@ -872,6 +872,16 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
             ?>
             <?php if ($editable && $quickActions): ?>
                 <span class="qsb-actions">
+                    <?php if (in_array('accepted', $quickActions, true) && !empty($items)
+                              && in_array((string) $quote['status'], ['draft', 'sent'], true)): ?>
+                        <?php /* Customer with no email/WhatsApp: they sign on this screen
+                                 (opens their own quote page in in-person mode). */ ?>
+                        <form method="post" action="/quote-builder/sign_start.php">
+                            <?= csrf_field() ?>
+                            <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
+                            <button type="submit" class="is-accept">✍ Customer signs here</button>
+                        </form>
+                    <?php endif; ?>
                     <?php foreach ($quickActions as $qa): ?>
                         <form method="post" action="/quote-builder/change_status.php">
                             <?= csrf_field() ?>
@@ -982,6 +992,28 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                     </form>
                 <?php endif; ?>
             </div>
+            <?php if (!empty($quote['acceptance_signature_png']) && !empty($quote['accepted_at'])): ?>
+                <?php
+                    $sigBy = '';
+                    if (!empty($quote['acceptance_by_user_id'])) {
+                        try {
+                            $sb = db()->prepare('SELECT full_name FROM client_users WHERE id = ? AND client_id = ? LIMIT 1');
+                            $sb->execute([(int) $quote['acceptance_by_user_id'], (int) $quote['client_id']]);
+                            $sigBy = trim((string) ($sb->fetchColumn() ?: ''));
+                        } catch (Throwable $e) { $sigBy = ''; }
+                    }
+                ?>
+                <div style="margin-top:0.875rem;padding:0.75rem 1rem;border:1px solid var(--border);border-radius:10px;
+                            display:flex;gap:1rem;align-items:center;flex-wrap:wrap">
+                    <img src="<?= e((string) $quote['acceptance_signature_png']) ?>" alt="Customer signature"
+                         style="height:64px;max-width:240px;background:#fff;border-radius:6px;padding:2px">
+                    <div style="font-size:0.875rem;line-height:1.5">
+                        <strong>Signed in person</strong> by <?= e((string) ($quote['acceptance_signature_name'] ?? '')) ?><br>
+                        <?= e(date('j M Y, H:i', (int) strtotime((string) $quote['accepted_at']))) ?>
+                        <?= $sigBy !== '' ? ' &middot; on ' . e($sigBy) . '&rsquo;s device' : '' ?>
+                    </div>
+                </div>
+            <?php endif; ?>
         </section>
 
         <div class="page-header" style="margin-bottom:0.6rem">

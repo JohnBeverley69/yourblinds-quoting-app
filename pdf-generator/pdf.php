@@ -739,6 +739,21 @@ $legalBase = rtrim((string) (env('APP_URL', '') ?: 'https://yourblinds.uk'), '/'
 $termsUrl  = legal_view_url($legalBase, (int) $clientId, $legalDoc);
 $privUrl   = legal_view_url($legalBase, (int) $clientId, 'privacy');
 ?>
+<?php
+// Signed in person (quote-history/accept.php in-person mode): print the
+// customer's signature on the quote/order — not on invoices or receipts.
+$pdfSig = (!empty($quote['acceptance_signature_png']) && !empty($quote['accepted_at'])
+           && stripos($docLabel, 'invoice') === false && stripos($docLabel, 'receipt') === false
+           && strncmp((string) $quote['acceptance_signature_png'], 'data:image/png;base64,', 22) === 0);
+?>
+<?php if ($pdfSig): ?>
+<div style="margin-top:16px;font-size:10px;color:#374151">
+    <div style="font-weight:bold;margin-bottom:4px">Accepted by the customer</div>
+    <img src="<?= e((string) $quote['acceptance_signature_png']) ?>" style="height:56px">
+    <div><?= e((string) ($quote['acceptance_signature_name'] ?? '')) ?> &middot; signed in person
+        <?= e(date('j F Y', (int) strtotime((string) $quote['accepted_at']))) ?></div>
+</div>
+<?php endif; ?>
 <?php if ($legalText !== '' || $ppText !== ''): ?>
 <div class="legal-links">
 <?php if ($legalText !== ''): ?>
