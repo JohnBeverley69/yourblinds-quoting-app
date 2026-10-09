@@ -175,6 +175,16 @@ $buildDateFilter = static function (string $col) use ($periodFrom, $periodTo): a
 
 $pdo = db();
 $inWon     = implode(',', array_fill(0, count($wonStatuses), '?'));
+
+// Direct orders (quote-builder/new_order.php) are kept OUT of the sales,
+// close-rate, team, product and profit figures: the system only knows what
+// the client pays us for them, not what they sold the blinds for, so counting
+// them would book their cost as sales and drag the margin down. They get
+// their own "Orders placed with us" tile instead. Guarded pre-migration.
+$hasDirectOrder = false;
+try { $pdo->query('SELECT direct_order FROM quotes LIMIT 0'); $hasDirectOrder = true; } catch (Throwable $e) {}
+$noDirect  = $hasDirectOrder ? ' AND COALESCE(direct_order, 0) = 0'   : '';
+$noDirectQ = $hasDirectOrder ? ' AND COALESCE(q.direct_order, 0) = 0' : '';
 $inDecided = implode(',', array_fill(0, count($decidedStatuses), '?'));
 
 // ---- Salesperson filter ----------------------------------------------
@@ -233,7 +243,8 @@ if ($canSeeRevenue) {
           WHERE client_id = ?
             AND status IN ($inWon)
             $dateClause
-            $kpiUser"
+            $kpiUser
+            $noDirect"
     );
     $st->execute(array_merge([$clientId], $wonStatuses, $dateParams, $kpiUserParams));
     $kpi = $st->fetch() ?: $kpi;
@@ -247,13 +258,32 @@ if ($canSeeRevenue) {
           WHERE client_id = ?
             AND status IN ($inDecided)
             $dateClause
-            $kpiUser"
+            $kpiUser
+            $noDirect"
     );
     $st->execute(array_merge($wonStatuses, [$clientId], $decidedStatuses, $dateParams, $kpiUserParams));
     $rate = $st->fetch() ?: $rate;
     $closeRate = (int) $rate['decided_cnt'] > 0
         ? ((int) $rate['accepted_cnt'] / (int) $rate['decided_cnt']) * 100
         : null;
+}
+
+// Orders placed with us (direct orders) — their own figure, at cost.
+$directOrders = null;
+if ($canSeeRevenue && $hasDirectOrder) {
+    [$doUser, $doUserParams] = $buildUserFilter('created_by_user_id');
+    $placed = ['ordered', 'fitted', 'invoiced', 'paid'];
+    $inPl   = implode(',', array_fill(0, count($placed), '?'));
+    $st = $pdo->prepare(
+        "SELECT COUNT(*) AS n, COALESCE(SUM(total), 0) AS spend
+           FROM quotes
+          WHERE client_id = ? AND direct_order = 1
+            AND status IN ($inPl)
+            $dateClause
+            $doUser"
+    );
+    $st->execute(array_merge([$clientId], $placed, $dateParams, $doUserParams));
+    $directOrders = $st->fetch() ?: null;
 }
 
 // ---- 2. Sales-person leaderboard -------------------------------------
@@ -273,6 +303,7 @@ if ($canSeeTeam) {
           WHERE q.client_id = ?
             $lbDate
             $lbUser
+            $noDirectQ
        GROUP BY q.created_by_user_id, u.full_name
        ORDER BY revenue DESC, won DESC"
     );
@@ -299,6 +330,7 @@ if ($canSeeProducts) {
             AND q.status IN ($inWon)
             $pmDate
             $pmUser
+            $noDirectQ
        GROUP BY qi.product_id, product_name
        ORDER BY revenue DESC
        LIMIT 8"
@@ -340,7 +372,8 @@ if ($canSeeProfit) {
           WHERE q.client_id = ?
             AND q.status IN ($inWon)
             $mgDate
-            $mgUser"
+            $mgUser
+            $noDirectQ"
     );
     $args = array_merge([$clientId], $wonStatuses, $mgDateParams, $mgUserParams);
     $st->execute($args);
@@ -366,6 +399,7 @@ if ($canSeeProfit) {
                        AND q.price_override IS NOT NULL
                        $mgDate
                        $mgUser
+                       $noDirectQ
                   GROUP BY q.id, q.subtotal
                ) t"
         );
@@ -1086,6 +1120,13 @@ $activeNav = 'dashboard';
                 <div class="kpi-value"><?= (int) $kpi['won_count'] ?></div>
                 <div class="kpi-sub">accepted &amp; beyond</div>
             </div>
+            <?php if ($directOrders !== null && (int) $directOrders['n'] > 0): ?>
+            <div class="kpi-tile" title="Orders placed straight with us (New order). Shown at what you pay us; kept out of revenue, close rate and profit because the system doesn't know what you sold them for.">
+                <div class="kpi-label">Orders placed with us</div>
+                <div class="kpi-value">£<?= number_format((float) $directOrders['spend'], 2) ?></div>
+                <div class="kpi-sub"><?= (int) $directOrders['n'] ?> order<?= (int) $directOrders['n'] === 1 ? '' : 's' ?> &middot; your cost, ex VAT &middot; not in the figures above</div>
+            </div>
+            <?php endif; ?>
         </div>
         <?php endif; ?>
 
