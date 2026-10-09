@@ -42,8 +42,9 @@ requireSuperAdmin();
 $pdo    = db();
 $MASTER = current_factory_id();
 
-// Period: this month / this year / all time / a From–To range you type yourself.
-$period  = (string) ($_GET['period'] ?? 'year');
+// Period: today (the default) / this month / this year / a From–To range you type
+// yourself. No "all time" (John: going back 30-odd years it's a meaningless figure).
+$period  = (string) ($_GET['period'] ?? 'today');
 $fromIn  = trim((string) ($_GET['from'] ?? ''));
 $toIn    = trim((string) ($_GET['to']   ?? ''));
 $since   = null;
@@ -54,6 +55,9 @@ $realDate = static function (string $s): bool {
     return (bool) preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $s, $m)
         && checkdate((int) $m[2], (int) $m[3], (int) $m[1]);
 };
+
+// A From–To with neither date given would be "all time" by the back door — show today.
+if ($period === 'custom' && $fromIn === '' && $toIn === '') $period = 'today';
 
 if ($period === 'custom') {
     // A bad bound is ignored rather than silently changing the window to
@@ -68,11 +72,12 @@ if ($period === 'custom') {
     if ($toIn   !== '') $until = $toIn   . ' 23:59:59';   // the "to" day is included
 } elseif ($period === 'month') {
     $since = date('Y-m-01 00:00:00');
-} elseif ($period === 'all') {
-    $since = null;
+} elseif ($period === 'year') {
+    $since = date('Y-01-01 00:00:00');
 } else {
-    $period = 'year';
-    $since  = date('Y-01-01 00:00:00');
+    $period = 'today';
+    $since  = date('Y-m-d 00:00:00');
+    $until  = date('Y-m-d 23:59:59');
 }
 
 // ?why=1 collects, for every line we could NOT cost, which link in the chain is
@@ -429,7 +434,7 @@ $activeNav = 'profit';
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Manufacturing profit &middot; Factory Console &middot; YourBlinds</title>
+    <title>The Numbers &middot; Factory Console &middot; YourBlinds</title>
     <link rel="stylesheet" href="<?= asset('/app.css') ?>">
 </head>
 <body>
@@ -462,11 +467,11 @@ $activeNav = 'profit';
   .pf .pos { color:#166534; font-weight:700; }
 </style>
 
-<h1 class="pf-h">Manufacturing profit</h1>
+<h1 class="pf-h">The Numbers</h1>
 <p class="pf-sub">What you charge for the blinds you make, minus what they cost you to make &mdash; across every trade customer's orders. Your eyes only.</p>
 
 <div class="pf-periods">
-    <?php foreach (['month' => 'This month', 'year' => 'This year', 'all' => 'All time'] as $k => $lbl): ?>
+    <?php foreach (['today' => 'Today', 'month' => 'This month', 'year' => 'This year'] as $k => $lbl): ?>
         <a class="<?= $period === $k ? 'on' : '' ?>" href="?period=<?= $k ?>"><?= e($lbl) ?></a>
     <?php endforeach; ?>
 </div>
