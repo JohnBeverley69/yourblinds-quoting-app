@@ -268,6 +268,56 @@ $navSections = [
         ],
     ],
 ];
+// Factory Console — the factory office signed in to the factory account is a
+// trade-only business, so it gets its own menu instead of the retail-shaped one
+// above: one Dashboard and one Orders list that read orders the factory way
+// (any account's placed order with our lines), production, then the accounts
+// side. Retail, Calendar, Pipeline and the old Trade quotes/orders lists are not
+// shown here (their pages still work by URL). Every other business is unchanged.
+$isFactoryConsole = function_exists('factory_console_user') && factory_console_user();
+if ($isFactoryConsole) {
+    $dashTag = 'Factory Console';
+    $navSections = [
+        [
+            'name'  => 'Work',
+            'items' => [
+                'factory-dashboard' => ['/factory/dashboard.php', 'Dashboard', true],
+                'factory-orders'    => ['/factory/orders.php',    'Orders',    true],
+            ],
+        ],
+        [
+            'name'  => 'Production',
+            'items' => [
+                'factory'  => ['/factory/incoming-orders.php', 'Incoming orders', true],
+                'floor'    => ['/factory/floor.php',           'Floor',           true],
+                'dispatch' => ['/master-admin/dispatch.php',   'Dispatch',        true],
+            ],
+        ],
+        [
+            'name'  => 'Accounts',
+            'items' => [
+                'trade-accounts' => ['/master-admin/trade-accounts.php', 'Trade accounts', $isSuperAdmin],
+                'wholesale'      => ['/master-admin/wholesale.php',      'Invoices',       true],
+                'bank'           => ['/master-admin/bank.php',           'Bank',           true],
+                'statement-run'  => ['/master-admin/statement-run.php',  'Statements',     true],
+                'commissions'    => ['/master-admin/commissions.php',    'Commissions',    true],
+            ],
+        ],
+        [
+            'name'        => 'Setup',
+            'collapsible' => true,
+            'items' => [
+                'products'         => ['/admin/products/index.php', 'Products',         $isAdmin],
+                'users'            => ['/admin/users.php',          'Users',            $isAdmin],
+                'settings'         => ['/admin/settings.php',       'Settings',         $isAdmin],
+                'factory-settings' => ['/factory/settings.php',     'Factory settings', true],
+            ],
+        ],
+        // Platform (super-admin) carries over exactly as above.
+        end($navSections),
+    ];
+}
+
 // Non-production badge — make it unmistakable that this is a test copy with
 // throwaway data, so nobody confuses staging for the live site. Inert on
 // production (APP_ENV defaults to 'production'). Fixed, click-through.
@@ -347,7 +397,7 @@ window.addEventListener('pageshow', function (e) {
 
     <aside class="app-sidebar" aria-label="Primary navigation">
         <div class="app-sidebar-brand">
-            <a href="/calendar/index.php" class="app-brand-mark">Your<span class="accent">Blinds</span></a>
+            <a href="<?= $isFactoryConsole ? '/factory/dashboard.php' : '/calendar/index.php' ?>" class="app-brand-mark">Your<span class="accent">Blinds</span></a>
             <span class="app-brand-tag"><?= e($dashTag) ?></span>
         </div>
         <div class="app-sidebar-user">
