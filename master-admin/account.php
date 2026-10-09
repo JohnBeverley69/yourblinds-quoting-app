@@ -19,6 +19,7 @@ require_once __DIR__ . '/../_partials/factory_ar.php';
 require_once __DIR__ . '/../_partials/order_stage.php';
 
 requireFactoryOffice();
+require_once __DIR__ . '/../_partials/office_calendar.php';
 
 $pdo       = db();
 $factory   = ar_factory_id();
@@ -160,6 +161,25 @@ $activeNav = 'wholesale';
                 <?php endif; ?>
             </div>
         <?php endif; ?>
+
+        <?php // Open callbacks for this account (office calendar, stage 4).
+        $ocCalls = oc_ready($pdo) ? oc_account_callbacks($pdo, $factory, $accountId) : []; ?>
+        <section class="section">
+            <h2 class="section-title" style="display:flex;justify-content:space-between;gap:.5rem;flex-wrap:wrap">Callbacks &amp; reminders
+                <a href="/factory/calendar.php?add=callback&amp;account=<?= (int) $accountId ?>" class="btn btn-secondary btn-sm">+ Add callback</a></h2>
+            <?php if (!$ocCalls): ?>
+                <p style="color:var(--text-faint);margin:0">Nothing open for this account.</p>
+            <?php else: ?>
+                <ul style="margin:0;padding-left:1.1rem;display:flex;flex-direction:column;gap:.3rem">
+                <?php foreach ($ocCalls as $oc): ?>
+                    <li><b><?= e(date('D j M', strtotime((string) $oc['entry_date']))) ?><?= $oc['entry_time'] ? ' ' . e(substr((string) $oc['entry_time'], 0, 5)) : '' ?></b>
+                        &middot; <a href="/factory/calendar-entry.php?id=<?= (int) $oc['id'] ?>"><?= e((string) $oc['title']) ?></a>
+                        <?= $oc['order_ref'] ? ' &middot; ' . e((string) $oc['order_ref']) : '' ?>
+                        <?= $oc['entry_date'] < date('Y-m-d') ? ' <span style="color:#b91c1c;font-weight:700">overdue</span>' : '' ?></li>
+                <?php endforeach; ?>
+                </ul>
+            <?php endif; ?>
+        </section>
 
         <section class="section">
             <h2 class="section-title">Orders <span style="font-weight:400;color:var(--text-faint);font-size:0.85rem">(<?= count($orders) ?>)</span></h2>
