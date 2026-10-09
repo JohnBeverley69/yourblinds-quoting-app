@@ -141,6 +141,11 @@ $activeNav = 'order-history';
                 Place an order straight with us. Enter your reference, then add the blinds on the next
                 screen &mdash; prices shown are your buying prices.
             </p>
+            <?php /* Plain p, not .ui-hint — compact mode hides hints and this one matters. */ ?>
+            <p style="color:#92400e;background:#fef3c7;border-radius:8px;padding:0.5rem 0.75rem;font-size:0.875rem;margin:0 0 1rem;max-width:44rem">
+                An order only knows what you pay us, not what you sold it for &mdash; so it shows <strong>no profit</strong> and
+                lowers the gross profit figures on your Dashboard. To track the profit on a job, use <strong>New quote</strong> instead.
+            </p>
             <form method="post" action="/quote-builder/new_order.php" class="form form-box-labels" novalidate>
                 <?= csrf_field() ?>
                 <?php if ($dups): ?><input type="hidden" name="confirm_dup" value="<?= e($ref) ?>"><?php endif; ?>
