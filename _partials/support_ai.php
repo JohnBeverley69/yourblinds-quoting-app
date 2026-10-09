@@ -287,7 +287,7 @@ function support_ai_alerts_if_due(): void
 /** Help topics as plain text, filtered to what this audience may see. */
 function support_ai_knowledge(string $aud): string
 {
-    $allowed = ['all' => ['all'], 'admin' => ['all', 'admin'], 'super' => ['all', 'admin', 'super']][$aud] ?? ['all'];
+    $allowed = ['all' => ['all'], 'admin' => ['all', 'admin'], 'super' => ['all', 'admin', 'super', 'factory']][$aud] ?? ['all'];
     $topics  = require APP_ROOT . '/help/_topics.php';
     $out = [];
     $cat = '';

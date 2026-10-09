@@ -6,7 +6,7 @@ declare(strict_types=1);
  * the animated walkthroughs in help/guides/.
  *
  * Each row: [aud, cat, title, keys, body]
- *   aud   all | admin | super  — who may see it
+ *   aud   all | admin | super | factory  — who may see it (factory = Factory Console users)
  *   cat   the section it groups under (order here is the page order)
  *   title the question, as the user would ask it
  *   keys  extra search words (the box matches title + keys + body)
@@ -36,6 +36,10 @@ return [
       <li><strong>Platform</strong> &mdash; running the whole system (catalogue, clients, billing plans, system health).</li>
       </ul>
       <p><strong>The factory works from its own menu.</strong> The office staff of the factory that makes the blinds sign in to the <strong>Factory Console</strong> instead: Dashboard, Orders, Remakes and Calendar; Production (Incoming orders, Floor, Dispatch); Accounts (Trade accounts, Invoices, Bank, Statements, Commissions). Its Orders list holds every order placed with the factory, whoever placed it. An ordinary business never sees any of that.</p>'],
+
+    ['factory', 'Getting started', 'Where has the Trade menu gone?', 'trade menu missing gone moved quotes orders dispatch invoices bank statements commissions factory console old screen redirect',
+     '<p>Into the <strong>Factory Console</strong>. Everything that was under <strong>Trade</strong> now sits in the console menu: <strong>Work</strong> (Dashboard, Orders, Remakes, Calendar), <strong>Production</strong> (Incoming orders, Floor, Dispatch) and <strong>Accounts</strong> (Invoices, Bank, Statements, Commissions, and Trade accounts for the super-admin).</p>
+      <p>The old Trade quotes and orders lists are now the one <strong>Work &rarr; Orders</strong> list &mdash; quotes not placed yet are its <em>Not placed</em> chip. Old links and bookmarks still work: the sales dashboard, the orders and quotes lists, the Pipeline and the old calendar simply take you to their console screen. The guides under <em>Factory Console</em> on this page walk through it.</p>'],
 
     ['all', 'Getting started', 'What is the Pipeline for?', 'pipeline board kanban columns drag drop move cards cannot move funnel column totals value mine only all time',
      '<p><strong>Work &rarr; Pipeline</strong> is a board that shows where every job has got to, in columns, so you can see the whole funnel in one screen instead of scrolling a list.</p>
