@@ -68,8 +68,8 @@ $L = [
 ];
 $tok = static fn (string $t): string => '<code class="tk">{{' . $t . '}}</code>';
 
-$pdfLine = '<div class="pdfl">This quotation is subject to our Terms &amp; Conditions of sale: <u>https://yourblinds.uk/legal/view.php?c=12&amp;doc=retail&amp;k=&hellip;</u>.<br>
-            Privacy Policy: <u>https://yourblinds.uk/legal/view.php?c=12&amp;doc=privacy&amp;k=&hellip;</u>.</div>';
+$pdfLine = '<div class="pdfl">This quotation is subject to our Terms &amp; Conditions of sale, which can be viewed <u>here</u>.<br>
+            Our Privacy Policy can be viewed <u>here</u>.</div>';
 
 $script = [];
 foreach ($vo as $n => [$cap, $line]) $script[] = [(string) $n, $cap, $line, $n];
@@ -327,7 +327,7 @@ return [
                   <div class="ta3" style="min-height:2.2rem"><span class="a-out" style="--d:3.5s">TERMS &amp; CONDITIONS OF SALE &mdash; {{company_name}} &middot; These terms apply to your order&hellip;</span></div>
                   <div class="side2 mt">
                     <div class="pdf a-rise" style="--d:5s"><b style="font-size:.66rem">Quote PDF</b><i></i><i style="width:70%"></i>
-                      <div class="pdfl stk" style="display:grid"><span class="a-out" style="--d:7.5s">This quotation is subject to our Terms &amp; Conditions of sale: <u>https://yourblinds.uk/legal/view.php?&hellip;</u></span>
+                      <div class="pdfl stk" style="display:grid"><span class="a-out" style="--d:7.5s">This quotation is subject to our Terms &amp; Conditions of sale, which can be viewed <u>here</u>.</span>
                         <span class="gone a-fade" style="--d:8s">&mdash; no terms link &mdash;</span></div></div>
                     <div class="oq a-rise" style="--d:9s"><b>Accept this quote</b><br>
                       <span class="stk" style="display:grid"><span class="a-out" style="--d:13s"><span class="cbx"></span>I agree to the <u style="color:#2563eb">Terms &amp; Conditions</u> of Bright Blinds.</span>
@@ -376,8 +376,8 @@ return [
           </ul>
 
           <p><b>Where the wording appears.</b> Quotes don&rsquo;t print the documents in full. The <b>quote PDF</b> prints one line with a link:
-             <em>&ldquo;This quotation is subject to our Terms &amp; Conditions of sale: https://yourblinds.uk/legal/view.php?&hellip;&rdquo;</em> and
-             <em>&ldquo;Privacy Policy: &hellip;&rdquo;</em> (an invoice reads &ldquo;This invoice is subject to&hellip;&rdquo;). A quote raised for a
+             <em>&ldquo;This quotation is subject to our Terms &amp; Conditions of sale, which can be viewed here.&rdquo;</em> and
+             <em>&ldquo;Our Privacy Policy can be viewed here.&rdquo;</em> (an invoice reads &ldquo;This invoice is subject to&hellip;&rdquo;). A quote raised for a
              <b>trade account</b> links to the trade terms. The link opens a plain public page &mdash; your company name, the title
              (<b>Terms &amp; Conditions</b>, <b>Terms &amp; Conditions (Trade)</b> or <b>Privacy Policy</b>), your wording, and
              &ldquo;Provided via YourBlinds&rdquo;. <b>No login is needed</b>, so keep private notes out of these boxes. Because the page is read
