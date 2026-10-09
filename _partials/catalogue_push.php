@@ -452,11 +452,13 @@ function pp_sync_systems(
           WHERE client_id = ? AND product_id = ? AND name = ? LIMIT 1'
     );
 
-    $seenSystemIds = [];
-    $hasSysSrc     = pp_has_src_col($pdo, 'product_systems', 'source_system_id');
+    $seenSystemIds  = [];
+    $srcDefaultId   = null;
+    $hasSysSrc      = pp_has_src_col($pdo, 'product_systems', 'source_system_id');
     foreach ($src->fetchAll(PDO::FETCH_ASSOC) as $r) {
         $srcSysId        = (int) $r['id'];
         $seenSystemIds[] = $srcSysId;
+        if ((int) ($r['is_default'] ?? 0) === 1) $srcDefaultId = $srcSysId;
 
         // Identity first, name second — so renaming a system on the master
         // renames the tenant's copy instead of adding a second one.
@@ -468,9 +470,7 @@ function pp_sync_systems(
             $tgtId = $find->fetchColumn();
         }
         if ($tgtId === false) {
-            // is_default: never let our push silently flip an existing
-            // tenant's default. For NEW systems on the target, copy the
-            // source's value — they're starting fresh anyway.
+            // is_default is mirrored after the loop (see below).
             // source_system_id rides along in the INSERT rather than costing a
             // second UPDATE per row — at ~6,400 fabrics and thousands of other
             // rows per tenant, a separate stamping query is the difference
@@ -494,8 +494,7 @@ function pp_sync_systems(
             $tgtId = (int) $tgtId;
             // Update non-name fields, and the NAME too now that identity is
             // tracked separately — that is what carries a master rename over.
-            // Skip is_default — the tenant may have set their own preference.
-            $sets   = ['name = ?', 'sort_order = ?', 'active = ?'];
+            $sets  = ['name = ?', 'sort_order = ?', 'active = ?'];
             $params = [
                 (string) $r['name'],
                 (int) ($r['sort_order'] ?? 0),
@@ -508,6 +507,18 @@ function pp_sync_systems(
             )->execute($params);
         }
         $systemMap[(int) $r['id']] = $tgtId;
+    }
+
+    // The default system mirrors the master, like everything else the push
+    // carries — changing the master's default (e.g. roller → No Frills) has
+    // to reach every account, existing systems included. One default per
+    // product: clear the rest, then set the mapped one.
+    if ($srcDefaultId !== null && isset($systemMap[$srcDefaultId])) {
+        $tgtDefaultId = (int) $systemMap[$srcDefaultId];
+        $pdo->prepare(
+            'UPDATE product_systems SET is_default = (id = ?)
+              WHERE client_id = ? AND product_id = ?'
+        )->execute([$tgtDefaultId, $targetClientId, $targetProductId]);
     }
 
     // Systems the master has deleted. Their price tables go with them via the
