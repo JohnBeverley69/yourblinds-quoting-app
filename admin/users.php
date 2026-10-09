@@ -14,7 +14,7 @@ $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
-$validRoles = ['admin','owner','office','sales','agent','fitter','readonly'];
+$validRoles = ['admin','office','sales','fitter'];
 // 'factory' (production back-office) is only offered on the Beverley factory
 // account itself — requireFactory() also scopes access to that client, so the
 // role is meaningless (and hidden) on tenant accounts.
@@ -302,6 +302,12 @@ $activeNav = 'users';
                                 </label>
                             <?php endforeach; ?>
                         </div>
+                        <p style="font-size:0.8125rem; color:#6b7280; margin:0.4rem 0 0;">
+                            <strong>Admin</strong> &mdash; the boss: can do everything, including Products, Users, Settings and Billing.
+                            <strong>Office</strong>, <strong>Sales</strong> and <strong>Fitter</strong> say what someone does; what they
+                            can see and do is set by the <strong>Permissions</strong> below. Sales people are offered when you book a
+                            measure, fitters when you book a fitting.
+                        </p>
                     </div>
                 </div>
 
