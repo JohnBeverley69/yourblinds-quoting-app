@@ -483,7 +483,7 @@ table { border-collapse: collapse; }
 .legal p  { margin: 0; white-space: pre-line; font-size: 8px; line-height: 1.5; color: #374151; }
 .legal-links { margin-top: 16px; padding-top: 10px; border-top: 1px solid #e5e7eb;
                font-size: 9px; line-height: 1.6; color: #6b7280; }
-.legal-links a { color: #1f3b5b; text-decoration: none; }
+.legal-links a { color: #1f3b5b; text-decoration: underline; font-weight: bold; }
 </style>
 </head>
 <body>
@@ -742,10 +742,11 @@ $privUrl   = legal_view_url($legalBase, (int) $clientId, 'privacy');
 <?php if ($legalText !== '' || $ppText !== ''): ?>
 <div class="legal-links">
 <?php if ($legalText !== ''): ?>
-This <?= e($docLabel === 'Quote' ? 'quotation' : strtolower($docLabel)) ?> is subject to our Terms &amp; Conditions of sale: <a href="<?= e($termsUrl) ?>"><?= e($termsUrl) ?></a>.<br>
+<?php /* Short "here" links, not the long signed URL printed out in full. */ ?>
+This <?= e($docLabel === 'Quote' ? 'quotation' : strtolower($docLabel)) ?> is subject to our Terms &amp; Conditions of sale, which can be viewed <a href="<?= e($termsUrl) ?>">here</a>.<br>
 <?php endif; ?>
 <?php if ($ppText !== ''): ?>
-Privacy Policy: <a href="<?= e($privUrl) ?>"><?= e($privUrl) ?></a>.
+Our Privacy Policy can be viewed <a href="<?= e($privUrl) ?>">here</a>.
 <?php endif; ?>
 </div>
 <?php endif; ?>
