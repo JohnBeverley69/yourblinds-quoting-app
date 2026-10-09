@@ -160,7 +160,9 @@ function qb_preview_response(PDO $pdo, int $clientId, array $q, bool $canCosts, 
         unset(
             $result['cost_price_per_blind'], $result['extras_cost_total'],
             // Trade (buying) discount reveals the account's wholesale cost — cost-viewers only.
-            $result['trade_price_per_blind'], $result['trade_discount_percent'], $result['trade_discount_amount']
+            $result['trade_price_per_blind'], $result['trade_discount_percent'], $result['trade_discount_amount'],
+            // Goes with them: it only describes which basis those figures use.
+            $result['trade_discount_basis']
         );
         if (!empty($result['extras_applied']) && is_array($result['extras_applied'])) {
             foreach ($result['extras_applied'] as &$exRow) {
