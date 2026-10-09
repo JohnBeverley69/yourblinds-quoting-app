@@ -249,16 +249,25 @@ try {
     $before      = [];   // item id => [w, d, qty, system_id, option_id]
     if ($validItems) {
         $ph2 = implode(',', array_fill(0, count($validItems), '?'));
-        $ips = $pdo->prepare("SELECT id, product_id, width_mm, drop_mm, quantity, system_id, option_id FROM quote_items WHERE id IN ($ph2)");
+        $ips = $pdo->prepare("SELECT id, product_id, width_mm, drop_mm, quantity, system_id, option_id, system_name_snapshot FROM quote_items WHERE id IN ($ph2)");
         $ips->execute($validItems);
         foreach ($ips->fetchAll(PDO::FETCH_ASSOC) as $r) {
             $itemProduct[(int) $r['id']] = (int) $r['product_id'];
-            $before[(int) $r['id']] = [(int) $r['width_mm'], (int) $r['drop_mm'], (int) $r['quantity'], (int) $r['system_id'], (int) $r['option_id']];
+            $before[(int) $r['id']] = [(int) $r['width_mm'], (int) $r['drop_mm'], (int) $r['quantity'], (int) $r['system_id'], (int) $r['option_id'], (string) ($r['system_name_snapshot'] ?? '')];
         }
     }
     $dirty = [];   // item id => true when a price-driving input changed
 
-    $sysName   = $pdo->prepare('SELECT name FROM product_systems WHERE id = ? LIMIT 1');
+    // Scoped to the tenant AND the line's own product, the same way $fabLookup
+    // just below already is. It used to be "WHERE id = ? LIMIT 1", which took
+    // the posted system id entirely on trust: any product_systems row would do,
+    // including another product's or another tenant's, and its name went into
+    // system_name_snapshot. Build rules key systems by NAME, so a line stamped
+    // with a system that doesn't belong to its product resolves the wrong cut
+    // rules or none — wrong sizes on the ticket, nothing on screen to show it.
+    // Not just a crafted-POST concern: a second tab, or a system renamed or
+    // deleted between loading Edit order and saving it, gets there honestly.
+    $sysName   = $pdo->prepare('SELECT name FROM product_systems WHERE id = ? AND client_id = ? AND product_id = ? LIMIT 1');
     $updItem   = $pdo->prepare('UPDATE quote_items SET width_mm = ?, drop_mm = ?, quantity = ?, room_name = ?, notes = ?, system_id = ?, system_name_snapshot = ? WHERE id = ?');
     $fabLookup = $pdo->prepare('SELECT band_code, supplier_name, name, colour, code FROM product_options WHERE id = ? AND client_id = ? AND product_id = ? LIMIT 1');
     $updFabric = $pdo->prepare('UPDATE quote_items SET option_id = ?, fabric_band_snapshot = ?, fabric_supplier_snapshot = ?, fabric_name_snapshot = ?, fabric_colour_snapshot = ?, fabric_code_snapshot = ? WHERE id = ?');
@@ -272,9 +281,17 @@ try {
 
         // System: dropdown posts the system id; text fallback posts a name.
         $sid = isset($_POST['sys'][$iid]) ? (int) $_POST['sys'][$iid] : 0;
-        if ($sid > 0) {
-            $sysName->execute([$sid]);
+        if ($sid > 0 && isset($itemProduct[$iid])) {
+            $sysName->execute([$sid, $clientId, $itemProduct[$iid]]);
             $sname = (string) ($sysName->fetchColumn() ?: '');
+            // No match means that id isn't one of this product's systems, so
+            // don't stamp it — keep the line exactly as it was rather than
+            // write a system whose build rules were never meant for this
+            // product, or blank the one it already had.
+            if ($sname === '') {
+                $sid   = (int) ($before[$iid][3] ?? 0);
+                $sname = (string) ($before[$iid][5] ?? '');
+            }
         } else {
             $sname = mb_substr(trim((string) ($_POST['sysname'][$iid] ?? '')), 0, 120);
             $sid   = 0;
