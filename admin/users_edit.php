@@ -35,7 +35,7 @@ if ((int) ($target['is_super_admin'] ?? 0) === 1 && !is_super_admin()) {
     exit;
 }
 
-$validRoles = ['admin','owner','office','sales','agent','fitter','readonly'];
+$validRoles = ['admin','office','sales','fitter'];
 // 'factory' role only on factory accounts (is_factory = 1); see admin/users.php.
 $isFactoryAccount = function_exists('is_factory_client') && is_factory_client((int) $clientId);
 if ($isFactoryAccount) {
@@ -63,7 +63,7 @@ if ($isFactoryAccount) {
 // when the user has more than one selected. Highest-privilege wins, so
 // existing requireAdmin() / role === 'admin' checks behave intuitively
 // for someone who's, say, admin AND fitter.
-$rolePriority = array_flip($validRoles);   // 'admin' => 0, 'readonly' => 6
+$rolePriority = array_flip($validRoles);   // 'admin' => 0 … 'fitter' => 3
 $pickPrimary = static function (array $roles) use ($rolePriority): string {
     if (!$roles) return 'sales';
     usort($roles, static fn ($a, $b)
@@ -427,9 +427,14 @@ $activeNav = 'users';
                             <?php endforeach; ?>
                         </div>
                         <p style="font-size:0.8125rem; color:#6b7280; margin:0.4rem 0 0;">
+                            <strong>Admin</strong> &mdash; the boss: can do everything, including Products, Users, Settings and Billing.
+                            <strong>Office</strong>, <strong>Sales</strong> and <strong>Fitter</strong> say what someone does; what they
+                            can see and do is set by the <strong>Permissions</strong> below. Sales people are offered when you book a
+                            measure, fitters when you book a fitting.
+                        </p>
+                        <p style="font-size:0.8125rem; color:#6b7280; margin:0.4rem 0 0;">
                             Tick every role this person fills — e.g. someone who fits
-                            and also closes sales should have both ticked. The most
-                            privileged role drives admin-only access.
+                            and also closes sales should have both ticked.
                             <?php if ($isSelf): ?>
                                 You can't untick your own admin.
                             <?php endif; ?>

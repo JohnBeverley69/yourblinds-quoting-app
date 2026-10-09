@@ -31,7 +31,7 @@ $cb = static function (string $label, string $state = '', string $extra = ''): s
     return '<span class="cb ' . $extra . '">' . $t . $label . '</span>';
 };
 
-$roleNames = ['Admin', 'Owner', 'Office', 'Sales', 'Agent', 'Fitter', 'Readonly'];
+$roleNames = ['Admin', 'Office', 'Sales', 'Fitter'];
 // $set = [roleName => state]
 $roles = static function (array $set = ['Sales' => 'on'], string $cls = '') use ($cb, $roleNames): string {
     $h = '<div class="rolebox ' . $cls . '">';
@@ -251,10 +251,9 @@ return [
                     <div class="blk a-rise" style="--d:6s"><h4>Booking a fitting &mdash; Assign to</h4><div>Dave Perry</div><p style="margin-top:.2rem">people with <b>Fitter</b></p></div>
                   </div>
                   <div class="chips">
-                    <span class="chip a-pop" style="--d:13s">Owner</span><span class="chip a-pop" style="--d:13.4s">Office</span>
-                    <span class="chip a-pop" style="--d:13.8s">Agent</span><span class="chip a-pop" style="--d:14.2s">Readonly</span>
-                    <span class="chip a-pop" style="--d:15s">= labels only, today</span>
-                    <span class="chip bad a-pop" style="--d:18.5s">Readonly does <b>not</b> lock anything</span>
+                    <span class="chip a-pop" style="--d:13s">Office</span>
+                    <span class="chip a-pop" style="--d:14s">= says who they are</span>
+                    <span class="chip good a-pop" style="--d:17s">Permissions decide what they can do</span>
                   </div>
                 </div>
 
@@ -396,16 +395,16 @@ return [
 
           <p class="prose"><b>2) The roles &mdash; and what they really do</b></p>
           <ul class="steps">
-            <li>Tick <b>every</b> role this person fills. The seven are <b>Admin, Owner, Office, Sales, Agent, Fitter, Readonly</b>, and on a
+            <li>Tick <b>every</b> role this person fills. The four are <b>Admin, Office, Sales and Fitter</b>, and on a
                 fresh form <b>Sales is already ticked</b> &mdash; untick it if it&rsquo;s wrong. Someone who fits <em>and</em> sells gets both.
-                The highest one ticked becomes their <b>primary</b> role (&ldquo;The most privileged role drives admin-only access.&rdquo;).</li>
+                The highest one ticked becomes their <b>primary</b> role.</li>
             <li><b>Admin</b> is the one that matters. It is the <b>only</b> role that opens <b>Products, Users, Settings, Trade terms</b> and
                 <b>Billing</b>, and an admin always sees money and the whole Dashboard.</li>
             <li><b>Sales</b> and <b>Fitter</b> decide who is offered in an appointment&rsquo;s assign-to list. A <b>measure</b> offers your
                 <b>Sales</b> people; a <b>fitting</b> offers your <b>Fitter</b>s. (If nobody holds the role at all, everyone is offered, so
                 booking never gets stuck.)</li>
-            <li><b>Owner, Office, Agent and Readonly</b> are <b>labels</b> today &mdash; handy for knowing who&rsquo;s who, but they don&rsquo;t
-                lock anything down on their own. In particular, <b>Readonly does not make someone read-only</b>. Use the <b>Permissions</b>.</li>
+            <li><b>Office</b> is for your office staff. Like Sales and Fitter it says who someone is; what they can see and do comes
+                from the <b>Permissions</b>.</li>
             <li>On the <b>factory account</b> there is an eighth tick, <b>Factory</b>, and a <b>Production area</b> box (see below).</li>
           </ul>
 
@@ -483,7 +482,7 @@ return [
             ['3',  'Email or username',               'Next, how they sign in. Give them an email address, or a username. You need one or the other, not both. Workshop staff with no email can sign in with just a username. That is why the sign in box says username or email.', 3],
             ['4',  'A password',                      'Then a password, at least eight characters long. Because you added them yourself, the account is trusted. No confirmation email goes out, and they can sign in straight away. Just tell them the password.', 4],
             ['5',  'Roles',                           'Now the roles. Sales is already ticked when the form opens, so untick it if it is wrong. Tick every role this person fills. Dave fits blinds, and he sells, so he gets both. Admin is the one that matters most. Only an admin can open Products, Users, Settings, Trade terms and Billing.', 5],
-            ['6',  'What Sales and Fitter do',        'Sales and Fitter have one job each. When you book a measure, the people offered are your sales people. When you book a fitting, they are your fitters. Owner, office, agent and readonly are just labels for now. They do not lock anything down. Readonly does not make someone read only.', 6],
+            ['6',  'What Sales and Fitter do',        'Sales and Fitter have one job each. When you book a measure, the people offered are your sales people. When you book a fitting, they are your fitters. Office is for your office staff. Like the others, it says who someone is. What they can actually see and do is set by the permissions.', 6],
             ['7',  'Permissions: creating, and seeing all', 'Permissions are what really decide what people can do. Create quotes is ticked to start with. Create orders lets them turn work into orders. View all customer jobs is really a filter. Without it, the calendar, customers, orders and payments only show the jobs assigned to that person.', 7],
             ['8',  'Costs, fittings, and the menu',   'View costs shows your cost and profit figures, so leave it off for a fitter. Fittings only keeps their calendar to fitting jobs, and hides your measures. And if none of the first three boxes is ticked, Customers, Quotes, Orders, Payments and Pipeline all disappear from their menu. A fitter gets to the job from the calendar instead.', 8],
             ['9',  'Add user',                        'Press Add user. A green bar says User added, and they join the list below, in name order. You can see their roles, an active badge, and their last login. That says never, until they first sign in. It is a quick way to spot a login nobody has used yet.', 9],
