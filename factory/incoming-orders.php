@@ -395,7 +395,7 @@ require __DIR__ . '/../_partials/factory_head.php';
             ?>
             <div class="io-item<?= ($stageBy[$qid] ?? '') === 'dispatched' ? ' done' : '' ?>" data-search="<?= e($searchKey) ?>" style="<?= e($orowStyle) ?>">
                 <div class="io-summary io-cols" role="button" tabindex="0" aria-expanded="false">
-                    <span class="ref"><?= e($ref) ?><?php if (isset($remakeOf[$qid])): ?> <?= rm_badge($remakeOf[$qid]) ?><?php endif; ?></span>
+                    <span class="ref"><?= e($ref) ?></span>
                     <span class="cust"><?= e($custLabel) ?><?php if ($accContact !== ''): ?> <span style="color:var(--text-faint,#6b7280);font-weight:400">· <?= e($accContact) ?></span><?php endif; ?><?php if (!empty($dupBy[$qid])): ?>
                         <span class="io-dup" title="Same customer reference (<?= e($custRef) ?>) as <?= e(implode(', ', $dupBy[$qid])) ?> — check it isn't the same order twice">&#9888; same ref as <?= e(implode(', ', $dupBy[$qid])) ?></span><?php endif; ?></span>
                     <span class="date"><?= e($fmtDate($o['created_at'] ?? null)) ?></span>
@@ -410,6 +410,7 @@ require __DIR__ . '/../_partials/factory_head.php';
                     ?>
                     <span class="cnt"><?= $orderQty ?> blind<?= $orderQty === 1 ? '' : 's' ?></span>
                     <span class="stat">
+                        <?php if (isset($remakeOf[$qid])): ?><?= rm_badge($remakeOf[$qid]) ?><?php endif; ?>
                         <?php
                             // Phase 3: the single fulfilment stage IS the status now (Confirmed /
                             // In Production / Ready / Dispatched), coloured by stage. The old raw
