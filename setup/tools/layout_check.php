@@ -38,7 +38,12 @@ require_once dirname(__DIR__, 2) . '/auth/middleware.php';
 
 requireSuperAdmin();
 
-$ROOT = __DIR__;
+// The APP root, not this script's own folder. Those were the same thing while
+// this tool lived at the top level; the move into setup/tools left it scanning
+// setup/tools for screens, finding none, and reporting "0 screens × 4 widths =
+// 0 checks". A check that silently passes is worse than no check — it reads as
+// all-clear.
+$ROOT = dirname(__DIR__, 2);
 
 /* ---- Which files are screens? -------------------------------------------- */
 // A screen draws one of the two shells. An action endpoint redirects and exits
@@ -46,8 +51,11 @@ $ROOT = __DIR__;
 $SHELLS = ['_partials/factory_head.php', '_partials/sidebar.php'];
 
 // Directories that hold no screens: partials, generators, endpoints, assets.
+// 'setup' holds migrations and seeds — things that DO something rather than
+// show something. None of them draws a shell today so none would be swept, but
+// a future one might, and a sweep that opens a migration would run it.
 $SKIP_DIRS = ['_partials', '_lib', '_backups', 'pdf-generator', 'api', 'vendor',
-              'node_modules', '.git', '.github', 'assets', 'uploads', 'logs'];
+              'node_modules', '.git', '.github', 'assets', 'uploads', 'logs', 'setup'];
 
 // A GET on one of these could DO something rather than show something.
 $UNSAFE = '/(^|[_-])(delete|wipe|purge|destroy|reset|logout|act-as|go-live|save|
