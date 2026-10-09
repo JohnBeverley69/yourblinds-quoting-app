@@ -78,9 +78,9 @@ $rmb = '<span class="rmb">REMAKE</span>';
  */
 $menu = static function (array $ring = [], string $rem = 'Remakes', string $cal = 'Calendar') : string {
     $sec = [
-        'Work'       => ['Dashboard', 'Orders', $rem, $cal],
-        'Production' => ['Incoming orders', 'Floor', 'Dispatch'],
-        'Accounts'   => ['Trade accounts', 'Invoices', 'Bank', 'Statements', 'Commissions', 'The Numbers'],
+        'Work'       => [$cal, 'Dashboard', 'Orders', $rem],   // A to Z, as the real menu
+        'Production' => ['Dispatch', 'Floor', 'Incoming orders'],
+        'Accounts'   => ['Bank', 'Commissions', 'Invoices', 'Statements', 'The Numbers', 'Trade accounts'],
         'Setup'      => [],
         'Platform'   => [],
     ];

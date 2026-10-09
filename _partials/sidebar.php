@@ -462,7 +462,14 @@ window.addEventListener('pageshow', function (e) {
         </div>
 
         <nav class="app-sidebar-nav">
-<?php foreach ($navSections as $section):
+<?php
+// Menu items run A to Z within each section (and within each Platform sub-group,
+// whose headings run A to Z too) — John 2026-10-09. Sections keep their order.
+$navAZ = static function (array $items): array {
+    uasort($items, static fn ($a, $b) => strnatcasecmp((string) $a[1], (string) $b[1]));
+    return $items;
+};
+foreach ($navSections as $section):
     $isCollapsible = !empty($section['collapsible']);
 
     // A section is either flat ('items') or sub-grouped ('groups', e.g. Platform).
@@ -474,8 +481,9 @@ window.addEventListener('pageshow', function (e) {
             $gi = array_filter($grp['items'], static fn ($it) => !empty($it[2]));
             if (!$gi) continue;
             if (array_key_exists($activeNav, $gi)) $anyActive = true;
-            $visGroups[] = ['heading' => $grp['heading'], 'items' => $gi];
+            $visGroups[] = ['heading' => $grp['heading'], 'items' => $navAZ($gi)];
         }
+        usort($visGroups, static fn ($a, $b) => strnatcasecmp($a['heading'], $b['heading']));
         if (!$visGroups) continue;
         $isOpen = $isCollapsible && $anyActive;
 ?>
@@ -497,6 +505,7 @@ window.addEventListener('pageshow', function (e) {
         static fn ($it) => !empty($it[2])
     );
     if (!$visibleItems) continue;
+    $visibleItems = $navAZ($visibleItems);
     // If the active page lives inside a collapsible section, open
     // it by default so the user sees their context.
     $isOpen = $isCollapsible && array_key_exists($activeNav, $visibleItems);
