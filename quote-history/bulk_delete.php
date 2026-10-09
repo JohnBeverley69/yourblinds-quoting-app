@@ -20,6 +20,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require __DIR__ . '/../quote-builder/_helpers.php';
 
 requireLogin();
 
@@ -91,6 +92,30 @@ $ph  = implode(',', array_fill(0, count($ids), '?'));
 // Defensive: if the payments table doesn't exist yet (migration not
 // run), skip this check entirely. The DELETE below works either way.
 $blocked = [];
+
+// The same refusals the single Delete button and quote-builder/delete.php
+// apply — qb_delete_block_reason(): the factory has already started it, it's
+// a remake (theirs, not ours), or it's a placed direct order that has to be
+// reopened as a draft first.
+//
+// Those rules landed on the single-delete path only (#927/#939). The payments
+// guard below was copied the other way, from here into delete.php, which is
+// why the mirroring reads as done and isn't: tick a live order in the Order
+// history list and Delete and it goes, blinds on the factory floor and all.
+// One ticked row must not be able to do what its own Delete button refuses.
+$ruleBlocked = [];
+$chk = $pdo->prepare(
+    "SELECT id, quote_number, status, direct_order, remake_of_quote_id
+       FROM quotes WHERE id IN ($ph) AND client_id = ?"
+);
+$chk->execute(array_merge($ids, [$clientId]));
+foreach ($chk->fetchAll(PDO::FETCH_ASSOC) as $row) {
+    $why = qb_delete_block_reason($pdo, $row);
+    if ($why !== '') {
+        $blocked[(int) $row['id']] = (string) $row['quote_number'];
+        $ruleBlocked[(string) $row['quote_number']] = $why;
+    }
+}
 try {
     $payStmt = $pdo->prepare(
         "SELECT q.id, q.quote_number, COUNT(p.id) AS n_payments
@@ -140,11 +165,20 @@ $msgs = [];
 if ($deleted > 0) {
     $msgs[] = ($deleted === 1 ? '1 quote' : "$deleted quotes") . ' deleted.';
 }
-if ($blocked) {
-    $list = implode(', ', $blocked);
-    $msgs[] = (count($blocked) === 1
+// Two different reasons a row was kept, so say which. Lumping them together
+// told someone whose order is on the factory floor to "delete the payments
+// first", which isn't the problem and wouldn't help.
+if ($ruleBlocked) {
+    foreach ($ruleBlocked as $num => $why) {
+        $msgs[] = $num . ': ' . $why;
+    }
+}
+$payBlocked = array_diff($blocked, array_keys($ruleBlocked));
+if ($payBlocked) {
+    $list = implode(', ', $payBlocked);
+    $msgs[] = (count($payBlocked) === 1
         ? '1 quote was kept because it has payment(s) recorded against it: '
-        : count($blocked) . ' quotes were kept because they have payments recorded against them: ')
+        : count($payBlocked) . ' quotes were kept because they have payments recorded against them: ')
         . $list
         . '. Delete the payments first if you really want to remove these.';
 }
