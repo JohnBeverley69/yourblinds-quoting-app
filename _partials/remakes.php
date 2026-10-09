@@ -335,7 +335,17 @@ function rm_create_remake_order(PDO $pdo, int $factory, array $r, float $charge,
              'acceptance_signature_png', 'acceptance_method', 'acceptance_by_user_id', 'archived_at', 'receipt_sent_at',
              'factory_notified_at', 'supplier_ordered_at', 'supplier_received_at', 'created_at', 'updated_at',
              'price_override', 'wt_amount', 'remake_of_quote_id', 'due_date', 'subtotal', 'vat', 'total',
-             'additional_reference', 'notes'];
+             'additional_reference', 'notes',
+             // The original's "Sold for" is what the client charged their own
+             // customer for the blind. They are not selling the remake to them
+             // again, so these must not ride along: $skip is a denylist, and
+             // every column missing from it is copied verbatim. Inherited, they
+             // made a free remake read as a second full-price sale at ~100%
+             // margin on the Dashboard's gross-profit panel.
+             // direct_order is deliberately NOT skipped — a remake of a direct
+             // order is still one, and #927 keys the client's own order lists
+             // off that flag, so clearing it would hide the remake from them.
+             'sold_for_amount', 'sold_for_inc_vat', 'sold_for_net', 'sold_for_gross'];
     $vatPct = (float) ($q['vat_percent'] ?? 0);
     $vat    = round($charge * $vatPct / 100, 2);
     $note   = 'REMAKE of ' . $q['quote_number'] . ' — ' . $r['reason_label']
