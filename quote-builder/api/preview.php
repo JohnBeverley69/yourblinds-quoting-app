@@ -53,6 +53,19 @@ $isAdmin  = is_array($user) && ($user['role'] ?? '') === 'admin';
 // Public (anonymous) visitors never see the cost/margin breakdown.
 $canCosts = $isAdmin || !empty(current_user_permissions()['can_view_costs']);
 
+// `direct_order=1` zeroes BOTH the markup and the discount in _preview_core.php
+// — it doesn't just tweak a figure, it IS the buying price. So it needs the
+// same gate as the two overrides it sets, and it had none: $q there is $_GET,
+// and this endpoint serves anonymous InstaPrice visitors (?public=1), who got
+// the factory's buying price for any showcase blind by appending one parameter.
+//
+// Not gated on $canCosts: a trade client raising a direct order is entitled to
+// the buying price (it's what they pay) without being a cost-viewer. The real
+// entitlement is being able to raise one at all — new_order.php:23's rule.
+$canDirect = is_array($user)
+    && ($isAdmin || is_super_admin() || !empty(current_user_permissions()['can_create_orders']));
+if (!$canDirect) unset($_GET['direct_order']);
+
 // The whole answer lives in _preview_core.php, shared with the tablet's
 // offline engine (offline/_device_preview.php) so both price identically.
 echo json_encode(qb_preview_response(db(), $clientId, $_GET, $canCosts, (bool) $ipPublic, $forAccountId));
