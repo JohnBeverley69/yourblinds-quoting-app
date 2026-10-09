@@ -221,7 +221,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                           . "Use the link below to choose a new password (valid for 24 hours):\n"
                           . $url . "\n\n"
                           . "If you weren't expecting this, please contact us.\n\n— YourBlinds";
-                    $ok = mailer_send($target['email'], 'Set your YourBlinds password', $body);
+                    $ok = mailer_send($target['email'], 'Set your YourBlinds password', $body, null, null,
+                        ['links' => [$url => 'Choose a new password']]);
                     $_SESSION[$ok ? 'flash_success' : 'flash_error'] = $ok
                         ? ('Reset link sent to ' . $target['email'] . '.')
                         : ('Could not send the email — check mail settings (or Testing mode is on).');

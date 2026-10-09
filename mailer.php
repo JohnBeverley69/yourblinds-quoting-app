@@ -28,6 +28,11 @@ require_once __DIR__ . '/_partials/app_settings.php';
  *                                       — e.g. send "from" the trade client's
  *                                       own settings. Invalid emails fall back
  *                                       to the MAIL_FROM default.
+ *                                       'links' => [url => label]: with no
+ *                                       $htmlBody, an HTML copy of $body is
+ *                                       built where each url shows as a short
+ *                                       "label" link instead of the long
+ *                                       address (plain text kept as AltBody).
  */
 function mailer_send(
     $to,
@@ -127,6 +132,9 @@ function mailer_send(
         }
 
         $mailer->Subject = $subject;
+        if ($htmlBody === null && !empty($opts['links']) && is_array($opts['links'])) {
+            $htmlBody = mailer_text_to_html($body, $opts['links']);
+        }
         if ($htmlBody !== null) {
             $mailer->isHTML(true);
             $mailer->Body    = $htmlBody;
@@ -152,4 +160,28 @@ function mailer_send(
         error_log('[YourBlinds] Email send failed: ' . $e->getMessage());
     }
     return false;
+}
+
+/**
+ * HTML copy of a plain-text email: text escaped, line breaks kept, and each
+ * url in $links shown as a short link reading its label ("View your quote")
+ * rather than the long tokenised address — which looks unprofessional.
+ *
+ * @param array<string,string> $links url => label
+ */
+function mailer_text_to_html(string $text, array $links): string
+{
+    $html = htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
+    // Longest first, so a url that prefixes another can't break it.
+    uksort($links, static fn ($a, $b) => strlen((string) $b) <=> strlen((string) $a));
+    foreach ($links as $url => $label) {
+        $url = (string) $url;
+        if ($url === '') continue;
+        $a = '<a href="' . htmlspecialchars($url, ENT_QUOTES, 'UTF-8') . '"'
+           . ' style="color:#1f3b5b;font-weight:bold;text-decoration:underline">'
+           . htmlspecialchars((string) $label, ENT_QUOTES, 'UTF-8') . '</a>';
+        $html = str_replace(htmlspecialchars($url, ENT_QUOTES, 'UTF-8'), $a, $html);
+    }
+    return '<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;line-height:1.5;color:#1f2937">'
+         . nl2br($html, false) . '</div>';
 }

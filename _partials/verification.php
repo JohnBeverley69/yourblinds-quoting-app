@@ -68,5 +68,6 @@ function verification_send_email(string $to, string $url, string $company = ''):
            . "If you didn't create a YourBlinds account, you can safely ignore this email.\n\n"
            . "— YourBlinds";
 
-    return mailer_send($to, 'Confirm your YourBlinds account', $body);
+    return mailer_send($to, 'Confirm your YourBlinds account', $body, null, null,
+        ['links' => [$url => 'Confirm my email address']]);
 }
