@@ -34,7 +34,15 @@ if (!$isAdmin && empty($_perms['can_create_orders'])) {
 $ref   = '';
 $label = '';
 $notes = '';
+$soldFor = '';
 $error = null;
+// Default "inc VAT" tick: on for a VAT-registered business.
+$soldIncVat = false;
+try {
+    $cv = db()->prepare('SELECT vat_number FROM clients WHERE id = ? LIMIT 1');
+    $cv->execute([$clientId]);
+    $soldIncVat = trim((string) ($cv->fetchColumn() ?: '')) !== '';
+} catch (Throwable $e) {}
 $dups  = [];   // earlier jobs with the same reference (warn, don't block)
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -42,6 +50,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $ref   = mb_substr(trim((string) ($_POST['customer_reference'] ?? '')), 0, 100);
     $label = mb_substr(trim((string) ($_POST['end_customer_name'] ?? '')), 0, 150);
     $notes = trim((string) ($_POST['notes'] ?? ''));
+    $soldFor    = trim((string) ($_POST['sold_for'] ?? ''));
+    $soldIncVat = !empty($_POST['sold_for_inc_vat']);
 
     if ($ref === '') {
         $error = 'Please enter your order reference.';
@@ -83,6 +93,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'UPDATE quotes SET direct_order = 1, vat_percent = 0, end_customer_name = ?
                   WHERE id = ? AND client_id = ?'
             )->execute([$label, (int) $res['id'], $clientId]);
+            if ($soldFor !== '') {
+                qb_save_sold_for($pdo, (int) $res['id'], $clientId, $soldFor, $soldIncVat);
+            }
             $pdo->commit();
             $_SESSION['flash_success'] = 'Order ' . $res['number'] . ' started — add the blinds, then Place order.';
             header('Location: /quote-builder/edit.php?id=' . (int) $res['id'] . '#add-line');
@@ -143,8 +156,8 @@ $activeNav = 'order-history';
             </p>
             <?php /* Plain p, not .ui-hint — compact mode hides hints and this one matters. */ ?>
             <p style="color:#92400e;background:#fef3c7;border-radius:8px;padding:0.5rem 0.75rem;font-size:0.875rem;margin:0 0 1rem;max-width:44rem">
-                An order only knows what you pay us, not what you sold it for &mdash; so it shows <strong>no profit</strong> and
-                lowers the gross profit figures on your Dashboard. To track the profit on a job, use <strong>New quote</strong> instead.
+                An order only knows what you pay us. Fill in <strong>Sold for</strong> (now or later) and it counts in your
+                Dashboard&rsquo;s sales and profit; leave it blank and the order is kept out of those figures.
             </p>
             <form method="post" action="/quote-builder/new_order.php" class="form form-box-labels" novalidate>
                 <?= csrf_field() ?>
@@ -157,10 +170,23 @@ $activeNav = 'order-history';
                                value="<?= e($ref) ?>">
                     </div>
                     <div class="form-group">
-                        <label for="end_customer_name">Name for the labels <span style="color:var(--text-faint);font-weight:400">(optional)</span></label>
+                        <label for="end_customer_name">Customer name <span style="color:var(--text-faint);font-weight:400">(optional &mdash; also on the labels)</span></label>
                         <input id="end_customer_name" name="end_customer_name" type="text" maxlength="150"
-                               placeholder="Name for the labels (optional)"
+                               placeholder="Customer name (optional)"
                                value="<?= e($label) ?>">
+                    </div>
+                </div>
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label for="sold_for">Sold for <span style="color:var(--text-faint);font-weight:400">(optional &mdash; what your customer is paying)</span></label>
+                        <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap">
+                            <span>£</span>
+                            <input id="sold_for" name="sold_for" type="number" step="0.01" min="0" inputmode="decimal"
+                                   style="width:9rem" placeholder="Sold for (optional)" value="<?= e($soldFor) ?>">
+                            <label style="display:inline-flex;align-items:center;gap:0.35rem;font-weight:400;margin:0">
+                                <input type="checkbox" name="sold_for_inc_vat" value="1" <?= $soldIncVat ? 'checked' : '' ?>> inc VAT
+                            </label>
+                        </div>
                     </div>
                 </div>
                 <div class="form-row full">

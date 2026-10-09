@@ -48,6 +48,10 @@ if ($offlineTemplate) {
 // Direct order (new_order.php): order-shaped screen — order header instead of
 // a retail customer, buying prices, one "Place order" step, no quoting extras.
 $isDirectOrder = !$offlineTemplate && qb_is_direct_order($quote);
+$clientVatNumber = '';
+if ($isDirectOrder) {
+    try { $cv = db()->prepare('SELECT vat_number FROM clients WHERE id = ? LIMIT 1'); $cv->execute([$clientId]); $clientVatNumber = (string) ($cv->fetchColumn() ?: ''); } catch (Throwable $e) {}
+}
 
 // Measurement unit for THIS quote: the quote's own override if set, else
 // the tenant default, else mm. Sizes are stored in mm; this only drives
@@ -1163,12 +1167,51 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                 </div>
                 <div class="form-row full">
                     <div class="form-group">
-                        <label for="end_customer_name">Name for the labels <span style="color:var(--text-faint);font-weight:400">(optional)</span></label>
+                        <label for="end_customer_name">Customer name <span style="color:var(--text-faint);font-weight:400">(optional &mdash; also printed on the labels)</span></label>
                         <input id="end_customer_name" name="end_customer_name" type="text" maxlength="150"
-                               placeholder="Name for the labels (optional)" <?= !$editable ? 'readonly' : '' ?>
+                               placeholder="Customer name (optional)" <?= !$editable ? 'readonly' : '' ?>
                                value="<?= e((string) ($quote['end_customer_name'] ?? '')) ?>">
                     </div>
                 </div>
+                <?php
+                    $doHasAddr = trim((string) ($quote['end_customer_address1'] ?? '') . ($quote['end_customer_postcode'] ?? '')
+                                    . ($quote['end_customer_phone'] ?? '') . ($quote['end_customer_mobile'] ?? '')) !== '';
+                ?>
+                <details<?= $doHasAddr ? ' open' : '' ?> style="margin:0.25rem 0 0.5rem">
+                    <summary style="cursor:pointer;font-size:0.875rem;color:var(--text-secondary)">
+                        Customer contact &amp; fitting address <span style="color:var(--text-faint)">(optional &mdash; goes on the fitting appointment)</span>
+                    </summary>
+                    <div class="form-row cols-3" style="margin-top:0.5rem">
+                        <?php foreach ([['end_customer_phone', 'Phone', 'tel', 50], ['end_customer_mobile', 'Mobile', 'tel', 50], ['end_customer_email', 'Email', 'email', 150]] as [$fn, $fl, $ft, $fm]): ?>
+                        <div class="form-group">
+                            <label for="<?= $fn ?>"><?= $fl ?></label>
+                            <input id="<?= $fn ?>" name="<?= $fn ?>" type="<?= $ft ?>" maxlength="<?= $fm ?>" placeholder="<?= $fl ?>"
+                                   <?= !$editable ? 'readonly' : '' ?> value="<?= e((string) ($quote[$fn] ?? '')) ?>">
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <div class="form-row cols-2">
+                        <?php foreach ([['end_customer_address1', 'Address line 1'], ['end_customer_address2', 'Address line 2']] as [$fn, $fl]): ?>
+                        <div class="form-group">
+                            <label for="<?= $fn ?>"><?= $fl ?></label>
+                            <input id="<?= $fn ?>" name="<?= $fn ?>" type="text" maxlength="150" placeholder="<?= $fl ?>"
+                                   <?= !$editable ? 'readonly' : '' ?> value="<?= e((string) ($quote[$fn] ?? '')) ?>">
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <div class="form-row cols-3">
+                        <?php foreach ([['end_customer_town', 'Town', 100], ['end_customer_county', 'County', 100], ['end_customer_postcode', 'Postcode', 20]] as [$fn, $fl, $fm]): ?>
+                        <div class="form-group">
+                            <label for="<?= $fn ?>"><?= $fl ?></label>
+                            <input id="<?= $fn ?>" name="<?= $fn ?>" type="text" maxlength="<?= $fm ?>" placeholder="<?= $fl ?>"
+                                   <?= !$editable ? 'readonly' : '' ?> value="<?= e((string) ($quote[$fn] ?? '')) ?>">
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <span class="ui-hint" style="display:block;font-size:0.8125rem;color:var(--text-faint)">
+                        Fill these in before you place the order &mdash; the fitting appointment it books picks them up.
+                    </span>
+                </details>
             <?php elseif ($isTradeOrder):
                 $accAddr = array_filter([
                     (string) ($tradeAccount['address1'] ?? ''),
@@ -1401,6 +1444,36 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                 </div>
             <?php endif; ?>
             </form>
+            <?php if ($isDirectOrder):
+                // Sold for — its own form so it stays editable after the order is
+                // placed (the price is often agreed later). Default tick: inc VAT
+                // for a VAT-registered business, ex VAT otherwise.
+                $sfAmt = $quote['sold_for_amount'] ?? null;
+                $sfInc = $sfAmt !== null && $sfAmt !== ''
+                    ? !empty($quote['sold_for_inc_vat'])
+                    : trim($clientVatNumber) !== '';
+            ?>
+            <form method="post" action="/quote-builder/save_sold_for.php" class="form" novalidate
+                  style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border)">
+                <?= csrf_field() ?>
+                <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
+                <label for="sold_for" style="display:block;font-weight:600">Sold for <span style="color:var(--text-faint);font-weight:400">(optional &mdash; what your customer is paying)</span></label>
+                <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;margin-top:0.35rem">
+                    <span>£</span>
+                    <input id="sold_for" name="sold_for" type="number" step="0.01" min="0" inputmode="decimal"
+                           style="width:9rem" placeholder="0.00"
+                           value="<?= ($sfAmt !== null && $sfAmt !== '') ? e(number_format((float) $sfAmt, 2, '.', '')) : '' ?>">
+                    <label style="display:inline-flex;align-items:center;gap:0.35rem;font-weight:400;margin:0">
+                        <input type="checkbox" name="sold_for_inc_vat" value="1" <?= $sfInc ? 'checked' : '' ?>> inc VAT
+                    </label>
+                    <button type="submit" class="btn btn-secondary">Save</button>
+                </div>
+                <span style="display:block;color:var(--text-muted,#667);font-size:0.8125rem;margin-top:0.35rem">
+                    Only for your own figures &mdash; we never see it. With a price, this order counts in your Dashboard's
+                    sales and profit; without one, it's left out. You can add or change it at any time.
+                </span>
+            </form>
+            <?php endif; ?>
         </section>
 
         <?php if ($editable): ?>

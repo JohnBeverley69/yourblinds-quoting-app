@@ -42,13 +42,26 @@ if (qb_is_direct_order($quote)) {
         return $v === '' ? null : mb_substr($v, 0, $max);
     };
     db()->prepare(
-        'UPDATE quotes SET customer_reference = ?, additional_reference = ?, end_customer_name = ?, notes = ?
+        'UPDATE quotes SET customer_reference = ?, additional_reference = ?, end_customer_name = ?, notes = ?,
+                           end_customer_phone = ?, end_customer_mobile = ?, end_customer_email = ?,
+                           end_customer_address1 = ?, end_customer_address2 = ?,
+                           end_customer_town = ?, end_customer_county = ?, end_customer_postcode = ?
           WHERE id = ? AND client_id = ?'
     )->execute([
         $ref,
         $opt('additional_reference', 100),
         (string) ($opt('end_customer_name', 150) ?? ''),
         $opt('notes', 65535),
+        // Optional customer contact + fitting address — the fitting appointment
+        // booked when the order is placed copies these.
+        $opt('end_customer_phone', 50),
+        $opt('end_customer_mobile', 50),
+        $opt('end_customer_email', 150),
+        $opt('end_customer_address1', 150),
+        $opt('end_customer_address2', 150),
+        $opt('end_customer_town', 100),
+        $opt('end_customer_county', 100),
+        $opt('end_customer_postcode', 20),
         $quoteId,
         $clientId,
     ]);
