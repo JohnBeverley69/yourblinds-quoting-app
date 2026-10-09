@@ -549,7 +549,8 @@ return [
           <p><b>The live price box does the checking.</b> Grey means waiting &mdash; <em>&ldquo;Still need: product, fabric, width, drop.&rdquo;</em> Red
              means it could not price it. Green means good: <em>&ldquo;&pound;77.00 per blind&rdquo;</em>, or <em>&ldquo;&pound;154.00 for 2 blinds &middot;
              &pound;77.00 each&rdquo;</em>. If you are allowed to see costs, the line can also show the <b>base</b>, the <b>extras</b>, the <b>markup</b> (or margin), the
-             <b>discount</b> and any <b>trade discount</b> &mdash; but <b>those start hidden every time the page opens</b>, because quotes are often built
+             <b>discount</b> and any <b>trade discount</b> (the <b>base</b> is the price-table figure <em>before</em> the trade discount, so a
+             trade line reads e.g. <em>&ldquo;base &pound;23.56 &middot; trade discount 15% &middot; &pound;20.03 per blind&rdquo;</em>, the buying price last) &mdash; but <b>those start hidden every time the page opens</b>, because quotes are often built
              with the customer looking at the screen. A small, unlabelled <b>eye</b> icon at the end of the line (and another beside <b>Total</b>) shows
              them; tap it again to hide them. It is never remembered, so the next page starts hidden again.
              <b>Both save buttons stay greyed out until the box is green</b> &mdash; a blind with no price cannot go on a quote.</p>
