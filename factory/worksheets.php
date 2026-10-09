@@ -195,6 +195,21 @@ function ws_snapshot_current(PDO $pdo, int $templateId, int $productId, ?int $us
 // ---- POST: save / delete --------------------------------------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $hasTable) {
     csrf_check();
+    // Designing the ticket is an office job. The page is requireFactory() so a
+    // floor login can still open it, pick a product and read or print the
+    // layout — the 403 page for office screens says in so many words that
+    // floor logins "can use the production floor, scanning and worksheets".
+    // But every POST here is an edit (save a template, delete one, restore a
+    // version), and those were ungated, so a bench login could redesign or
+    // delete the work ticket every other bench builds from. #852 took the same
+    // powers off floor logins for orders, settings, routes and build rules; the
+    // worksheet designer is the same kind of tool and was missed.
+    // Switching product or template is GET (lines 568, 576), so browsing is
+    // untouched.
+    if (!factory_user_is_office()) {
+        http_response_code(403);
+        exit('Worksheet layouts are an office screen. Floor logins can view and print them, but not change them.');
+    }
     $action = (string) ($_POST['_action'] ?? '');
     $uid    = (function_exists('current_user') ? (int) (current_user()['user_id'] ?? 0) : 0) ?: null;
 
