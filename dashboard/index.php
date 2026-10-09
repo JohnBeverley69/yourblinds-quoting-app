@@ -185,6 +185,18 @@ $hasDirectOrder = false;
 try { $pdo->query('SELECT direct_order FROM quotes LIMIT 0'); $hasDirectOrder = true; } catch (Throwable $e) {}
 $noDirect  = $hasDirectOrder ? ' AND COALESCE(direct_order, 0) = 0'   : '';
 $noDirectQ = $hasDirectOrder ? ' AND COALESCE(q.direct_order, 0) = 0' : '';
+// A direct order WITH a "Sold for" price (what the client's customer pays) is a
+// real sale: it counts in revenue at that price (gross, like quote totals) and in
+// profit at its net price minus the order total (what they pay us). Without one
+// it stays out. Close rate always leaves direct orders out (they aren't quotes).
+$hasSoldFor = false;
+if ($hasDirectOrder) {
+    try { $pdo->query('SELECT sold_for_net FROM quotes LIMIT 0'); $hasSoldFor = true; } catch (Throwable $e) {}
+}
+$keepSales  = $hasSoldFor ? ' AND (COALESCE(direct_order, 0) = 0 OR sold_for_net IS NOT NULL)'     : $noDirect;
+$keepSalesQ = $hasSoldFor ? ' AND (COALESCE(q.direct_order, 0) = 0 OR q.sold_for_net IS NOT NULL)' : $noDirectQ;
+$saleTotal  = $hasSoldFor ? 'CASE WHEN COALESCE(direct_order, 0) = 1 THEN sold_for_gross ELSE total END'       : 'total';
+$saleTotalQ = $hasSoldFor ? 'CASE WHEN COALESCE(q.direct_order, 0) = 1 THEN q.sold_for_gross ELSE q.total END' : 'q.total';
 $inDecided = implode(',', array_fill(0, count($decidedStatuses), '?'));
 
 // ---- Salesperson filter ----------------------------------------------
@@ -237,14 +249,14 @@ if ($canSeeRevenue) {
     [$kpiUser, $kpiUserParams] = $buildUserFilter('created_by_user_id');
     $st = $pdo->prepare(
         "SELECT COUNT(*)        AS won_count,
-                COALESCE(SUM(total), 0)  AS revenue,
-                COALESCE(AVG(total), 0)  AS aov
+                COALESCE(SUM($saleTotal), 0)  AS revenue,
+                COALESCE(AVG($saleTotal), 0)  AS aov
            FROM quotes
           WHERE client_id = ?
             AND status IN ($inWon)
             $dateClause
             $kpiUser
-            $noDirect"
+            $keepSales"
     );
     $st->execute(array_merge([$clientId], $wonStatuses, $dateParams, $kpiUserParams));
     $kpi = $st->fetch() ?: $kpi;
@@ -279,6 +291,7 @@ if ($canSeeRevenue && $hasDirectOrder) {
            FROM quotes
           WHERE client_id = ? AND direct_order = 1
             AND status IN ($inPl)
+            " . ($hasSoldFor ? 'AND sold_for_net IS NULL' : '') . "
             $dateClause
             $doUser"
     );
@@ -291,19 +304,21 @@ $leaderboard = [];
 if ($canSeeTeam) {
     [$lbDate, $lbDateParams] = $buildDateFilter('q.created_at');
     [$lbUser, $lbUserParams] = $buildUserFilter('q.created_by_user_id');
+    // Quote counts (pipeline / decided / won) ignore direct orders — multiply by 0.
+    $lbQuoteOnly = $hasDirectOrder ? '* (1 - COALESCE(q.direct_order, 0))' : '';
     $st = $pdo->prepare(
         "SELECT q.created_by_user_id AS uid,
                 COALESCE(u.full_name, '(unknown)') AS name,
-                SUM(CASE WHEN q.status IN ($inDecided) OR q.status = 'sent' THEN 1 ELSE 0 END) AS pipeline,
-                SUM(CASE WHEN q.status IN ($inDecided) THEN 1 ELSE 0 END) AS decided,
-                SUM(CASE WHEN q.status IN ($inWon)     THEN 1 ELSE 0 END) AS won,
-                COALESCE(SUM(CASE WHEN q.status IN ($inWon) THEN q.total ELSE 0 END), 0) AS revenue
+                SUM(CASE WHEN q.status IN ($inDecided) OR q.status = 'sent' THEN 1 ELSE 0 END $lbQuoteOnly) AS pipeline,
+                SUM(CASE WHEN q.status IN ($inDecided) THEN 1 ELSE 0 END $lbQuoteOnly) AS decided,
+                SUM(CASE WHEN q.status IN ($inWon)     THEN 1 ELSE 0 END $lbQuoteOnly) AS won,
+                COALESCE(SUM(CASE WHEN q.status IN ($inWon) THEN $saleTotalQ ELSE 0 END), 0) AS revenue
            FROM quotes q
            LEFT JOIN client_users u ON u.id = q.created_by_user_id
           WHERE q.client_id = ?
             $lbDate
             $lbUser
-            $noDirectQ
+            $keepSalesQ
        GROUP BY q.created_by_user_id, u.full_name
        ORDER BY revenue DESC, won DESC"
     );
@@ -318,11 +333,15 @@ $productMixTotal = 1;
 if ($canSeeProducts) {
     [$pmDate, $pmDateParams] = $buildDateFilter('q.created_at');
     [$pmUser, $pmUserParams] = $buildUserFilter('q.created_by_user_id');
+    // A priced direct order's lines are at cost; scale them to its net sold-for price.
+    $pmScale = $hasSoldFor
+        ? 'CASE WHEN COALESCE(q.direct_order, 0) = 1 THEN q.sold_for_net / NULLIF(q.subtotal, 0) ELSE 1 END'
+        : '1';
     $st = $pdo->prepare(
         "SELECT qi.product_id,
                 COALESCE(p.name, qi.product_name_snapshot, '(unknown)') AS product_name,
                 SUM(qi.quantity)   AS units,
-                SUM(qi.line_total) AS revenue
+                SUM(qi.line_total * $pmScale) AS revenue
            FROM quote_items qi
            JOIN quotes q     ON q.id = qi.quote_id
            LEFT JOIN products p ON p.id = qi.product_id
@@ -330,7 +349,7 @@ if ($canSeeProducts) {
             AND q.status IN ($inWon)
             $pmDate
             $pmUser
-            $noDirectQ
+            $keepSalesQ
        GROUP BY qi.product_id, product_name
        ORDER BY revenue DESC
        LIMIT 8"
@@ -406,6 +425,24 @@ if ($canSeeProfit) {
         $od->execute($args);
         $overrideDisc = (float) $od->fetchColumn();
     } catch (Throwable $e) { /* price_override column absent (pre-migration) → no adjustment */ }
+
+    if ($row && $hasSoldFor) {
+        try {
+            $dq = $pdo->prepare(
+                "SELECT COALESCE(SUM(q.sold_for_net), 0) AS sell, COALESCE(SUM(q.subtotal), 0) AS cost, COUNT(*) AS jobs
+                   FROM quotes q
+                  WHERE q.client_id = ? AND q.direct_order = 1 AND q.sold_for_net IS NOT NULL
+                    AND q.status IN ($inWon)
+                    $mgDate
+                    $mgUser"
+            );
+            $dq->execute($args);
+            $dr = $dq->fetch() ?: ['sell' => 0, 'cost' => 0, 'jobs' => 0];
+            $row['sell_total'] = (float) $row['sell_total'] + (float) $dr['sell'];
+            $row['cost_basis'] = (float) $row['cost_basis'] + (float) $dr['cost'];
+            $row['jobs']       = (int) $row['jobs'] + (int) $dr['jobs'];
+        } catch (Throwable $e) { /* leave quote-only figures */ }
+    }
 
     if ($row) {
         $sell = (float) $row['sell_total'] - $overrideDisc;
@@ -1121,10 +1158,10 @@ $activeNav = 'dashboard';
                 <div class="kpi-sub">accepted &amp; beyond</div>
             </div>
             <?php if ($directOrders !== null && (int) $directOrders['n'] > 0): ?>
-            <div class="kpi-tile" title="Orders sent straight through with New order, without a quote. Shown at what you pay for them; kept out of revenue, close rate and profit because the system doesn't know what you sold them for.">
-                <div class="kpi-label">Direct orders</div>
+            <div class="kpi-tile" title="Orders sent straight through with New order that have no Sold for price yet. Shown at what you pay for them and kept out of revenue and profit, because the system doesn't know what you sold them for. Add a Sold for price on the order to count it.">
+                <div class="kpi-label">Direct orders &mdash; no selling price</div>
                 <div class="kpi-value">£<?= number_format((float) $directOrders['spend'], 2) ?></div>
-                <div class="kpi-sub"><?= (int) $directOrders['n'] ?> order<?= (int) $directOrders['n'] === 1 ? '' : 's' ?> placed without a quote &middot; at your cost, ex VAT &middot; not counted in revenue or profit</div>
+                <div class="kpi-sub"><?= (int) $directOrders['n'] ?> order<?= (int) $directOrders['n'] === 1 ? '' : 's' ?> at your cost, ex VAT &middot; not counted in revenue or profit until you add what you sold <?= (int) $directOrders['n'] === 1 ? 'it' : 'them' ?> for</div>
             </div>
             <?php endif; ?>
         </div>

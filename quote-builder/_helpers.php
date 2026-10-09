@@ -97,6 +97,39 @@ function qb_is_direct_order(array $quote): bool
 }
 
 /**
+ * Direct order "Sold for": what the client's own customer is paying, entered
+ * inc or ex VAT (their tick). Returns [net, gross] at the tenant's VAT rate
+ * (client_settings.vat_percent; 0 = not VAT-registered, net = gross).
+ * The Dashboard uses net for profit and gross for revenue (like quote totals).
+ */
+function qb_sold_for_split(float $amount, bool $incVat, float $vatPct): array
+{
+    $amount = round(max(0.0, $amount), 2);
+    if ($vatPct <= 0) return [$amount, $amount];
+    return $incVat
+        ? [round($amount / (1 + $vatPct / 100), 2), $amount]
+        : [$amount, round($amount * (1 + $vatPct / 100), 2)];
+}
+
+/** Save (or clear, when $raw is blank) a direct order's Sold-for price. */
+function qb_save_sold_for(PDO $pdo, int $quoteId, int $clientId, string $raw, bool $incVat): void
+{
+    $raw = trim(str_replace([',', '£'], '', $raw));
+    if ($raw === '' || !is_numeric($raw) || (float) $raw <= 0) {
+        $pdo->prepare('UPDATE quotes SET sold_for_amount = NULL, sold_for_inc_vat = NULL, sold_for_net = NULL, sold_for_gross = NULL
+                        WHERE id = ? AND client_id = ?')->execute([$quoteId, $clientId]);
+        return;
+    }
+    $vs = $pdo->prepare('SELECT vat_percent FROM client_settings WHERE client_id = ? LIMIT 1');
+    $vs->execute([$clientId]);
+    $vat = (float) ($vs->fetchColumn() ?: 0);
+    [$net, $gross] = qb_sold_for_split((float) $raw, $incVat, $vat);
+    $pdo->prepare('UPDATE quotes SET sold_for_amount = ?, sold_for_inc_vat = ?, sold_for_net = ?, sold_for_gross = ?
+                    WHERE id = ? AND client_id = ?')
+        ->execute([round((float) $raw, 2), $incVat ? 1 : 0, $net, $gross, $quoteId, $clientId]);
+}
+
+/**
  * 404 (not 403 — don't confirm existence) if the user can't act on the quote.
  */
 function qb_require_quote_access(array $quote, array $user, array $perms): void

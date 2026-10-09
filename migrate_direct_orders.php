@@ -31,6 +31,23 @@ if ($exists->fetchColumn()) {
     $pdo->exec('ALTER TABLE quotes ADD COLUMN direct_order TINYINT(1) NOT NULL DEFAULT 0');
     echo "Added quotes.direct_order.\n";
 }
+// "Sold for" on a direct order (John, 2026-10-09): what the client's own
+// customer pays, so the Dashboard can count the sale and its profit.
+foreach ([
+    'sold_for_amount'  => 'DECIMAL(10,2) NULL',
+    'sold_for_inc_vat' => 'TINYINT(1) NULL',
+    'sold_for_net'     => 'DECIMAL(10,2) NULL',
+    'sold_for_gross'   => 'DECIMAL(10,2) NULL',
+] as $col => $def) {
+    $exists->execute(['quotes', $col]);
+    if ($exists->fetchColumn()) {
+        echo "quotes.$col already exists — skipped.\n";
+    } else {
+        $pdo->exec("ALTER TABLE quotes ADD COLUMN $col $def");
+        echo "Added quotes.$col.\n";
+    }
+}
+
 // Direct orders were first filed as sale_type 'trade', which hid them from a
 // client's own Quotes / Orders lists (those show type=retail). Re-file them.
 try {
