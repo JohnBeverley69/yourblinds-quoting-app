@@ -123,6 +123,29 @@ if (bj_tables_ready($pdo) && !empty($ids)) {
     try { $waitingBy = bj_order_waiting($pdo, $ids); } catch (Throwable $e) { $waitingBy = []; }
 }
 
+// Possible duplicates: another placed order from the SAME customer (tenant, or
+// trade account on a factory order) carrying the same customer reference.
+// Flagged on the row so the office can catch an order keyed in twice.
+$dupBy = [];
+if (!empty($ids)) {
+    try {
+        $dph = implode(',', array_fill(0, count($ids), '?'));
+        $dSt = $pdo->prepare(
+            "SELECT a.id, b.quote_number
+               FROM quotes a
+               JOIN quotes b ON b.client_id = a.client_id
+                            AND COALESCE(b.account_client_id, 0) = COALESCE(a.account_client_id, 0)
+                            AND b.id <> a.id
+                            AND b.status IN ($inPlaced)
+                            AND LOWER(TRIM(b.customer_reference)) = LOWER(TRIM(a.customer_reference))
+              WHERE a.id IN ($dph) AND TRIM(COALESCE(a.customer_reference, '')) <> ''
+              ORDER BY b.created_at"
+        );
+        $dSt->execute($ids);
+        foreach ($dSt->fetchAll(PDO::FETCH_ASSOC) as $r) $dupBy[(int) $r['id']][] = (string) $r['quote_number'];
+    } catch (Throwable $e) { $dupBy = []; }
+}
+
 // Phase 0: the single derived fulfilment stage, shown next to the old pills so
 // it can be checked against them. Guarded (column added by migration).
 require_once __DIR__ . '/../_partials/order_stage.php';
@@ -249,6 +272,8 @@ require __DIR__ . '/../_partials/factory_head.php';
     .io-item.done .io-summary .ref, .io-item.done .io-summary .cust { opacity: 0.6; }
     .io-status { font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 0.15rem 0.55rem; border-radius: 999px; background: #e0e7ff; color: #3730a3; }
     .io-status.ordered { background: #dcfce7; color: #166534; }
+    .io-dup { display: inline-block; margin-left: 0.4rem; font-size: 0.6875rem; font-weight: 700; white-space: nowrap;
+              padding: 0.1rem 0.45rem; border-radius: 999px; background: #fef3c7; color: #92400e; }
     .io-stage { font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; padding: 0.2rem 0.6rem; border-radius: 999px; white-space: nowrap; }
     .io-prog { display: inline-block; margin-left: 0.4rem; font-size: 0.6875rem; font-weight: 700; padding: 0.15rem 0.5rem; border-radius: 999px; background: #fef3c7; color: #92600a; text-decoration: none; white-space: nowrap; }
     .io-prog.all { background: #dcfce7; color: #166534; }
@@ -366,7 +391,8 @@ require __DIR__ . '/../_partials/factory_head.php';
             <div class="io-item<?= ($stageBy[$qid] ?? '') === 'dispatched' ? ' done' : '' ?>" data-search="<?= e($searchKey) ?>" style="<?= e($orowStyle) ?>">
                 <div class="io-summary io-cols" role="button" tabindex="0" aria-expanded="false">
                     <span class="ref"><?= e($ref) ?></span>
-                    <span class="cust"><?= e($custLabel) ?><?php if ($accContact !== ''): ?> <span style="color:var(--text-faint,#6b7280);font-weight:400">· <?= e($accContact) ?></span><?php endif; ?></span>
+                    <span class="cust"><?= e($custLabel) ?><?php if ($accContact !== ''): ?> <span style="color:var(--text-faint,#6b7280);font-weight:400">· <?= e($accContact) ?></span><?php endif; ?><?php if (!empty($dupBy[$qid])): ?>
+                        <span class="io-dup" title="Same customer reference (<?= e($custRef) ?>) as <?= e(implode(', ', $dupBy[$qid])) ?> — check it isn't the same order twice">&#9888; same ref as <?= e(implode(', ', $dupBy[$qid])) ?></span><?php endif; ?></span>
                     <span class="date"><?= e($fmtDate($o['created_at'] ?? null)) ?></span>
                     <?php
                         // The count is the whole order, not just what we make.
