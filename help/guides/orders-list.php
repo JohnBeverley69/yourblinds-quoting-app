@@ -434,7 +434,7 @@ return [
           </div>',
         'body'    => '
           <p><b>One page, several doors.</b> There is one list of jobs, opened from the menu by <b>Retail &rarr; Quotes</b> and <b>Retail &rarr;
-             Orders</b> &mdash; and, if you supply trade accounts, <b>Trade &rarr; Quotes</b> and <b>Trade &rarr; Orders</b>. Read the heading:
+             Orders</b>. Read the heading:
              <b>Retail Orders</b>, <b>Trade Quotes</b> and so on, with the line under it &mdash; <em>&ldquo;Accepted onward &mdash; orders, invoices
              and paid jobs.&rdquo;</em> on the orders side, <em>&ldquo;Quotes still in the pipeline &mdash; drafts, sent, and declined.&rdquo;</em> on
              the quotes side. Under the heading, the <b>List</b> | <b>Pipeline</b> tray swaps to the board view (which shows every job, with no
@@ -485,7 +485,7 @@ return [
              counts follow. Empty pages say <em>&ldquo;Quotes you&rsquo;re assigned to fit will appear here.&rdquo;</em>, <em>&ldquo;Nothing matches
              your filter. Clear filters.&rdquo;</em> or, on a new account, <em>&ldquo;No quotes yet. Start a new quote &rarr;&rdquo;</em>.</p>',
         'script'  => [
-            ['1', 'One list, several doors',   'Every quote and every order lives in one list. The menu on the left opens it from more than one door. Under Retail there are Quotes and Orders. If you supply trade accounts, there is a Trade section with its own Quotes and Orders too. They all open the same screen. What changes is which jobs it lets through.', 1],
+            ['1', 'One list, several doors',   'Every quote and every order lives in one list. The menu on the left opens it from more than one door. Under Retail there are Quotes and Orders. They both open the same screen. What changes is which jobs it lets through: quotes still being worked on, or orders from accepted onward.', 1],
             ['2', 'Read the heading first',    'So the first thing to do is read the heading. Here it says Retail Orders. That tells you two things. These are your own retail customers, not trade accounts. And these are orders, not quotes. The line underneath agrees: accepted onward, orders, invoices and paid jobs. Read it, and you always know where you are.', 2],
             ['3', 'The quotes side',           'Now click Quotes instead. It is the same page, showing the other end of the job. A job is a quote until the customer accepts it. So here you see drafts, sent quotes, and declined ones. A draft carries a small amber Not sent badge, meaning the customer has never seen it. The money columns have gone, because there is no deposit on a quote.', 3],
             ['4', 'Retail or trade',           'Whether a job is retail or trade is decided once, when it is created. Nothing afterwards moves it, and there is no switch on this list to do so. So if a job is on the wrong side, it was raised on the wrong side. The fix is to raise it again on the right side, then archive the one you do not want.', 4],

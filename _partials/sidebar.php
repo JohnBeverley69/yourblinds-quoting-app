@@ -202,20 +202,14 @@ $navSections = [
     ],
     [
         // Acting as the factory/wholesaler TO other businesses (was "Wholesale").
-        // Super-admin only — same visibility as the old Wholesale section, so a
-        // retail-only tenant never sees this whole block. Quotes/Orders are the
-        // shared list page filtered to trade (type=trade).
+        // RETIRED 2026-10-09 (Factory Console stage 5): the factory office now has
+        // its own menu (below, $isFactoryConsole) with Orders, Dispatch and the
+        // Accounts pages, so this block is gone from the ordinary menu. Kept as an
+        // empty section so the structure (and anything keyed on it) is unchanged.
+        // The pages themselves still exist; the old Trade quotes/orders lists
+        // (orders/index.php?type=trade) send console users to Console → Orders.
         'name'  => 'Trade',
-        'items' => [
-            'trade-accounts' => ['/master-admin/trade-accounts.php',          'Trade accounts', $isSuperAdmin],
-            'trade-quotes'   => ['/orders/index.php?scope=quotes&type=trade',  'Quotes',        $isFactoryOffice],
-            'trade-orders'   => ['/orders/index.php?scope=orders&type=trade',  'Orders',        $isFactoryOffice],
-            'dispatch'       => ['/master-admin/dispatch.php',                'Dispatch',       $isFactoryOffice],
-            'wholesale'      => ['/master-admin/wholesale.php',               'Invoices',       $isFactoryOffice],
-            'bank'           => ['/master-admin/bank.php',                    'Bank',           $isFactoryOffice],
-            'statement-run'  => ['/master-admin/statement-run.php',           'Statements',     $isFactoryOffice],
-            'commissions'    => ['/master-admin/commissions.php',             'Commissions',    $isFactoryOffice],
-        ],
+        'items' => [],
     ],
     [
         'name'        => 'Setup',
@@ -277,6 +271,10 @@ $navSections = [
 $isFactoryConsole = function_exists('factory_console_user') && factory_console_user();
 if ($isFactoryConsole) {
     $dashTag = 'Factory Console';
+    // Order/quote screens (quote builder, factory edit) belong under Console → Orders.
+    if (in_array($activeNav, ['order-history', 'quote-history', 'retail-quotes', 'retail-orders', 'trade-quotes', 'trade-orders'], true)) {
+        $activeNav = 'factory-orders';
+    }
     // Remakes waiting for approval ride on the label (plain text: labels are escaped).
     require_once __DIR__ . '/remakes.php';
     $_ybRemakesWaiting = rm_waiting_count(db(), ar_factory_id());

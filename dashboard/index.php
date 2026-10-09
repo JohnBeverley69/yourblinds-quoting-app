@@ -36,6 +36,7 @@ require __DIR__ . '/../_partials/joke_of_the_day.php';
 require __DIR__ . '/../_partials/pricing_basis.php';
 
 requireLogin();
+factory_console_redirect('/factory/dashboard.php');   // the factory office's home is the console
 
 $user      = current_user();
 $clientId  = (int) $user['client_id'];
