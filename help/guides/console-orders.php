@@ -36,7 +36,7 @@ $S = [
     ['1', 'Why there is a Factory Console', 'When a trade account places an order on their own portal, it is stored as their order, not ours. So the old sales screens, which only listed the factory\'s own jobs, could never show it. The Factory Console fixes that. It finds every order with our blinds on it, whoever placed it, and puts them all in one place for the office.', 1],
     ['2', 'Signing in', 'The console is for the office staff of the factory. When you sign in, you land straight on the console Dashboard, and the menu says Factory Console under the logo. If you open one of the old screens, like the sales dashboard, the Pipeline or the old orders list, it simply takes you to the console version instead.', 2],
     ['3', 'The Work menu', 'The menu has its own sections. Work comes first. Dashboard is your home page. Orders is the one list of everything placed with us. Remakes is where faults and remakes are handled, and Calendar is the office\'s shared calendar. When something needs you, the menu says so. For example, Remakes, two to approve, or Calendar, three due.', 3],
-    ['4', 'Production and Accounts', 'Under Production are the factory screens you already know: Incoming orders, the Floor, and Dispatch. Under Accounts are Invoices, Bank, Statements and Commissions. Trade accounts is there too, but only for the super admin. Setup and Platform sit at the bottom, for the people allowed to use them.', 4],
+    ['4', 'Production and Accounts', 'Under Production are the factory screens you already know: Incoming orders, the Floor, and Dispatch. Under Accounts are Invoices, Bank, Statements and Commissions. Trade accounts and Profit are there too, but only for the super admin. Setup and Platform sit at the bottom, for the people allowed to use them.', 4],
     ['5', 'The four stage tiles', 'The top row of the Dashboard counts orders by stage. New means an order has come in, but has not been received on the floor yet. Received means it is in, but not started. In production means it is being made. Ready to dispatch means everything is made and in. Click a tile to open it. New opens Incoming orders, and Ready to dispatch opens Dispatch.', 5],
     ['6', 'Quotes not placed yet', 'Just under those tiles, you may see a line saying how many of our own trade quotes are not placed yet. These are quotes the office has keyed in, which have not been turned into orders. Click the line, and you see them in the Orders list, under Not placed.', 6],
     ['7', 'The second row', 'The second row is the rest of the day at a glance. Calendar shows how many reminders and callbacks are due now. Remakes shows how many are in progress, and how many are waiting for approval. Blinds to make counts the blinds on orders that are not ready yet. And Out today counts the delivery notes dispatched today.', 7],
@@ -80,7 +80,7 @@ $menu = static function (array $ring = [], string $rem = 'Remakes', string $cal 
     $sec = [
         'Work'       => ['Dashboard', 'Orders', $rem, $cal],
         'Production' => ['Incoming orders', 'Floor', 'Dispatch'],
-        'Accounts'   => ['Trade accounts', 'Invoices', 'Bank', 'Statements', 'Commissions'],
+        'Accounts'   => ['Trade accounts', 'Invoices', 'Bank', 'Statements', 'Commissions', 'Profit'],
         'Setup'      => [],
         'Platform'   => [],
     ];
@@ -546,7 +546,7 @@ return [
                 waiting), <b>Calendar</b> (reads <b>Calendar (3 due)</b> when reminders, callbacks or remakes are due).</li>
             <li><b>Production</b> &mdash; <b>Incoming orders</b>, <b>Floor</b>, <b>Dispatch</b>.</li>
             <li><b>Accounts</b> &mdash; <b>Trade accounts</b> (super-admin only), <b>Invoices</b>, <b>Bank</b>, <b>Statements</b>,
-                <b>Commissions</b>.</li>
+                <b>Commissions</b>, <b>Profit</b> (super-admin only — what you make on every order, at your real cost).</li>
             <li><b>Setup</b> &mdash; <b>Products</b>, <b>Users</b>, <b>Settings</b> (admins) and <b>Factory settings</b>; then
                 <b>Platform</b> for the super-admin.</li>
           </ul>

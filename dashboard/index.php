@@ -152,8 +152,10 @@ if ($period === 'custom') {
 }
 
 // "Won" = quote turned into actual revenue. Excludes sent/draft/declined.
-$wonStatuses     = ['accepted', 'ordered', 'invoiced', 'paid'];
-$decidedStatuses = ['accepted', 'declined', 'ordered', 'invoiced', 'paid'];
+// 'fitted' sits between ordered and invoiced — it was missing, so a job dropped
+// out of revenue while it was fitted and came back when invoiced.
+$wonStatuses     = ['accepted', 'ordered', 'fitted', 'invoiced', 'paid'];
+$decidedStatuses = ['accepted', 'declined', 'ordered', 'fitted', 'invoiced', 'paid'];
 // "decided" = quote where the customer has made up their mind (won OR
 // lost). Used as the close-rate denominator so quotes still sitting in
 // 'sent' don't get counted against the salesperson — they might still
@@ -195,6 +197,15 @@ if ($hasDirectOrder) {
 }
 $keepSales  = $hasSoldFor ? ' AND (COALESCE(direct_order, 0) = 0 OR sold_for_net IS NOT NULL)'     : $noDirect;
 $keepSalesQ = $hasSoldFor ? ' AND (COALESCE(q.direct_order, 0) = 0 OR q.sold_for_net IS NOT NULL)' : $noDirectQ;
+// Remake orders (Factory Console) are the factory putting a fault right, not a new
+// sale — keep them out of every sales, close-rate and profit figure here.
+try {
+    $pdo->query('SELECT remake_of_quote_id FROM quotes LIMIT 0');
+    $noDirect   .= ' AND remake_of_quote_id IS NULL';
+    $noDirectQ  .= ' AND q.remake_of_quote_id IS NULL';
+    $keepSales  .= ' AND remake_of_quote_id IS NULL';
+    $keepSalesQ .= ' AND q.remake_of_quote_id IS NULL';
+} catch (Throwable $e) { /* remakes not migrated */ }
 $saleTotal  = $hasSoldFor ? 'CASE WHEN COALESCE(direct_order, 0) = 1 THEN sold_for_gross ELSE total END'       : 'total';
 $saleTotalQ = $hasSoldFor ? 'CASE WHEN COALESCE(q.direct_order, 0) = 1 THEN q.sold_for_gross ELSE q.total END' : 'q.total';
 $inDecided = implode(',', array_fill(0, count($decidedStatuses), '?'));
@@ -284,7 +295,8 @@ if ($canSeeRevenue) {
 $directOrders = null;
 if ($canSeeRevenue && $hasDirectOrder) {
     [$doUser, $doUserParams] = $buildUserFilter('created_by_user_id');
-    $placed = ['ordered', 'fitted', 'invoiced', 'paid'];
+    // Same statuses as Revenue (won), so an order is always in exactly one of them.
+    $placed = $wonStatuses;
     $inPl   = implode(',', array_fill(0, count($placed), '?'));
     $st = $pdo->prepare(
         "SELECT COUNT(*) AS n, COALESCE(SUM(total), 0) AS spend
@@ -540,7 +552,7 @@ if ($canSeeRecent) {
     [$rcDate, $rcDateParams] = $buildDateFilter('q.created_at');
     [$rcUser, $rcUserParams] = $buildUserFilter('q.created_by_user_id');
     $st = $pdo->prepare(
-        "SELECT q.id, q.quote_number, q.total, q.status, q.accepted_at, q.created_at,
+        "SELECT q.id, q.quote_number, $saleTotalQ AS total, q.status, q.accepted_at, q.created_at,
                 COALESCE(c.name, q.end_customer_name, '(no customer)') AS customer_name,
                 COALESCE(u.full_name, '(unknown)') AS user_name
            FROM quotes q
@@ -548,6 +560,7 @@ if ($canSeeRecent) {
            LEFT JOIN client_users u ON u.id = q.created_by_user_id
           WHERE q.client_id = ?
             AND q.status IN ($inWon)
+            $keepSalesQ
             $rcDate
             $rcUser
        ORDER BY q.accepted_at DESC, q.created_at DESC

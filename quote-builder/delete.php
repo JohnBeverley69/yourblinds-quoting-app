@@ -30,6 +30,11 @@ if (($user['role'] ?? '') !== 'admin' && empty($perms['can_create_quotes'])
     exit('Quote not found.');
 }
 
+// Refuse when the factory has started it, it's a remake, or it's a placed
+// direct order (reopen as draft first) — qb_delete_block_reason().
+$block = qb_delete_block_reason(db(), $quote);
+if ($block !== '') qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId, 'error', $block);
+
 // Refuse if payments are recorded against it. The payments FK is ON DELETE
 // SET NULL, so deleting would orphan those rows — they'd keep counting toward
 // Accounts totals with no order to reconcile against. Mirrors the guard in
@@ -62,6 +67,7 @@ try {
 db()->prepare('DELETE FROM quotes WHERE id = ? AND client_id = ?')
     ->execute([$quoteId, $clientId]);
 
-$_SESSION['flash_success'] = 'Quote ' . $quote['quote_number'] . ' deleted.';
+$isOrder = qb_is_direct_order($quote) || in_array((string) $quote['status'], ['accepted', 'ordered', 'fitted', 'invoiced', 'paid'], true);
+$_SESSION['flash_success'] = ($isOrder ? 'Order ' : 'Quote ') . $quote['quote_number'] . ' deleted.';
 header('Location: /orders/index.php');
 exit;

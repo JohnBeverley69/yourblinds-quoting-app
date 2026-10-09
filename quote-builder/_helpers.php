@@ -112,6 +112,35 @@ function qb_sold_for_split(float $amount, bool $incVat, float $vatPct): array
 }
 
 /** Save (or clear, when $raw is blank) a direct order's Sold-for price. */
+/** The business's VAT rate (client_settings.vat_percent) — what the Sold for split uses. */
+function qb_client_vat_percent(PDO $pdo, int $clientId): float
+{
+    try {
+        $vs = $pdo->prepare('SELECT vat_percent FROM client_settings WHERE client_id = ? LIMIT 1');
+        $vs->execute([$clientId]);
+        return (float) ($vs->fetchColumn() ?: 0);
+    } catch (Throwable $e) { return 0.0; }
+}
+
+/**
+ * Why this job can't be deleted, or '' when it can. Shared by the Delete button
+ * and quote-builder/delete.php.
+ *   - the factory has started it (received / on the floor): it would vanish from
+ *     their queue with blinds already being made;
+ *   - a remake order: it's the factory's;
+ *   - a placed direct order: reopen it as a draft first (allowed until the
+ *     factory takes it in), so deleting a live order is always a two-step choice.
+ */
+function qb_delete_block_reason(PDO $pdo, array $quote): string
+{
+    if (!empty($quote['remake_of_quote_id'])) return 'This is a remake order — the factory manages it. Contact them to change or cancel it.';
+    if (qb_factory_has_received($pdo, (int) $quote['id'])) return 'The factory has already started this order, so it can’t be deleted — contact them to change or cancel it.';
+    if (qb_is_direct_order($quote) && (string) $quote['status'] !== 'draft') {
+        return 'This order has been placed. To delete it, use Reopen as draft first (while the factory hasn’t started it), then delete.';
+    }
+    return '';
+}
+
 function qb_save_sold_for(PDO $pdo, int $quoteId, int $clientId, string $raw, bool $incVat): void
 {
     $raw = trim(str_replace([',', '£'], '', $raw));
