@@ -11,7 +11,8 @@ declare(strict_types=1);
  * Mirrors the "Quote defaults" form on Settings → Quoting
  * (admin/settings.php, the section headed "Quote defaults", POST
  * _action=quote): Quote prefix (unique across accounts, a free one suggested
- * on a clash), VAT % (locked until a VAT number is on the Company tab),
+ * on a clash), the VAT % slot (now only a note pointing to the Company tab,
+ * where the rate sits beside the VAT number - commit f84cc09),
  * Default deposit, Prices / Sizes on the customer quote, the WT charge, New
  * order alerts, Auto-place in-house orders, Paid-in-full receipt, the email
  * from-name / reply-to and the quote footer. The factory-only blocks (Default
@@ -32,8 +33,8 @@ $vo = [
            'Start with the quote prefix. These are the letters in front of every quote number. Type them in, and they are saved in capitals. So your first quote this year becomes B R I, twenty twenty six, nought nought nought one. The next is nought nought nought two, and the count starts again each January. Leave the box blank, and the system uses the first three letters of your company name instead.'],
     3  => ['One prefix, one business',
            'Each prefix can belong to one business only. If another account already uses the letters you typed, the save is stopped, and a red message explains why. Two accounts sharing a prefix would end up with the same order numbers. To help, a free set of letters is put in the box for you, made from your company name. Click Save to use them, or type your own and save again.'],
-    4  => ['VAT needs a VAT number',
-           'Next to it is VAT percent. You can only charge VAT once you are VAT registered. So until your VAT number is on the Company tab, this box is greyed out, at nought. Add the number there, and the box opens up. Type your rate, twenty for most businesses. At nought, a quote shows just a total, with no VAT line. And each quote keeps the rate it was made with, so a change here only affects new quotes.'],
+    4  => ['VAT is on the Company tab',
+           'Next to the prefix is VAT percent, but there is no box to fill in here any more. Instead, a short note says, Set beside your VAT number on the Company tab. Your VAT rate now lives right next to your VAT number, so the two always go together. Click Company in the note to go straight there. Each quote keeps the rate it was made with, so a new rate only changes new quotes.'],
     5  => ['The default deposit',
            'The default deposit is what you usually ask for when a customer says yes. Choose Percentage of total, and type a figure, such as fifty. Or choose Flat amount, and type a sum in pounds. The figure is put on a quote the moment it moves to Accepted. So a four hundred pound order asks for two hundred. You can still change it on any one quote, and a deposit you typed yourself is never overwritten.'],
     6  => ['Prices on the customer quote',
@@ -84,10 +85,11 @@ return [
         'title'   => 'Quote defaults',
         'eyebrow' => 'Settings · Quoting',
         'v'       => 2,
-        'blurb'   => 'Quote numbers, VAT, deposits, what the customer sees, the automatic emails and the Wally tax (WT charge).',
+        'blurb'   => 'Quote numbers, deposits, what the customer sees, the automatic emails and the Wally tax (WT charge) — plus where your VAT rate lives now.',
         'lede'    => 'One form on the <b>Quoting</b> tab quietly shapes every quote you send: the <b>letters in front of your quote
-                      numbers</b>, your <b>VAT rate</b>, the <b>deposit</b> you ask for, <b>what the customer does and doesn&rsquo;t
-                      see</b>, the emails that go out on their own, and the <b>Wally tax (WT charge)</b>. This guide takes it one box
+                      numbers</b>, the <b>deposit</b> you ask for, <b>what the customer does and doesn&rsquo;t
+                      see</b>, the emails that go out on their own, and the <b>Wally tax (WT charge)</b>. (Your <b>VAT rate</b> isn&rsquo;t
+                      here any more &mdash; it sits beside your VAT number on the <b>Company</b> tab.) This guide takes it one box
                       at a time, slowly. Watch it through once, then use <b>Jump to a chapter</b> to go back over any part.
                       To get there: <b>Settings</b> &rarr; the <b>Quoting</b> tab &rarr; <b>Quote defaults</b>.',
         'open'    => '/admin/settings.php',
@@ -111,6 +113,8 @@ return [
           .gd .ta3{ border:1px solid var(--border-strong,#c7ccd4); border-radius:6px; background:var(--surface); padding:.35rem .5rem; font-size:.74rem;
                     color:var(--ink); min-height:3rem; line-height:1.45; }
           .gd .ph{ color:var(--faint); }
+          .gd .vlink{ display:block; font-size:.72rem; color:var(--soft); padding-top:.35rem; line-height:1.4; }
+          .gd .vlink u{ color:var(--accent); font-weight:700; border-radius:4px; }
           .gd .stk{ display:inline-grid; } .gd .stk > *{ grid-area:1/1; }
           .gd .two{ display:grid; grid-template-columns:1fr 1fr; gap:.6rem .8rem; max-width:31rem; }
           .gd .opt{ display:flex; align-items:flex-start; gap:.45rem; font-size:.78rem; color:var(--ink); font-weight:600; }
@@ -198,7 +202,7 @@ return [
                   <div class="sh">Quote defaults</div>
                   <div class="two">
                     <div><span class="lb">Quote prefix</span><span class="in">BRI</span></div>
-                    <div><span class="lb">VAT %</span><span class="in">20</span></div>
+                    <div><span class="lb">VAT %</span><span class="vlink">Set beside your VAT number on the <u>Company</u> tab.</span></div>
                   </div>
                   <div class="fs mt"><div class="lg">Default deposit</div>
                     <div class="rrow"><span><span class="rd"><i></i></span> Percentage of total <span class="in sm">50</span> %</span>
@@ -261,27 +265,25 @@ return [
                   <div class="mt"><span class="btnp a-press" style="--d:25s">Save quote defaults</span></div>
                 </div>
 
-                <!-- 4 — VAT -->
+                <!-- 4 — VAT: now set on the Company tab -->
                 <div class="sc" data-scene="4" data-len="' . $len(4) . '">
-                  <div class="sct a-fade" style="--d:.2s">VAT % needs a VAT number first</div>
-                  <div class="two">
-                    <div><span class="lb">VAT %</span>
-                      <span class="stk" style="display:grid">
-                        <span class="in off a-out" style="--d:16s">0</span>
-                        <span class="in a-fade" style="--d:16s"><span class="a-type" style="--d:17.5s;--ts:2;--tt:.4s">20</span></span>
-                      </span>
-                      <span class="stk" style="display:grid"><span class="hn a-mid" style="--d:3s;--d2:16s">Add your <u>VAT number</u> on the Company tab to set a VAT rate.</span>
-                        <span class="hn a-fade" style="--d:16.2s;color:var(--good);font-weight:700">&#10003; Unlocked &mdash; the VAT number is in</span></span></div>
-                    <div class="a-rise" style="--d:13s"><span class="lb">Company tab &rarr; VAT number</span>
-                      <span class="in a-ring" style="--d:13.5s"><span class="a-type" style="--d:14s;--ts:14;--tt:1.2s">GB 123 4567 89</span></span></div>
+                  <div class="sct a-fade" style="--d:.2s">VAT % is set on the Company tab now</div>
+                  <div class="sh a-fade" style="--d:.6s">Quote defaults</div>
+                  <div class="two" style="position:relative">
+                    <div><span class="lb">Quote prefix</span><span class="in">BRI</span></div>
+                    <div class="a-ring" style="--d:1.5s;border-radius:6px"><span class="lb">VAT %</span>
+                      <span class="vlink a-fade" style="--d:6.6s">Set beside your VAT number on the <u class="a-ring" style="--d:17.8s;position:relative">Company<span class="a-move" style="--fx:-9rem;--fy:2.6rem;--tx:45%;--ty:55%;--d:16.3s;--md:1.5s">' . $ptr . '</span></u> tab.</span></div>
                   </div>
-                  <div class="row mt" style="align-items:flex-start;gap:.8rem">
-                    <div class="a-rise" style="--d:19s"><div class="tcap">VAT at 20%</div>
-                      <div class="tot"><span>Subtotal</span><b>&pound;400.00</b><span>VAT (20%)</span><b>&pound;80.00</b><span class="g">Total</span><b class="g">&pound;480.00</b></div></div>
-                    <div class="a-rise" style="--d:21s"><div class="tcap">VAT at 0</div>
-                      <div class="tot"><span class="g">Total</span><b class="g">&pound;400.00</b></div></div>
+                  <div class="row mt"><span class="chip a-pop" style="--d:2.8s">No box to fill in here any more</span></div>
+                  <div class="fs a-rise mt" style="--d:19s"><div class="lg">Company tab &rarr; Company details</div>
+                    <div class="two">
+                      <div><span class="lb">VAT number</span><span class="in">GB123456789</span></div>
+                      <div><span class="lb">VAT %</span><span class="in a-ring" style="--d:20s">20</span></div>
+                    </div></div>
+                  <div class="row">
+                    <span class="chip a-pop" style="--d:12s">Number and rate, side by side</span>
+                    <span class="chip warn a-pop" style="--d:21.5s">Each quote keeps the rate it was made with</span>
                   </div>
-                  <div class="row mt"><span class="chip warn a-pop" style="--d:25s">Each quote keeps the rate it was made with</span></div>
                 </div>
 
                 <!-- 5 — default deposit -->
@@ -415,11 +417,12 @@ return [
                 click Save below to use it, or type your own and click Save. Two accounts sharing a prefix would end up with the same order
                 numbers.</code> The suggestion is made from your own company name and is always free. Nothing else on the form is saved
                 until you save again.</li>
-            <li><b>VAT %</b> &mdash; you can only charge VAT once you are VAT-registered, so the box is <b>greyed out at 0</b> until a
-                <b>VAT number</b> is on the <b>Company</b> tab, with the note <em>&ldquo;Add your VAT number on the Company tab to set a VAT
-                rate.&rdquo;</em> Add the number, come back, and type your rate (20 for most). At <b>0</b> the quote shows a <b>Total</b>
-                only, with no Subtotal or VAT line. Each quote <b>keeps the rate it was created with</b>, so changing it here only affects
-                new quotes.</li>
+            <li><b>VAT %</b> &mdash; no longer set here. Beside the prefix, under the <b>VAT %</b> heading, there is just the note
+                <em>&ldquo;Set beside your VAT number on the Company tab.&rdquo;</em> &mdash; click <b>Company</b> in it to go there. The rate
+                box now sits to the right of <b>VAT number</b> on the <b>Company</b> tab: greyed out until a VAT number is typed, then filled
+                in with 20 (the UK standard rate) for you to change, and saved with <b>Save company details</b> (see
+                <a href="/help/guide.php?g=settings-company"><b>Your company details</b></a>). Each quote <b>keeps the rate it was created
+                with</b>, so a new rate only affects new quotes.</li>
             <li><b>Default deposit</b> &mdash; two radio buttons: <b>Percentage of total</b> (with a % box, 50 to start) or <b>Flat amount</b>
                 (with a &pound; box). It <em>&ldquo;Seeds the deposit figure on every quote the moment it moves into Accepted. Overrideable per
                 quote.&rdquo;</em> Only a blank deposit is filled &mdash; one you typed yourself is never overwritten.</li>
@@ -460,8 +463,7 @@ return [
              placed</em> &mdash; <b>off by default</b>, because it sends a real purchase order; a supplier with no email is left for you to order
              by hand).</p>
 
-          <div class="oops"><b>If a save goes wrong:</b> <code>Add your VAT number on the Company tab before setting a VAT rate &mdash; you can
-             only charge VAT once you&rsquo;re VAT-registered.</code> means a rate was sent without a VAT number.
+          <div class="oops"><b>If a save goes wrong:</b>
              <code>Could not save settings: &hellip;</code> is followed by the reason &mdash; pass it to whoever looks after your setup.</div>
 
           <p class="prose"><b>Markup and discount aren&rsquo;t here.</b> The grey line in the form says so: they are set per product

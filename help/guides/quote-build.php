@@ -12,7 +12,7 @@ declare(strict_types=1);
  * (/quote-builder/edit.php + add_item.php) up to the point the quote is built:
  * the sticky bar, Quote actions, the Add blind form (Product / System / Band,
  * Fabric search, Room name, Measurement, Width / Drop / Quantity / Notes,
- * Adjust price for this blind, Options, the live price box, Save / Save and
+ * Adjust price for this blind, the cost eye (customer view), Options, the live price box, Save / Save and
  * add another blind), the Blinds list and its totals rows, the unsaved-blind
  * restore bar, and the locked-quote rule. Sending, accepting, ordering,
  * invoicing and payments each have their own guide. Every label, button and
@@ -45,6 +45,13 @@ $row = static fn (string $cls = '', string $style = ''): string => '
     <span>1500 &times; 1600 mm</span><span class="n">1</span><span class="n">&pound;77.00</span><span class="n">&pound;77.00</span>
     <span class="ac"><i class="b">Edit</i><i class="b">Dup</i><i class="b x">&times;</i></span></div>';
 $head = '<div class="br th"><span>#</span><span>Description</span><span>Size</span><span class="n">Qty</span><span class="n">Unit</span><span class="n">Total</span><span></span></div>';
+
+// The cost eye (copied from _partials/cost_reveal.php: an unlabelled eye icon).
+$eye = '<span class="eye"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg></span>';
+/** The eye being tapped: ring at $r, presses at $p1 (and $p2 if given). One animation class per element, so nested. */
+$eyeTap = static fn (string $r, string $p1, string $p2 = ''): string =>
+    '<span class="eyew a-ring" style="--d:' . $r . 's"><span class="eyew a-press" style="--d:' . $p1 . 's">'
+    . ($p2 !== '' ? '<span class="eyew a-press" style="--d:' . $p2 . 's">' . $eye . '</span>' : $eye) . '</span></span>';
 
 $saveBtns = static fn (string $cls = 'off', string $extra = ''): string =>
     '<div class="fact"><span class="btnp ' . $cls . '" ' . $extra . '>Save</span><span class="btns ' . $cls . '">Save and add another blind</span></div>';
@@ -163,6 +170,9 @@ return [
           .gd .rob{ background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:.4rem .6rem; font-size:.7rem; color:var(--soft); margin-bottom:.5rem; }
           .gd .ovr{ border:1px solid var(--line); border-radius:8px; padding:.4rem .55rem; font-size:.68rem; color:var(--soft); background:var(--surface); }
           .gd .ovr .sm{ color:var(--soft); }
+          .gd .eye{ display:inline-flex; width:14px; height:14px; vertical-align:middle; margin:0 .15rem; color:var(--ink); opacity:.45; }
+          .gd .eye svg{ width:100%; height:100%; }
+          .gd .eyew{ display:inline-flex; vertical-align:middle; border-radius:5px; }
           .gd .tip{ position:absolute; z-index:6; background:#0f172a; color:#fff; font-size:.62rem; border-radius:6px; padding:.3rem .45rem; max-width:15rem; line-height:1.4; }
 
           @media (max-width:640px){
@@ -196,7 +206,7 @@ return [
                       <div class="frm">
                         <div class="g2">' . $f('Product ' . $rq, 'Roller Blind', 'sel') . $f('System', 'Bev Roller', 'sel') . '</div>
                         <div class="g2">' . $f('Fabric ' . $rq, 'Sunset / Ivory') . $f('Room name', 'Living Room') . '</div>
-                        <div class="prv ok"><b>&pound;77.00</b> per blind</div>
+                        <div class="prv ok"><b>&pound;77.00</b> per blind ' . $eye . '</div>
                         ' . $saveBtns('') . '
                       </div></div>
                     <div><div class="sech">Blinds (1)</div><div class="bl">' . $head . $row() . '</div></div>
@@ -364,23 +374,24 @@ return [
                 </div>
 
                 <!-- 10 — live price -->
-                <div class="sc" data-scene="10" data-len="25">
+                <div class="sc" data-scene="10" data-len="30">
                   <div class="sct a-fade" style="--d:.2s">The live price does the checking</div>
                   <div class="frm">
                     <div class="g4">' . $f('Width (mm) ' . $rq, '1500') . $f('Drop (mm) ' . $rq, '<span class="a-type" style="--d:10.6s;--ts:4;--tt:.5s">1600</span>') . $f('Quantity', '1') . $f('Notes', $ph('Optional internal note')) . '</div>
                     <div class="stack">
                       <div class="prv a-out" style="--d:11s">Still need: drop.</div>
-                      <div class="prv ok a-pop" style="--d:11.1s"><b>&pound;77.00</b> per blind &middot; base &pound;40.00 &middot; + extras &pound;5.00</div>
+                      <div class="prv ok a-pop" style="--d:11.1s"><b>&pound;77.00</b> per blind<span class="a-mid" style="--d:25.4s;--d2:28.9s"> &middot; base &pound;40.00 &middot; + extras &pound;5.00 &middot; markup 80.00%</span> ' . $eyeTap('24.1', '25.1', '28.6') . '</div>
                     </div>
                     <div class="stack">
-                      <div class="a-out" style="--d:15.5s">' . $saveBtns('off') . '</div>
-                      <div class="a-fade" style="--d:15.6s">' . $saveBtns('') . '</div>
+                      <div class="a-out" style="--d:15.1s">' . $saveBtns('off') . '</div>
+                      <div class="a-fade" style="--d:15.2s">' . $saveBtns('') . '</div>
                     </div>
                   </div>
                   <div class="chips">
                     <span class="chip a-pop" style="--d:5.4s">Grey = still waiting</span>
                     <span class="chip a-pop" style="--d:11.4s;border-color:var(--good);color:var(--good)">Green = priced</span>
-                    <span class="chip a-pop" style="--d:18s">No price, no save</span></div>
+                    <span class="chip a-pop" style="--d:16.4s">No price, no save</span>
+                    <span class="chip a-pop" style="--d:19.2s">&#128274; Costs start hidden &mdash; the customer may be watching</span></div>
                 </div>
 
                 <!-- 11 — the slip -->
@@ -453,19 +464,21 @@ return [
                 </div>
 
                 <!-- 15 — one blind, or the whole job -->
-                <div class="sc" data-scene="15" data-len="24">
+                <div class="sc" data-scene="15" data-len="26">
                   <div class="sct a-fade" style="--d:.2s">Changing a price: one blind, or the whole job</div>
                   <div class="two">
-                    <div class="ovr a-rise" style="--d:2.8s"><b>&#9662; Adjust price for this blind</b>
-                      <div class="g2" style="margin-top:.4rem">' . $f('Discount % (this blind)', '<span class="swap"><span class="gph a-out" style="--d:6.5s">product default</span><span class="a-type" style="--d:6.6s;--ts:2;--tt:.3s">15</span></span>') . $f('Markup % (this blind)', $ph('product default')) . '</div>
-                      <div class="sm" style="margin-top:.3rem">Leave blank to use the product&rsquo;s set markup / discount. This only changes <b>this blind</b> on this quote.</div></div>
-                    <div class="bl tots a-rise" style="--d:12.4s">
-                      <div class="a-fade" style="--d:19.8s">Discount <small>(to agreed price)</small> <b>&minus;&pound;27.00</b></div>
-                      <div>Subtotal <b><span class="swap"><span class="a-out" style="--d:18.6s">&pound;977.00</span><span class="a-fade" style="--d:18.6s">&pound;950.00</span></span></b></div>
-                      <div>VAT (20.00%) <b><span class="swap"><span class="a-out" style="--d:18.6s">&pound;195.40</span><span class="a-fade" style="--d:18.6s">&pound;190.00</span></span></b></div>
-                      <div>Total <b><span class="swap"><span class="a-out" style="--d:18.6s">&pound;1,172.40</span><span class="a-fade" style="--d:18.6s">&pound;1,140.00</span></span></b></div>
+                    <div>
+                    <div class="prv ok" style="margin-bottom:.45rem"><b>&pound;77.00</b> per blind<span class="a-fade" style="--d:4.8s"> &middot; base &pound;40.00 &middot; markup 80.00%</span> ' . $eyeTap('3.2', '4.4') . '</div>
+                    <div class="ovr a-rise" style="--d:5.4s"><b>&#9662; Adjust price for this blind</b>
+                      <div class="g2" style="margin-top:.4rem">' . $f('Discount % (this blind)', '<span class="swap"><span class="gph a-out" style="--d:8.4s">product default</span><span class="a-type" style="--d:8.5s;--ts:2;--tt:.3s">15</span></span>') . $f('Markup % (this blind)', $ph('product default')) . '</div>
+                      <div class="sm" style="margin-top:.3rem">Leave blank to use the product&rsquo;s set markup / discount. This only changes <b>this blind</b> on this quote.</div></div></div>
+                    <div class="bl tots a-rise" style="--d:13.8s">
+                      <div class="a-fade" style="--d:21.6s">Discount <small>(to agreed price)</small> <b>&minus;&pound;27.00</b></div>
+                      <div>Subtotal <b><span class="swap"><span class="a-out" style="--d:20.4s">&pound;977.00</span><span class="a-fade" style="--d:20.4s">&pound;950.00</span></span></b></div>
+                      <div>VAT (20.00%) <b><span class="swap"><span class="a-out" style="--d:20.4s">&pound;195.40</span><span class="a-fade" style="--d:20.4s">&pound;190.00</span></span></b></div>
+                      <div>' . $eye . ' Total <b><span class="swap"><span class="a-out" style="--d:20.4s">&pound;1,172.40</span><span class="a-fade" style="--d:20.4s">&pound;1,140.00</span></span></b></div>
                       <div class="ovrow">Override price <small>(agreed price ex VAT &mdash; VAT added on top; blank to clear)</small>
-                        <span class="mini">&pound;<span class="ib a-ring" style="--d:15s"><span class="a-type" style="--d:16s;--ts:3;--tt:.4s">950</span></span><span class="btns a-press" style="--d:18s">Set</span></span></div>
+                        <span class="mini">&pound;<span class="ib a-ring" style="--d:16.4s"><span class="a-type" style="--d:17.4s;--ts:3;--tt:.4s">950</span></span><span class="btns a-press" style="--d:19.8s">Set</span></span></div>
                     </div>
                   </div>
                 </div>
@@ -535,7 +548,10 @@ return [
 
           <p><b>The live price box does the checking.</b> Grey means waiting &mdash; <em>&ldquo;Still need: product, fabric, width, drop.&rdquo;</em> Red
              means it could not price it. Green means good: <em>&ldquo;&pound;77.00 per blind&rdquo;</em>, or <em>&ldquo;&pound;154.00 for 2 blinds &middot;
-             &pound;77.00 each&rdquo;</em>. If you are allowed to see costs it adds the base, the extras, the markup (or margin) and the discount.
+             &pound;77.00 each&rdquo;</em>. If you are allowed to see costs, the line can also show the <b>base</b>, the <b>extras</b>, the <b>markup</b> (or margin), the
+             <b>discount</b> and any <b>trade discount</b> &mdash; but <b>those start hidden every time the page opens</b>, because quotes are often built
+             with the customer looking at the screen. A small, unlabelled <b>eye</b> icon at the end of the line (and another beside <b>Total</b>) shows
+             them; tap it again to hide them. It is never remembered, so the next page starts hidden again.
              <b>Both save buttons stay greyed out until the box is green</b> &mdash; a blind with no price cannot go on a quote.</p>
 
           <div class="oops"><b>&ldquo;No price table for Roller Blind band A on system &lsquo;Grip Fit&rsquo;.&rdquo;</b> The slip everybody makes once. The
@@ -562,14 +578,16 @@ return [
              (<em>&ldquo;Duplicate this blind &mdash; copies fabric, system, options. New row opens in edit mode for you to tweak the size.&rdquo;</em>) and
              <b>&times;</b> (<em>&ldquo;Remove this blind?&rdquo;</em>). Before you add anything it says <em>No blinds yet</em>.</p>
 
-          <p><b>Changing a price.</b> <b>Adjust price for this blind</b> (a folded panel, shown to admins and people allowed to see costs) holds
+          <p><b>Changing a price.</b> <b>Adjust price for this blind</b> (a folded panel for admins and people allowed to see costs &mdash; it stays hidden until you tap
+             the eye) holds
              <b>Discount % (this blind)</b> and <b>Markup % (this blind)</b> &mdash; <b>Margin % (this blind)</b> on a margin company &mdash; both showing
              <em>product default</em>: <em>&ldquo;Leave blank to use the product&rsquo;s set markup / discount. This only changes this blind on this
              quote.&rdquo;</em> For the whole job, the <b>Override price</b> row under the totals (<em>&ldquo;agreed price ex VAT &mdash; VAT added on top;
              blank to clear&rdquo;</em>) takes the figure you shook hands on &rarr; <b>Set</b>. The gap appears as <b>Discount (to agreed price)</b> (or
              <b>Price adjustment (to agreed price)</b> if it went up), so the sums still add up. The totals read <b>Subtotal</b>, <b>VAT (20.00%)</b>,
              <b>Total</b>, then a faint <b>Deposit due on acceptance</b>. If the WT charge is switched on for your company there is also a purple
-             <b>WT (internal &mdash; never shown to the customer)</b> row with its own <b>Set</b>.</p>
+             <b>WT (internal &mdash; never shown to the customer)</b> row with its own <b>Set</b>; for cost-viewers it, too, only shows once the
+             eye is tapped.</p>
 
           <div class="heads"><span class="hi">&#9888;</span><div><b>You can&rsquo;t lose a half-typed blind.</b> The blind form is kept on the device as
              you fill it in. If the page reloads or the tablet dies, the next time you open the quote a yellow bar offers <em>&ldquo;You have an unsaved blind
@@ -592,12 +610,12 @@ return [
             ['7', 'Finding the fabric',              'Click the fabric box, and type part of a name, a colour, or a code. A panel drops down. Each row shows the name and colour, with the supplier and code underneath, so you can be sure it is the right one. Click it. If nothing matches, it says so: no matching fabrics. Click the box without typing, to see the ones used recently.', 7],
             ['8', 'Name the room',                   'Next, the Room name. Click the box, or the little arrow, and a list of rooms opens, like Living Room, Kitchen, or Landing. Pick one, or type your own. The room is only a label, but it matters. It is what the fitter and the workshop read on the ticket, so always fill it in. Blind three helps nobody, on a landing with four windows.', 8],
             ['9', 'The sizes',                       'Now the sizes. Measurement sets the unit for the whole quote, and you can change it at any time. You can also type a unit on the end, like one hundred and fifty c m, and it is read for you. Quantity is how many identical blinds. And Notes is for you: an internal note for your own paperwork. It never shows on the customer\'s quote.', 9],
-            ['10', 'The live price',                 'Under the form is the live price box, and it does the checking for you. Grey means it is still waiting, and it tells you what for. Still need: drop. Green means it has a price. Seventy seven pounds per blind. Now look at the two save buttons. They stay greyed out until the box is green, because a blind with no price cannot go on a quote.', 10],
+            ['10', 'The live price',                 'Under the form is the live price box, and it does the checking. Grey means it is still waiting, and it tells you what for. Still need: drop. Green means it has a price. Seventy seven pounds per blind. The save buttons stay greyed out until it is green. If you can see costs, they start hidden, in case the customer is watching. Tap the small eye at the end of the line to show them, and tap it again to hide them.', 10],
             ['11', 'The slip everybody makes once',  'Here is the slip everyone makes once. The box goes red: no price table for Roller Blind band A, on system Grip Fit. The band box only narrows the fabric list. It never promises a price. The price belongs to the product, the system, and the band, together. So change the system to one that is priced for that band, and pick the fabric again.', 11],
             ['12', 'Exceeds the largest cell',       'You may also see: size exceeds the largest cell in this price table. Before you blame the price list, check the unit. One hundred and fifty, typed in a millimetre quote, is a fifteen centimetre blind. A size between two rows of the table is fine. It simply rounds up to the next one. Only a size past the end of the table stops it.', 12],
             ['13', 'Options',                        'Then the options. They look different on every product, because each product has its own. Some are a dropdown, some are tick boxes where you can pick more than one, and some are just a number to type. Some only appear once you have picked the fabric or the system. And a few, like the roller fascia, sit above the size, because you need them first.', 13],
             ['14', 'Save, and the blinds list',      'When the price is green, click Save. The blind lands in the list on the right, with the room in bold, then the product, the fabric, and its options folded underneath. Or click Save and add another blind, to keep going. Beside each blind are Edit, and Dup, which copies it, so you only change the size. The cross removes it, after asking.', 14],
-            ['15', 'One blind, or the whole job',    'There are two ways to change a price. Adjust price for this blind changes one line only, with its own discount and markup. Leave them blank to use the product\'s rates. For the whole job, the Override price row, under the totals, takes the price you agreed, before VAT. The difference shows as a discount, so the sums still add up.', 15],
+            ['15', 'One blind, or the whole job',    'There are two ways to change a price. For one blind, tap the eye first, and Adjust price for this blind appears, with its own discount and markup. Leave them blank to use the product\'s rates. For the whole job, the Override price row, under the totals, takes the price you agreed, before VAT. The difference shows as a discount, so the sums still add up.', 15],
             ['16', 'Two safety nets',                'Two safety nets. If the page reloads, or the tablet dies, halfway through a blind, a yellow bar offers to put it back. Nothing is lost. And once a quote has been sent, it is locked, so it cannot change behind the customer\'s back. To change it, use Reopen as draft, make your change, and then send it again.', 16],
         ],
 ];

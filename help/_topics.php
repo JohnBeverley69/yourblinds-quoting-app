@@ -165,6 +165,17 @@ return [
       <p><strong>Paid is never a button.</strong> A job turns <em>paid</em> by itself once the deposit and payments
       cover the total, so &ldquo;paid&rdquo; always means the money is genuinely accounted for.</p>'],
 
+    ['all', 'Quoting', 'Can I just send an order, without a quote?', 'new order direct order place order straight to factory no quote no customer portal order reference buying price create orders duplicate reference twice start order anyway',
+     '<p>Yes &mdash; <strong>New order</strong>. Press <strong>+ New</strong> at the top of the menu and pick <strong>New order</strong>
+      (if your login can only create orders, the button itself reads <strong>+ New order</strong>). It needs the <strong>Create orders</strong>
+      tick on the Users page.</p>
+      <ul><li>Type your <strong>Order reference</strong> (required), an optional <strong>Name for the labels</strong> and any
+      <strong>Order notes</strong>, then <strong>Start order</strong>. If that reference is already on one of your jobs, it shows you
+      them first &mdash; press <strong>Start order anyway</strong> only if it really is a separate order.</li>
+      <li>Add the blinds as on a quote. Prices are <strong>your buying price</strong> (no markup, no retail discount) and the total reads
+      <strong>Order total (your price, ex VAT)</strong>.</li>
+      <li>Press <strong>&#128230; Place order</strong> and confirm. There is no customer, so nothing is sent out for approval.</li></ul>'],
+
     ['all', 'Quoting', 'Archiving jobs you’ve finished with', 'archive archived restore hide old quotes tidy list delete selected bulk clear out',
      '<p><strong>Archiving hides a job. Deleting destroys it.</strong> If you just want an old job out of the way,
       archive it.</p>

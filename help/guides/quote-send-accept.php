@@ -19,6 +19,13 @@ declare(strict_types=1);
  *     expired / accepted / declined / in-progress states,
  *   - what /quote-history/accept.php sets off (signature, fitting, thank-you
  *     email, new-order alert, auto-place to Ordered),
+ *   - signing in person: the sticky bar's "✍ Customer signs here"
+ *     (/quote-builder/sign_start.php) opening public.php in in-person mode
+ *     (finger-signature box, no Decline) and the "Signed in person" note on
+ *     the quote + the signature on the quote PDF (pdf-generator/pdf.php),
+ *   - the emails' short links ("View and accept your quote" /
+ *     "View your quote", mailer_send links) and the business as the sender
+ *     (_partials/tenant_mail.php),
  *   - and the 30-day acceptance window (_partials/quote_expiry.php) with the
  *     builder's "Renew for 30 days".
  * Every label, button and message is copied from those files.
@@ -68,17 +75,32 @@ $acceptCard = static fn (string $tick = '', string $err = '', string $cls = '', 
     ' . $err . '
     <div class="fact"><span class="btnp">Accept quote</span><span class="btns">Decline</span></div></div>';
 
+// A drawn signature (one stroke, drawn with a-draw on the in-person page).
+$sigD = 'M12 46 C 20 12, 34 10, 32 40 S 26 58, 44 40 S 62 18, 66 42 C 68 54, 78 50, 84 36 S 98 30, 100 44 C 102 54, 116 50, 122 34 S 136 24, 140 42 C 144 56, 160 52, 170 30 L 188 26';
+
+// The accept card in in-person mode (public.php with &in_person=1): no Decline.
+$signCard = static fn (string $tick = '', string $nameCls = '', string $nameStyle = '', string $pad = '', string $accCls = '', string $accStyle = ''): string => '
+  <div class="acc"><h4>Accept this quote</h4>
+    <p>Check your name, then sign in the box below with your finger to accept this quote.</p>
+    <span class="fl">Your full name</span><span class="ib ' . $nameCls . '" style="' . $nameStyle . '">Emma Fletcher</span>
+    <span class="sigl">Your signature</span><span class="sigp">' . $pad . '</span>
+    <div class="sigr"><span>Sign above</span><u>Clear</u></div>
+    <div class="tc"><i class="cb">' . $tick . '</i><span>I agree to the <u>Terms &amp; Conditions</u> of Beverley Blinds.</span></div>
+    <div class="fact"><span class="btnp ' . $accCls . '" style="' . $accStyle . '">Accept quote</span></div>
+    <div class="stb">&larr; Back to the quote</div></div>';
+
 return [
         'aud'     => 'admin',
         'section' => 'Quotes',
         'title'   => 'Sending & accepting',
         'eyebrow' => 'Quotes',
         'v'       => 2,
-        'blurb'   => 'The Send to customer panel, the plain-text email, the whole public accept page, the typed-name sign-off, deposits, what a customer\'s Yes sets off on your side, and the thirty-day window.',
+        'blurb'   => 'The Send to customer panel, the email and its short link, the whole public accept page, the typed-name sign-off, signing in person on your own tablet or phone, deposits, what a customer\'s Yes sets off on your side, and the thirty-day window.',
         'lede'    => 'You send a quote from <b>inside the quote itself</b> &mdash; scroll down the quote screen to the
                       <b>Send to customer</b> panel. From there you can <b>email the PDF with an accept link</b>, share the same link on
                       <b>WhatsApp</b>, or <b>copy the link</b> and paste it anywhere. The customer opens it with <b>no login</b>, reads it,
-                      types their name and <b>accepts</b>. This guide shows both sides, <b>slowly</b>, one idea per chapter: what you press,
+                      types their name and <b>accepts</b>. No email or WhatsApp? Press <b>&#9997; Customer signs here</b> and they
+                      <b>sign with a finger</b> on your own tablet or phone. This guide shows both sides, <b>slowly</b>, one idea per chapter: what you press,
                       what they see, and what their <em>Yes</em> sets off for you. <em>(The button below opens your Retail Quotes list &mdash;
                       click a quote, then scroll down to <b>Send to customer</b>.)</em>',
         'open'    => '/orders/index.php?scope=quotes&type=retail',
@@ -178,6 +200,24 @@ return [
           .gd .cal i.on{ background:var(--accent-wash); color:var(--accent); font-weight:800; }
           .gd .cal i.end{ background:var(--err-wash); color:var(--err); font-weight:800; }
 
+          /* signing in person */
+          .gd .mail .blnk{ color:#1f3b5b; font-weight:800; text-decoration:underline; }
+          :root[data-theme="dark"] .gd .mail .blnk{ color:var(--accent); }
+          .gd .sigl{ display:block; font-size:.64rem; font-weight:700; color:#374151; margin-top:.45rem; }
+          .gd .sigp{ display:block; height:66px; background:#fff; border:2px dashed #94a3b8; border-radius:9px; margin-top:.2rem; overflow:hidden; }
+          .gd .sigp svg{ display:block; width:100%; height:100%; }
+          .gd .sigp path, .gd .sgn path{ fill:none; stroke:#111827; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round; }
+          .gd .sigr{ display:flex; justify-content:space-between; font-size:.6rem; color:#6b7280; margin-top:.15rem; }
+          .gd .sigr u{ color:#2563eb; text-decoration:none; }
+          .gd .stb{ text-align:center; font-size:.62rem; color:#6b7280; margin-top:.4rem; }
+          .gd .sgn{ display:flex; gap:.7rem; align-items:center; flex-wrap:wrap; border:1px solid var(--line); border-radius:10px; padding:.5rem .7rem;
+                    background:var(--surface); font-size:.72rem; color:var(--ink); line-height:1.5; max-width:30rem; }
+          .gd .sgn svg{ width:7.5rem; height:2.6rem; background:#fff; border-radius:6px; padding:2px; flex:0 0 auto; }
+          .gd .pdfs{ border:1px solid var(--line); border-radius:8px; background:#fff; color:#374151; padding:.4rem .55rem; font-size:.6rem; max-width:15rem; }
+          .gd .pdfs b{ display:block; margin-bottom:.15rem; }
+          .gd .pdfs svg{ width:6rem; height:2rem; display:block; }
+          .gd .pdfs path{ fill:none; stroke:#111827; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round; }
+
           @media (max-width:640px){
             .gd .sc{ min-height:470px; }
             .gd .two, .gd .four{ grid-template-columns:1fr; }
@@ -205,7 +245,7 @@ return [
                     <div>' . $send() . '</div>
                     <div>' . $acceptCard('&#10003;') . '</div>
                   </div>
-                  <p class="scs" style="margin-top:.8rem">Press <b>&#9654; Play</b> below &mdash; fifteen short chapters, at an easy pace.</p>
+                  <p class="scs" style="margin-top:.8rem">Press <b>&#9654; Play</b> below &mdash; seventeen short chapters, at an easy pace.</p>
                 </div>
 
                 <!-- 1 — where you send from -->
@@ -287,21 +327,23 @@ return [
                 </div>
 
                 <!-- 7 — the email -->
-                <div class="sc" data-scene="7" data-len="22">
+                <div class="sc" data-scene="7" data-len="23">
                   <div class="sct a-fade" style="--d:.2s">What lands in their inbox</div>
                   <div class="mail a-rise" style="--d:1s">
-                    <div class="mh"><b>Your quote BEV-2026-0042 from Beverley Blinds</b><br>To: emma.fletcher@gmail.com</div>
+                    <div class="mh"><b>Your quote BEV-2026-0042 from Beverley Blinds</b><br><span class="a-ring" style="--d:3s">From: Beverley Blinds</span><br>To: emma.fletcher@gmail.com</div>
                     <div class="mb">
-                      <span class="a-fade" style="--d:5.2s">Hello Emma Fletcher,</span><br><br>
-                      <span class="a-fade" style="--d:5.8s">Please find your quote (BEV-2026-0042) attached as a PDF.</span><br><br>
-                      <span class="a-fade" style="--d:6.9s">Lovely to meet you today &mdash; any questions, ring me.</span><br><br>
-                      <span class="a-fade" style="--d:9.6s">You can also view it online and accept it here:</span><br>
-                      <span class="lnk a-fade a-ring" style="--d:10s">https://yourblinds.uk/quote-history/public.php?token=8f3c&hellip;</span><br><br>
-                      <span class="a-fade" style="--d:15.1s">If you have any questions please reply to this email.</span><br><br>
-                      <span class="a-fade" style="--d:17s">Kind regards,<br>Beverley Blinds</span>
-                      <div><span class="att a-pop" style="--d:2.5s">&#128206; BEV-2026-0042.pdf</span></div>
+                      <span class="a-fade" style="--d:11.6s">Hello Emma Fletcher,</span><br><br>
+                      <span class="a-fade" style="--d:10s">Please find your quote (BEV-2026-0042) attached as a PDF.</span><br><br>
+                      <span class="a-fade" style="--d:13.7s">Lovely to meet you today &mdash; any questions, ring me.</span><br><br>
+                      <span class="a-fade" style="--d:16s">You can also view it online and accept it here:</span><br>
+                      <span class="a-fade" style="--d:16.5s"><span class="blnk a-ring" style="--d:17.7s">View and accept your quote</span></span><br><br>
+                      <span class="a-fade" style="--d:6.5s">If you have any questions please reply to this email.</span><br><br>
+                      <span class="a-fade" style="--d:19s">Kind regards,<br>Beverley Blinds</span>
+                      <div><span class="att a-pop" style="--d:10.2s">&#128206; BEV-2026-0042.pdf</span></div>
                     </div></div>
-                  <span class="chip a-pop" style="--d:12.3s;margin-top:.5rem">Plain text &mdash; no fancy button to hunt for</span>
+                  <div class="chips">
+                    <span class="chip a-pop" style="--d:4.5s">From your business name &middot; replies come to you</span>
+                    <span class="chip a-pop" style="--d:20.4s">A short link &mdash; not a long web address</span></div>
                 </div>
 
                 <!-- 8 — the public page -->
@@ -341,7 +383,7 @@ return [
                 </div>
 
                 <!-- 11 — the yes -->
-                <div class="sc" data-scene="11" data-len="23">
+                <div class="sc" data-scene="11" data-len="26">
                   <div class="sct a-fade" style="--d:.2s">The sign-off</div>
                   <div class="two">
                     <div>
@@ -351,9 +393,10 @@ return [
                       <div class="chips"><span class="chip a-pop" style="--d:3s">name typed</span><span class="chip a-pop" style="--d:4.5s">date</span><span class="chip a-pop" style="--d:6s">IP address</span></div>
                     </div>
                     <div class="mail a-rise" style="--d:12.5s"><div class="mh"><b>Thank you for accepting quote BEV-2026-0042</b></div>
-                      <div class="mb">Hello Emma Fletcher,<br><br>Thank you for accepting your quote BEV-2026-0042 &mdash; we really appreciate your business&hellip;</div></div>
+                      <div class="mb">Hello Emma Fletcher,<br><br>Thank you for accepting your quote BEV-2026-0042 &mdash; we really appreciate your business&hellip;<br><br>
+                        You can view your quote any time here:<br><span class="blnk a-ring" style="--d:20s">View your quote</span></div></div>
                   </div>
-                  <span class="chip a-pop" style="--d:18.6s;margin-top:.6rem">Change it, or empty it to stop it: Settings &rarr; Legal</span>
+                  <span class="chip a-pop" style="--d:22.5s;margin-top:.6rem">Change it, or empty it to stop it: Settings &rarr; Legal</span>
                 </div>
 
                 <!-- 12 — declining -->
@@ -392,8 +435,46 @@ return [
                   <div class="chips"><span class="chip a-pop" style="--d:16.9s">Same result &mdash; but no &ldquo;New order&rdquo; alert email</span></div>
                 </div>
 
-                <!-- 15 — thirty days -->
-                <div class="sc" data-scene="15" data-len="25">
+                <!-- 15 — customer signs here -->
+                <div class="sc" data-scene="15" data-len="27">
+                  <div class="sct a-fade" style="--d:.2s">No email, no WhatsApp? They sign here</div>
+                  <div class="qsb a-rise" style="--d:6s">Quote BEV-2026-0042 <span class="pill"><span class="swap"><span class="a-out" style="--d:14s">draft</span><span class="a-fade" style="--d:14s">sent</span></span></span>
+                    <span class="qa ok a-press" style="--d:10.6s"><span class="a-ring" style="--d:8s">&#9997; Customer signs here</span></span><span class="qa ok">&#10003; Customer accepted</span><span class="qa no">&#10005; Customer declined</span><span class="tt">Total &pound;1,140.00</span></div>
+                  <div class="two">
+                    <div class="a-rise" style="--d:17.3s">' . $signCard('', 'a-ring', '--d:25s') . '</div>
+                    <div class="chips" style="margin-top:0;flex-direction:column;align-items:flex-start">
+                      <span class="chip a-pop" style="--d:4.9s">&#128241; On your own tablet or phone</span>
+                      <span class="chip a-pop" style="--d:15.1s">A draft is marked <b>sent</b> first</span>
+                      <span class="chip a-pop" style="--d:22s">Their blinds and totals &mdash; no costs</span>
+                      <span class="chip a-pop" style="--d:19s">Only while you&rsquo;re logged in</span></div>
+                  </div>
+                </div>
+
+                <!-- 16 — signed in person -->
+                <div class="sc" data-scene="16" data-len="29">
+                  <div class="sct a-fade" style="--d:.2s">Signed in person</div>
+                  <div class="two">
+                    <div class="stack">
+                      <div class="a-out" style="--d:13.2s">' . $signCard('<span class="a-pop" style="--d:7.1s">&#10003;</span>', '', '', '<svg viewBox="0 0 200 66" preserveAspectRatio="none" aria-hidden="true"><path class="a-draw" style="--d:2.3s;--dd:2.6s" pathLength="100" d="' . $sigD . '"/></svg>', 'a-press', '--d:9s') . '</div>
+                      <div><div class="acc done a-fade" style="--d:13.3s"><h4>Quote accepted &#10003;</h4>
+                        <p style="margin:0">Thanks Emma Fletcher! This quote was accepted on 9 October 2026. Beverley Blinds will be in touch.</p>
+                        <div class="stb" style="text-align:left">&larr; Back to the quote</div></div>
+                      <div class="pdfs a-rise" style="--d:26.3s;margin-top:.6rem"><b>Accepted by the customer</b>
+                        <svg viewBox="0 0 200 66" preserveAspectRatio="none" aria-hidden="true"><path d="' . $sigD . '"/></svg>
+                        Emma Fletcher &middot; signed in person 9 October 2026<br><i>on the quote PDF</i></div>
+                      </div>
+                    </div>
+                    <div>
+                      <div class="chips" style="margin-top:0"><span class="chip a-pop" style="--d:10.7s">No Decline button here</span>
+                        <span class="chip a-pop" style="--d:16.5s">Fitting to book &middot; thank-you email</span></div>
+                      <div class="sgn a-rise" style="--d:22.2s;margin-top:.6rem"><svg viewBox="0 0 200 66" preserveAspectRatio="none" aria-hidden="true"><path d="' . $sigD . '"/></svg>
+                        <div><b>Signed in person</b> by Emma Fletcher<br>9 Oct 2026, 14:32 &middot; on John Beverley&rsquo;s device</div></div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 17 — thirty days -->
+                <div class="sc" data-scene="17" data-len="25">
                   <div class="sct a-fade" style="--d:.2s">Thirty days to accept</div>
                   <div class="two">
                     <div class="card a-rise" style="--d:1.5s"><h4>From the day it&rsquo;s sent</h4>
@@ -442,11 +523,13 @@ return [
              So don&rsquo;t paste the link anywhere until you&rsquo;re happy with the quote. <b>No signal?</b> On a tablet or phone set up for offline, the red button can
              queue the email until the signal is back &mdash; see <b>&ldquo;Working offline on a tablet or phone&rdquo;</b>.</div></div>
 
-          <p><b>What lands in their inbox.</b> A plain-text email. Subject <em>&ldquo;Your quote BEV-2026-0042 from Beverley Blinds&rdquo;</em>; then
+          <p><b>What lands in their inbox.</b> A simple email that comes <b>from your business</b>, not from YourBlinds: the sender name is your
+             <b>Email &ldquo;from&rdquo; name</b> (or your company name) and replies go to your <b>Reply-to email</b> (or your company email) &mdash; both in
+             <b>Settings &rarr; Quoting &rarr; Quote defaults</b>. Subject <em>&ldquo;Your quote BEV-2026-0042 from Beverley Blinds&rdquo;</em>; then
              &ldquo;Hello Emma Fletcher,&rdquo; (the full name on the quote), &ldquo;Please find your quote (BEV-2026-0042) attached as a PDF.&rdquo;, your
-             message, &ldquo;You can also view it online and accept it here:&rdquo; with <b>the link on its own line</b>, &ldquo;If you have any questions please
-             reply to this email.&rdquo;, &ldquo;Kind regards,&rdquo; and your company name. The attachment is named after the quote number. A reply comes
-             straight back to you.</p>
+             message, &ldquo;You can also view it online and accept it here:&rdquo; with a <b>short bold link, &ldquo;View and accept your quote&rdquo;</b>, on its
+             own line &mdash; no long web address. Then &ldquo;If you have any questions please reply to this email.&rdquo;, &ldquo;Kind regards,&rdquo; and your
+             company name. The attachment is named after the quote number. A reply comes straight back to you.</p>
 
           <p><b>What they see.</b> No login &mdash; the long code in the link is the key. Your <b>logo</b>, company name, address, phone and email;
              <b>Quote BEV-2026-0042</b> with the <b>Date</b> and <b>Status</b>; a <b>Quote for</b> panel with their name and address; then the items &mdash;
@@ -475,20 +558,46 @@ return [
 
           <div class="heads"><span class="hi">&#9888;</span><div><b>Their Yes sets off four things.</b>
              <b>One:</b> an email to you &mdash; <em>&ldquo;New order &mdash; BEV-2026-0042 accepted (Emma Fletcher)&rdquo;</em> with the total and a link &mdash;
-             <b>only if</b> an address is set under <b>Settings &rarr; Quoting &rarr; New order alerts</b>, and only for acceptances made <em>online</em>.
+             <b>only if</b> an address is set under <b>Settings &rarr; Quoting &rarr; New order alerts</b>, and only when the <em>customer</em> accepts
+             (online, or signing in person) &mdash; not when you press Customer accepted yourself.
              <b>Two:</b> the <b>deposit</b> shows as due. <b>Three:</b> an appointment <b>&ldquo;Install: &lt;quote number&gt; &mdash; &lt;customer&gt;&rdquo;</b> lands
              in the calendar&rsquo;s <b>Pending Fitting</b> tray with no date, ready to drag onto the day. <b>Four:</b> if <b>Auto-place in-house orders</b> is on
              (it is by default) and <b>every</b> blind is made in-house with no outside supplier, the quote goes <b>straight to Ordered</b> &mdash; so it may read
              &ldquo;Ordered&rdquo; rather than &ldquo;Accepted&rdquo; when you look.</div></div>
 
           <p><b>The thank-you email.</b> If the customer has an email address, a thank-you goes out the moment they accept &mdash; subject <em>&ldquo;Thank you
-             for accepting quote &lt;number&gt;&rdquo;</em>. Edit it in <b>Settings &rarr; Legal</b>, under <b>&ldquo;Thank-you email (sent when a customer accepts
+             for accepting quote &lt;number&gt;&rdquo;</em>, from your business like the quote email, with a short bold <b>&ldquo;View your quote&rdquo;</b>
+             link where <code>{{quote_link}}</code> sits. Edit it in <b>Settings &rarr; Legal</b>, under <b>&ldquo;Thank-you email (sent when a customer accepts
              a quote)&rdquo;</b>, using <code>{{customer_name}}</code>, <code>{{company_name}}</code>, <code>{{quote_number}}</code> and
              <code>{{quote_link}}</code>. <b>&ldquo;Leave empty to send no thank-you email.&rdquo;</b></p>
 
           <p><b>Saying yes on their behalf.</b> In the dark bar at the top of the quote: <b>&ldquo;&#10003; Customer accepted&rdquo;</b> and <b>&ldquo;&#10005; Customer
              declined&rdquo;</b> (which asks <em>&ldquo;Mark this quote as declined?&rdquo;</em>). Or <b>&#128230; Save as order</b> in <b>Quote actions</b> accepts it
-             <em>and</em> places it in one go. Same result &mdash; except the New-order alert email only fires for an online acceptance.</p>
+             <em>and</em> places it in one go. Same result &mdash; except the New-order alert email only fires when the customer accepts it themselves.</p>
+
+          <p><b>Signing in person &mdash; no email or WhatsApp needed.</b> Not every customer has email or WhatsApp. In the dark bar at the top of the
+             quote, next to Customer accepted, press <b>&ldquo;&#9997; Customer signs here&rdquo;</b>. It shows while the quote is a <b>draft</b> or <b>sent</b>
+             and has at least one blind. A draft is marked <b>sent</b> first (it&rsquo;s being presented right now, and starts the 30 days). Your screen
+             then opens the <b>customer&rsquo;s own quote page</b> &mdash; their blinds and totals exactly as they&rsquo;d see them, <b>no costs</b> &mdash; in
+             in-person mode:</p>
+          <ul class="steps">
+            <li><b>Accept this quote</b> &mdash; <em>&ldquo;Check your name, then sign in the box below with your finger to accept this quote.&rdquo;</em>
+                <b>Your full name</b> is filled in; they can correct it.</li>
+            <li><b>Your signature</b> &mdash; a dashed box to sign in with a finger (a pen or mouse works too). <b>Sign above</b>; <b>Clear</b> wipes it to
+                start again. Press Accept without signing and it says <em>&ldquo;Please sign in the box.&rdquo;</em></li>
+            <li>The <b>Terms &amp; Conditions</b> tick, if you have terms, works just as online.</li>
+            <li><b>Accept quote</b> &mdash; there&rsquo;s <b>no Decline</b> button in person. <b>&ldquo;&larr; Back to the quote&rdquo;</b> at the bottom takes you
+                back to the quote screen.</li>
+          </ul>
+          <p>Accepting runs exactly the same as a customer&rsquo;s online yes &mdash; the fitting lands in <b>Pending Fitting</b>, the measure visit is closed
+             off, an all-in-house job can go straight to Ordered, and the thank-you email goes out if they have an email address. They see
+             <b>&ldquo;Quote accepted &#10003;&rdquo;</b>. Back on the quote, under <b>Quote actions</b>, you see their signature and <b>&ldquo;Signed in
+             person by Emma Fletcher&rdquo;</b> with the date and time and whose device it was signed on. The signature also prints on the
+             <b>quote PDF</b> (&ldquo;Accepted by the customer&rdquo; &hellip; &ldquo;signed in person&rdquo;) &mdash; not on invoices or receipts.</p>
+          <div class="oops"><b>When Customer signs here won&rsquo;t open.</b> The signing page only works on a device where someone from your business
+             is <b>logged in</b> &mdash; anyone else opening that link just gets the normal online page, where they type their name. An <b>expired</b> quote says
+             <em>&ldquo;This quote has expired &mdash; renew it before the customer signs.&rdquo;</em>; a quote already accepted or declined says so; and
+             staff without permission to take an acceptance see <em>&ldquo;You don&rsquo;t have permission to take a customer&rsquo;s acceptance.&rdquo;</em></div>
 
           <p><b>Where to watch it.</b> <b>Retail &rarr; Quotes</b> &mdash; <em>&ldquo;Quotes still in the pipeline &mdash; drafts, sent, and declined.&rdquo;</em>
              A draft carries an amber <b>Not sent</b> badge (<em>&ldquo;This quote hasn&rsquo;t been sent to the customer yet&rdquo;</em>); the badge going is how
@@ -511,14 +620,16 @@ return [
             ['4', 'When it won\'t send',          'Two things can stop it. If the email box is empty, or mistyped, you are told: please provide a valid recipient email address. If the email itself will not go, you see a message about SMTP credentials. That is the email settings, not your quote. Either way, nothing was sent. So send the link another way, instead.', 4],
             ['5', 'Send via WhatsApp',           'The green Send via WhatsApp button opens WhatsApp, with a short message and the same link. If you cannot see the button, check two things in the customer details. There must be a mobile number. And Mobile is on WhatsApp must be ticked. Once both are there, the button appears. On a trade account job, it uses the account\'s own mobile.', 5],
             ['6', 'Copy public link',            'Copy public link puts the link on your clipboard, and says Link copied. Paste it into a text, or anywhere you like. If copying is blocked, the link is printed underneath, to copy by hand. One warning. The first time someone opens that link, a draft quote turns to sent. So only share it once the quote is right.', 6],
-            ['7', 'What lands in their inbox',   'This is what arrives. A plain email, with the quote attached as a PDF. Hello, and their name. Your own message, if you wrote one. Then the link, on a line of its own. There is no fancy button to hunt for. And it asks them to reply to the email, so if they do, the reply comes straight back to you.', 7],
+            ['7', 'What lands in their inbox',   'This is what arrives. It comes from your business name, not from YourBlinds, so if they reply, it comes straight back to you. The quote is attached as a PDF. Hello, and their name. Your own message, if you wrote one. Then a short bold link: View and accept your quote. There is no long web address to put them off.', 7],
             ['8', 'What they see',               'The link opens this, with no login needed. Your logo, your address, the quote number, and the date. Then who it is for. Then every blind, with its room, its fabric and colour, its size, and its options. Then the subtotal, the VAT, and the total. Whether sizes and line prices show is up to you, in Settings.', 8],
             ['9', 'The deposit, and how to pay', 'Under the total, they see the deposit they will owe when they say yes, and that the balance is due on completion. Then a box called How to pay, bank transfer, with your account name, sort code and account number. And it asks them to use the quote number as the payment reference, so you can match it up.', 9],
             ['10', 'Accepting',                  'At the bottom is Accept this quote. Their full name is already in the box. If you have terms and conditions, there is a box to tick, to agree to them. If they forget, the page stops them: please tick the box to agree to the Terms and Conditions. The Terms and Conditions words open your terms in their own tab, so they never lose the quote.', 10],
-            ['11', 'The sign-off',               'When they press Accept quote, the app records the name they typed, the date, and where it came from, as their digital sign-off. They see Quote accepted, with their name. And if you have their email address, a thank you email goes to them straight away. You can change its wording, or switch it off, in Settings.', 11],
+            ['11', 'The sign-off',               'When they press Accept quote, the app records the name they typed, the date, and where it came from, as their digital sign-off. They see Quote accepted, with their name. And if you have their email address, a thank you email goes to them straight away, with a short link, View your quote. You can change its wording, or switch it off, in Settings.', 11],
             ['12', 'Or they decline',            'If they press Decline instead, it asks them first: decline this quote? Your supplier will be notified. They press Yes, continue, and the quote is marked declined. They see Quote declined. And the fitting that was waiting on your calendar is taken off again.', 12],
             ['13', 'Your side',                  'On your side, a yes sets off several things. You get an email, new order, quote accepted, as long as an address is set in New order alerts, in Settings. An install appointment lands in the Pending Fitting tray on your calendar, with no date yet, ready to drag onto a day. The deposit shows as due. And if every blind is made in-house, it can go straight to Ordered.', 13],
             ['14', 'A yes on the phone',         'Plenty of people say yes on the phone, or at the door. You do not need the link for that. In the dark bar at the top of the quote, press Customer accepted. Or press Save as order, which accepts it and places the order, in one go. The result is the same, except you do not get the new order email.', 14],
-            ['15', 'Thirty days to accept',      'A sent quote can be accepted for thirty days. After that, the link still opens, but instead of the Accept button, the customer sees: this quote has expired. Prices may have changed. On your side, the quote shows a red bar, with a Renew for thirty days button. Check the prices, then renew it. Or email it again, which restarts it too.', 15],
+            ['15', 'Customer signs here',        'Not everyone has email, or WhatsApp. So they can sign on your own tablet or phone instead. In the dark bar at the top of the quote, press Customer signs here. If the quote is still a draft, it is marked as sent first. Your screen then opens their own quote page, just as they would see it. Their blinds and the totals, with no costs. And their name, ready to check.', 15],
+            ['16', 'Signed in person',           'Now hand them the device. They sign in the box, with a finger. Clear lets them start again. They tick the terms, and press Accept quote. There is no Decline button here. It works just like a yes online. The fitting lands in Pending Fitting, and the thank you email goes out. Back on the quote, you see Signed in person, with their name and the time. And the signature prints on the quote PDF.', 16],
+            ['17', 'Thirty days to accept',     'A sent quote can be accepted for thirty days. After that, the link still opens, but instead of the Accept button, the customer sees: this quote has expired. Prices may have changed. On your side, the quote shows a red bar, with a Renew for thirty days button. Check the prices, then renew it. Or email it again, which restarts it too.', 17],
         ],
 ];
