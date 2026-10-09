@@ -298,10 +298,17 @@ if ($canSeeRevenue && $hasDirectOrder) {
     // Same statuses as Revenue (won), so an order is always in exactly one of them.
     $placed = $wonStatuses;
     $inPl   = implode(',', array_fill(0, count($placed), '?'));
+    // A remake is putting a fault right, not another direct order. It inherits
+    // direct_order and the sold_for_* figures from the original (the copy in
+    // _partials/remakes.php skips neither), so without this guard it lands in
+    // these tiles a second time. Lines 204-207 build exactly this guard into
+    // the fragments every other figure on the page uses; the two direct-order
+    // queries (here and the gross-profit supplement below) used none of them.
     $st = $pdo->prepare(
         "SELECT COUNT(*) AS n, COALESCE(SUM(total), 0) AS spend
            FROM quotes
           WHERE client_id = ? AND direct_order = 1
+            AND remake_of_quote_id IS NULL
             AND status IN ($inPl)
             " . ($hasSoldFor ? 'AND sold_for_net IS NULL' : '') . "
             $dateClause
@@ -444,6 +451,7 @@ if ($canSeeProfit) {
                 "SELECT COALESCE(SUM(q.sold_for_net), 0) AS sell, COALESCE(SUM(q.subtotal), 0) AS cost, COUNT(*) AS jobs
                    FROM quotes q
                   WHERE q.client_id = ? AND q.direct_order = 1 AND q.sold_for_net IS NOT NULL
+                    AND q.remake_of_quote_id IS NULL
                     AND q.status IN ($inWon)
                     $mgDate
                     $mgUser"
