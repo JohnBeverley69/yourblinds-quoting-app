@@ -1074,6 +1074,16 @@ $activeNav = 'settings';
                             Leave blank if your business isn't VAT-registered.
                             When set, it appears below your contact details on every quote PDF.
                         </small>
+                        <?php /* Plain span, not .ui-hint — compact mode hides hints, and this is
+                                 the link between the number and the rate people miss. */ ?>
+                        <span style="display:block;color:var(--text-muted,#667);font-size:0.8125rem;margin-top:0.25rem">
+                            <?php if (trim((string) ($client['vat_number'] ?? '')) !== ''): ?>
+                                VAT is charged on quotes at <strong><?= e(rtrim(rtrim(number_format((float) ($settings['vat_percent'] ?? 20), 2, '.', ''), '0'), '.')) ?>%</strong>
+                                — change the rate in <a href="/admin/settings.php#quoting">Quote defaults</a>.
+                            <?php else: ?>
+                                Saving a VAT number turns on VAT at 20% (adjustable in Quote defaults).
+                            <?php endif; ?>
+                        </span>
                     </div>
                 </div>
 
