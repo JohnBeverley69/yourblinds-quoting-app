@@ -138,8 +138,11 @@ if ($hasQuotes) {
 
     // Pull the lot. We sort by updated_at so the most-recently-touched
     // quotes rise to the top of each column.
+    // Direct orders (new_order.php) label as "Draft order" — guarded pre-migration.
+    $plDirectSel = '0 AS direct_order,';
+    try { db()->query('SELECT direct_order FROM quotes LIMIT 0'); $plDirectSel = 'q.direct_order,'; } catch (Throwable $e) {}
     $sql = "SELECT q.id, q.quote_number, q.end_customer_name, q.end_customer_postcode,
-                   q.status, q.total, q.deposit_amount, q.deposit_paid_at,
+                   q.status, q.total, q.deposit_amount, q.deposit_paid_at, $plDirectSel
                    q.created_at, q.updated_at, q.accepted_at,
                    IFNULL((SELECT SUM(amount) FROM payments
                             WHERE quote_id = q.id), 0) AS paid_total
@@ -506,7 +509,10 @@ $ageOf = static function (?string $ts): string {
                                                 </span>
                                             <?php endif; ?>
                                         </div>
-                                        <?php if (($c['status'] ?? '') === 'draft'): ?>
+                                        <?php if (($c['status'] ?? '') === 'draft' && !empty($c['direct_order'])): ?>
+                                            <div><span class="pl-card-notsent"
+                                                  title="This order hasn't been placed yet">Draft order</span></div>
+                                        <?php elseif (($c['status'] ?? '') === 'draft'): ?>
                                             <div><span class="pl-card-notsent"
                                                   title="This quote hasn't been sent to the customer yet">Not sent</span></div>
                                         <?php endif; ?>

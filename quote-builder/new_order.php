@@ -78,7 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             // Name left blank here so no customer record is spawned — the label
             // name is just text for the worksheets/labels, set below.
-            $res = qb_create_quote_from_fields($pdo, $clientId, $f, 0, (int) $user['user_id'], 0, 'trade');
+            $res = qb_create_quote_from_fields($pdo, $clientId, $f, 0, (int) $user['user_id']);
             $pdo->prepare(
                 'UPDATE quotes SET direct_order = 1, vat_percent = 0, end_customer_name = ?
                   WHERE id = ? AND client_id = ?'

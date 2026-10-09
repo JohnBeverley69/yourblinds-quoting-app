@@ -31,4 +31,13 @@ if ($exists->fetchColumn()) {
     $pdo->exec('ALTER TABLE quotes ADD COLUMN direct_order TINYINT(1) NOT NULL DEFAULT 0');
     echo "Added quotes.direct_order.\n";
 }
+// Direct orders were first filed as sale_type 'trade', which hid them from a
+// client's own Quotes / Orders lists (those show type=retail). Re-file them.
+try {
+    $n = $pdo->exec("UPDATE quotes SET sale_type = 'retail'
+                      WHERE direct_order = 1 AND account_client_id IS NULL AND sale_type = 'trade'");
+    echo "Re-filed $n direct order(s) so they show in the client's lists.\n";
+} catch (Throwable $e) {
+    echo "sale_type back-fill skipped: " . $e->getMessage() . "\n";
+}
 echo "\nDone. \"New order\" now works for users with Create orders.\n";

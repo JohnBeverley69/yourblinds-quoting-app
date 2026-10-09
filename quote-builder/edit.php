@@ -2460,7 +2460,9 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
             });
         })();
         </script>
+        <?php endif; /* send to customer */ ?>
 
+        <?php if (!$offlineTemplate): ?>
         <!-- ============== DANGER ZONE ==============
              Status transitions / PDF buttons now live at the TOP of
              the page (see .qb-top-actions). Only the Delete button
@@ -2472,14 +2474,14 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
             </div>
             <div class="status-actions">
                 <form method="post" action="/quote-builder/delete.php"
-                      data-confirm="Delete quote <?= e((string) $quote['quote_number']) ?>? This is permanent — all blinds go too.">
+                      data-confirm="Delete <?= $isDirectOrder ? 'order' : 'quote' ?> <?= e((string) $quote['quote_number']) ?>? This is permanent — all blinds go too.">
                     <?= csrf_field() ?>
                     <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
-                    <button type="submit" class="btn btn-danger">Delete quote</button>
+                    <button type="submit" class="btn btn-danger">Delete <?= $isDirectOrder ? 'order' : 'quote' ?></button>
                 </form>
             </div>
         </section>
-        <?php endif; /* !$offlineTemplate: send + danger zone */ ?>
+        <?php endif; /* !$offlineTemplate: danger zone */ ?>
     </main>
 </div>
 
