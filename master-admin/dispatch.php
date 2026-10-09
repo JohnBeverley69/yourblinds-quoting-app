@@ -369,7 +369,9 @@ $todayBase  = [];   // acc => method => net already noted out today
 $todayOvr   = [];   // acc => method => override already set today
 $dnDateOf   = [];   // quote id => delivery_date of its note ('' = pre-charges note)
 $toInvCarr  = [];   // quote id => delivery charge parked on its note
+$remakeQ = [];   // quote id => original number, for remake orders (no delivery charge)
 if ($dcOn) {
+    require_once __DIR__ . '/../_partials/remakes.php';
     $netByQ = [];
     foreach (ar_placed_orders($pdo, $factory) as $o) $netByQ[(int) $o['id']] = (float) $o['wholesale_total'];
     $today = date('Y-m-d');
@@ -380,11 +382,14 @@ if ($dcOn) {
             AND (delivery_date = ? OR delivery_date IS NULL OR carriage_net > 0)"
     );
     $tn->execute([$factory, $today]);
-    foreach ($tn->fetchAll(PDO::FETCH_ASSOC) as $n) {
+    $tnRows  = $tn->fetchAll(PDO::FETCH_ASSOC);
+    $remakeQ = rm_remake_orders($pdo, array_merge(array_map(static fn ($n) => (int) $n['source_quote_id'], $tnRows),
+                                                  array_map(static fn ($o) => (int) $o['id'], $ready)));
+    foreach ($tnRows as $n) {
         $q = (int) $n['source_quote_id'];
         $dnDateOf[$q]  = (string) ($n['delivery_date'] ?? '');
         $toInvCarr[$q] = (float) $n['carriage_net'];
-        if ((string) $n['delivery_date'] !== $today) continue;
+        if ((string) $n['delivery_date'] !== $today || isset($remakeQ[$q])) continue;   // remakes don't count
         $a = (int) $n['account_client_id']; $m = (string) $n['delivery_method'];
         $todayBase[$a][$m] = ($todayBase[$a][$m] ?? 0) + ($netByQ[$q] ?? 0);
         if ($n['carriage_override'] !== null) $todayOvr[$a][$m] = (float) $n['carriage_override'];
@@ -508,10 +513,10 @@ $money     = static fn ($n) => '£' . number_format((float) $n, 2);
               <tr class="dt-row<?= $o['has_dn'] ? ' is-noted' : '' ?>">
                 <td><input type="checkbox" class="dt-tick go" name="quote_ids[]" value="<?= $qid ?>"
                            data-acc="<?= (int) $acc ?>" data-net="<?= e(number_format((float) ($o['wholesale_total'] ?? 0), 2, '.', '')) ?>"
-                           data-counts="<?= $counts ? '1' : '0' ?>"
+                           data-counts="<?= $counts ? '1' : '0' ?>" data-remake="<?= isset($remakeQ[$qid]) ? '1' : '0' ?>"
                            <?= $o['has_dn'] ? '' : 'checked' ?>></td>
                 <td><?= e((string) ($o['account_name'] ?? '')) ?></td>
-                <td><a href="/quote-builder/edit.php?id=<?= $qid ?>"><?= e((string) $o['quote_number']) ?></a></td>
+                <td><a href="/factory/edit-order.php?order=<?= $qid ?>"><?= e((string) $o['quote_number']) ?></a></td>
                 <td class="dt-po"><?= e((string) ($o['customer_reference'] ?? '')) ?: '—' ?></td>
                 <td class="num"><?= (int) ($o['bev_qty'] ?? 0) ?></td>
                 <td class="num"><?= e($money($o['wholesale_total'] ?? 0)) ?></td>
@@ -556,7 +561,7 @@ $money     = static fn ($n) => '£' . number_format((float) $n, 2);
               <tr class="dt-row">
                 <td><input type="checkbox" class="dt-tick inv" name="quote_ids[]" value="<?= $qid ?>" checked></td>
                 <td><?= e((string) ($o['account_name'] ?? '')) ?></td>
-                <td><a href="/quote-builder/edit.php?id=<?= $qid ?>"><?= e((string) $o['quote_number']) ?></a></td>
+                <td><a href="/factory/edit-order.php?order=<?= $qid ?>"><?= e((string) $o['quote_number']) ?></a></td>
                 <td class="dt-po"><?= e((string) ($o['customer_reference'] ?? '')) ?: '—' ?></td>
                 <td class="num"><?= (int) ($o['bev_qty'] ?? 0) ?></td>
                 <td class="num"><?= e($money($o['wholesale_total'] ?? 0)) ?></td>
@@ -593,12 +598,15 @@ $money     = static fn ($n) => '£' . number_format((float) $n, 2);
             var mode = row.querySelector('.dt-mode').value;
             var base = JSON.parse(row.dataset.base || '{}');
             var net = +(base[method] || 0);
+            var paying = method in base;   // a non-remake order already out today on this method
             document.querySelectorAll('.dt-tick.go[data-acc="' + acc + '"]').forEach(function (t) {
-              if (t.checked && t.dataset.counts === '1') net += +t.dataset.net;
+              if (!t.checked || t.dataset.counts !== '1' || t.dataset.remake === '1') return;   // remakes: no delivery charge
+              net += +t.dataset.net; paying = true;
             });
             row.querySelector('.dt-custom').hidden = mode !== 'custom';
             var r = rules[method], charge = 0, why = '';
-            if (row.dataset.nocharge === '1') why = 'no delivery charge on this account';
+            if (!paying) why = 'remakes only — no delivery charge';
+            else if (row.dataset.nocharge === '1') why = 'no delivery charge on this account';
             else if (method === 'collect') why = 'collected — free';
             else if (!r || r.charge <= 0) why = 'no charge set for this method';
             else if (net < r.under) { charge = r.charge; why = 'under ' + gbp(r.under); }
