@@ -340,6 +340,11 @@ $activeNav = 'users';
                 <div class="form-row full">
                     <div class="form-group">
                         <label>Permissions</label>
+                        <p id="perm-admin-note" hidden style="margin:0 0 0.5rem; font-size:0.8125rem; color:#1f3b5b;
+                                  background:#eef4fb; border-radius:6px; padding:0.4rem 0.6rem;">
+                            <strong>Admin</strong> is ticked, so this person can always do everything below
+                            (except <strong>Fittings only</strong>, which is a restriction you choose). Untick Admin to use these ticks instead.
+                        </p>
                         <div style="display:flex; flex-wrap:wrap; gap:1rem; font-size:0.9375rem;">
                             <label style="display:inline-flex; align-items:center; gap:.4rem; font-weight:400;">
                                 <input type="checkbox" name="can_create_quotes" value="1" <?= $form['can_create_quotes'] ? 'checked' : '' ?>>
@@ -374,6 +379,44 @@ $activeNav = 'users';
                     <button type="submit" class="btn btn-primary">Add user</button>
                 </div>
             </form>
+
+<script>
+// The Admin role overrides the grant ticks (quotes, orders, all jobs, costs,
+// money) everywhere in the app, so show them ticked + greyed while Admin is
+// ticked. A hidden twin posts each box's OWN saved value meanwhile, so
+// unticking Admin later brings back exactly what was set.
+(function () {
+    var admin = document.querySelector('input[name="roles[]"][value="admin"]');
+    if (!admin) return;
+    var note  = document.getElementById('perm-admin-note');
+    var boxes = ['can_create_quotes', 'can_create_orders', 'can_view_all_customer_jobs', 'can_view_costs', 'dash_view_revenue']
+        .map(function (n) { return document.querySelector('input[type="checkbox"][name="' + n + '"]'); })
+        .filter(Boolean);
+    boxes.forEach(function (b) {
+        b.dataset.own = b.checked ? '1' : '0';
+        var twin = document.createElement('input');
+        twin.type = 'hidden'; twin.name = b.name; twin.value = '1'; twin.disabled = true;
+        b.parentNode.appendChild(twin);
+        b._twin = twin;
+    });
+    function sync() {
+        var on = admin.checked;
+        boxes.forEach(function (b) {
+            if (on) {
+                if (!b.disabled) b.dataset.own = b.checked ? '1' : '0';
+                b.checked = true; b.disabled = true;
+                b._twin.disabled = b.dataset.own !== '1';
+            } else {
+                b.disabled = false; b.checked = b.dataset.own === '1';
+                b._twin.disabled = true;
+            }
+        });
+        if (note) note.hidden = !on;
+    }
+    admin.addEventListener('change', sync);
+    sync();
+})();
+</script>
         </section>
 
         <section class="section">
