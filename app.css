@@ -355,6 +355,14 @@ a { color: var(--link); }
     color: var(--brand-hover);
 }
 .sidebar-cta-btn:active { transform: translateY(1px); }
+/* "New" with both Quote and Order allowed: a two-item menu under the button. */
+.sidebar-new > summary { list-style: none; cursor: pointer; }
+.sidebar-new > summary::-webkit-details-marker { display: none; }
+.sidebar-new-menu { display: flex; flex-direction: column; gap: 0.25rem; margin-top: 0.35rem; }
+.sidebar-new-menu a { display: block; padding: 0.45rem 0.75rem; border-radius: 8px; text-align: center;
+                      background: rgba(255,255,255,0.12); color: #fff; font-weight: 600; font-size: 0.875rem;
+                      text-decoration: none; }
+.sidebar-new-menu a:hover { background: rgba(255,255,255,0.22); }
 /* InstaPrice CTA — distinct colour so it stands out from the white
    "New quote" button directly above it. */
 .sidebar-cta-btn.is-instaprice {

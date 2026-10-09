@@ -45,6 +45,9 @@ if ($offlineTemplate) {
     $id    = (int) ($_GET['id'] ?? 0);
     $quote = qb_load_quote_or_404($id, $clientId);
 }
+// Direct order (new_order.php): order-shaped screen — order header instead of
+// a retail customer, buying prices, one "Place order" step, no quoting extras.
+$isDirectOrder = !$offlineTemplate && qb_is_direct_order($quote);
 
 // Measurement unit for THIS quote: the quote's own override if set, else
 // the tenant default, else mm. Sizes are stored in mm; this only drives
@@ -61,7 +64,8 @@ $unitSuffix  = unit_suffix($measureUnit);
 // quotes to a guessing attacker.
 $canSeeAllQuotes = $isAdmin
     || $_perms['can_view_all_customer_jobs']
-    || $_perms['can_create_quotes'];
+    || $_perms['can_create_quotes']
+    || ($isDirectOrder && !empty($_perms['can_create_orders']));
 if (!$canSeeAllQuotes) {
     $assignedSt = db()->prepare(
         'SELECT 1 FROM appointments
@@ -846,7 +850,7 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
         <?php if (!$offlineTemplate): ?>
         <div class="quote-sticky-bar">
             <span class="qsb-left">
-                Quote <?= e((string) $quote['quote_number']) ?>
+                <?= $isDirectOrder ? 'Order' : 'Quote' ?> <?= e((string) $quote['quote_number']) ?>
                 <span class="status-pill status-<?= e((string) $quote['status']) ?>">
                     <?= e((string) $quote['status']) ?>
                 </span>
@@ -870,7 +874,7 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                     static fn ($t) => qb_user_can_change_to($isAdmin, $_perms, $t)
                 ));
             ?>
-            <?php if ($editable && $quickActions): ?>
+            <?php if ($editable && $quickActions && !$isDirectOrder): ?>
                 <span class="qsb-actions">
                     <?php if (in_array('accepted', $quickActions, true) && !empty($items)
                               && in_array((string) $quote['status'], ['draft', 'sent'], true)): ?>
@@ -921,9 +925,11 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
              can't be a top-of-page misclick. -->
         <section class="section qb-top-actions">
             <div class="section-header">
-                <h2 class="section-title">Quote actions</h2>
+                <h2 class="section-title"><?= $isDirectOrder ? 'Order actions' : 'Quote actions' ?></h2>
             </div>
             <div class="status-actions">
+                <?php $draftOrder = $isDirectOrder && in_array((string) $quote['status'], ['draft', 'sent'], true); ?>
+                <?php if (!$draftOrder): ?>
                 <a href="/pdf-generator/quote_pdf.php?id=<?= (int) $quote['id'] ?>"
                    class="btn btn-secondary" target="_blank" rel="noopener">
                     View PDF
@@ -932,6 +938,7 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                    class="btn btn-secondary">
                     Download PDF
                 </a>
+                <?php endif; ?>
                 <?php
                     // "Save as order" — place the job now: accept it, then route
                     // to the Place-order screen (bought-in lines get emailed to
@@ -949,11 +956,12 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                         <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
                         <input type="hidden" name="target_status" value="accepted">
                         <input type="hidden" name="then_place" value="1">
-                        <button type="submit" class="btn btn-primary">📦 Save as order</button>
+                        <button type="submit" class="btn btn-primary"<?= $isDirectOrder ? ' data-confirm="Place this order with us now?"' : '' ?>>📦 <?= $isDirectOrder ? 'Place order' : 'Save as order' ?></button>
                     </form>
                 <?php endif; ?>
                 <?php foreach ($transitions as $t): ?>
                     <?php if (!qb_user_can_change_to($isAdmin, $_perms, $t)) continue; ?>
+                    <?php if ($draftOrder) continue; /* a draft order's only step is Place order */ ?>
                     <form method="post" action="/quote-builder/change_status.php">
                         <?= csrf_field() ?>
                         <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
@@ -1098,7 +1106,7 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
             </div>
         <?php endif; ?>
 
-        <?php if (!$hasCustomer): ?>
+        <?php if (!$hasCustomer && !$isDirectOrder): ?>
             <a class="needs-customer" href="#customer-details">
                 <span aria-hidden="true">&#9888;</span>
                 <span>This quote has <b>no customer yet</b> &mdash; add their details.</span>
@@ -1114,7 +1122,19 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                 <?= csrf_field() ?>
                 <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
 
-            <?php if ($isTradeOrder):
+            <?php if ($isDirectOrder): ?>
+                <div class="section-header" style="margin-bottom:0.5rem">
+                    <h2 class="section-title">Order details</h2>
+                </div>
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label for="end_customer_name">Name for the labels <span style="color:var(--text-faint);font-weight:400">(optional)</span></label>
+                        <input id="end_customer_name" name="end_customer_name" type="text" maxlength="150"
+                               placeholder="Name for the labels (optional)" <?= !$editable ? 'readonly' : '' ?>
+                               value="<?= e((string) ($quote['end_customer_name'] ?? '')) ?>">
+                    </div>
+                </div>
+            <?php elseif ($isTradeOrder):
                 $accAddr = array_filter([
                     (string) ($tradeAccount['address1'] ?? ''),
                     (string) ($tradeAccount['address2'] ?? ''),
@@ -1306,9 +1326,15 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                  again. A retail customer has job numbers too. -->
             <div class="form-row cols-2" style="margin-top:1rem">
                 <div class="form-group">
+                    <?php if ($isDirectOrder): ?>
+                    <label for="customer_reference">Order reference <span class="required">*</span></label>
+                    <input id="customer_reference" name="customer_reference" type="text" maxlength="100" required
+                           placeholder="Order reference *" <?= !$editable ? 'readonly' : '' ?>
+                    <?php else: ?>
                     <label for="customer_reference">Customer reference <span style="color:var(--text-faint);font-weight:400">(their order / PO)</span></label>
                     <input id="customer_reference" name="customer_reference" type="text" maxlength="100"
                            placeholder="Customer reference (their order / PO)" <?= !$editable ? 'readonly' : '' ?>
+                    <?php endif; ?>
                            value="<?= e((string) ($quote['customer_reference'] ?? '')) ?>">
                 </div>
                 <div class="form-group">
@@ -1327,8 +1353,8 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                  just drags the corner. -->
             <div class="form-row full" style="margin-top:1rem">
                 <div class="form-group">
-                    <label for="notes">Quote notes</label>
-                    <textarea id="notes" name="notes" rows="1" placeholder="Quote notes"
+                    <label for="notes"><?= $isDirectOrder ? 'Order notes' : 'Quote notes' ?></label>
+                    <textarea id="notes" name="notes" rows="1" placeholder="<?= $isDirectOrder ? 'Order notes' : 'Quote notes' ?>"
                               style="resize:vertical;min-height:2.5rem"
                               <?= !$editable ? 'readonly' : '' ?>><?= e((string) ($quote['notes'] ?? '')) ?></textarea>
                 </div>
@@ -1622,7 +1648,7 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                     </div>
                 </div>
 
-                <?php if ($isAdmin || $_perms['can_view_costs']):
+                <?php if (($isAdmin || $_perms['can_view_costs']) && !$isDirectOrder):
                     // Per-blind pricing override. The rate field is in the
                     // tenant's basis; a hidden field carries the MARKUP the
                     // server stores. Blank = use the product's set rate.
@@ -1829,7 +1855,7 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                                 </tr>
                             <?php endforeach; ?>
 
-                            <?php if ($wtEnabled || $wtAmount > 0.0049): ?>
+                            <?php if (($wtEnabled || $wtAmount > 0.0049) && !$isDirectOrder): ?>
                                 <tr class="totals-row cost-only" style="color:#9333ea">
                                     <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right">
                                         WT
@@ -1890,11 +1916,11 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                                 </tr>
                             <?php endif; ?>
                             <tr class="totals-row grand">
-                                <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right"><?php if ($isAdmin || $_perms['can_view_costs']) echo cost_reveal_button(); ?> Total</td>
+                                <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right"><?php if (($isAdmin || $_perms['can_view_costs']) && !$isDirectOrder) echo cost_reveal_button(); ?> <?= $isDirectOrder ? 'Order total <span style="font-weight:400;font-size:0.75rem;color:var(--text-faint)">(your price, ex VAT)</span>' : 'Total' ?></td>
                                 <td class="num"><?= e(qb_fmt_money($quote['total'])) ?></td>
                                 <?php if ($editable): ?><td colspan="2"></td><?php endif; ?>
                             </tr>
-                            <?php if ($editable): ?>
+                            <?php if ($editable && !$isDirectOrder): ?>
                                 <tr class="totals-row">
                                     <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right;vertical-align:middle">
                                         Override price <span style="font-weight:400;font-size:0.75rem;color:var(--text-faint)">(agreed price ex VAT — VAT added on top; blank to clear)</span>
@@ -1931,7 +1957,7 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                                         : qb_predicted_deposit(db(), (int) $quote['client_id'], (float) $quote['total']))
                                     : 0.0;
                             ?>
-                            <?php if ($predDep > 0): ?>
+                            <?php if ($predDep > 0 && !$isDirectOrder): ?>
                             <tr class="totals-row">
                                 <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right;color:var(--text-faint);font-size:0.875rem">Deposit due on acceptance</td>
                                 <td class="num" style="color:var(--text-faint);font-size:0.875rem"><?= e(qb_fmt_money($predDep)) ?></td>
@@ -1991,7 +2017,7 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
             $hasPaidDeposit = $depositPaidAt !== null && (float) $depositAmount > 0.004;
         ?>
         <?php // Paid-deposit panel is money handling — "Can see money" only. ?>
-        <?php if (($quoteIsOrder || $hasPaidDeposit) && $canSeeMoney): ?>
+        <?php if (!$isDirectOrder && ($quoteIsOrder || $hasPaidDeposit) && $canSeeMoney): ?>
         <section class="section">
             <div class="section-header">
                 <h2 class="section-title">Deposit</h2>
@@ -2051,7 +2077,7 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                 </form>
             <?php endif; ?>
         </section>
-        <?php elseif ($editable && !$quoteIsOrder && !$hasPaidDeposit): ?>
+        <?php elseif (!$isDirectOrder && $editable && !$quoteIsOrder && !$hasPaidDeposit): ?>
         <section class="section">
             <div class="section-header">
                 <h2 class="section-title">Deposit</h2>
@@ -2129,7 +2155,7 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                 'other' => 'Other',
             ];
         ?>
-        <?php if ($paymentsLoaded): ?>
+        <?php if ($paymentsLoaded && !$isDirectOrder): ?>
         <section class="section" id="payments" style="scroll-margin-top:4rem">
             <div class="section-header">
                 <h2 class="section-title">Payments</h2>
@@ -2253,7 +2279,7 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
         </div><!-- /col-right -->
         </div><!-- /quote-cols -->
 
-        <?php if (!$offlineTemplate): ?>
+        <?php if (!$offlineTemplate && !$isDirectOrder): ?>
         <!-- ============== SEND TO CUSTOMER (full-width below the cols
              so it doesn't get buried under a tall Blinds table when the
              quote has lots of line items) ============== -->
@@ -3699,7 +3725,8 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
             unit:       measureUnit,
             // Factory quote raised FOR a trade account → price the preview with
             // their buying discount (server honours it for super-admins only).
-            account_id: '<?= (int) ($quote['account_client_id'] ?? 0) ?>'
+            account_id: '<?= (int) ($quote['account_client_id'] ?? 0) ?>',
+            direct_order: '<?= $isDirectOrder ? '1' : '' ?>'
         });
         // Per-blind override (cost-viewers only — fields absent otherwise).
         // markup_override is the hidden, already-converted MARKUP value;
@@ -3952,7 +3979,8 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
         var params = new URLSearchParams({
             product_id: productSel.value, system_id: systemSel.value || '0', option_id: fabricId.value,
             drop: dropIn.value, quantity: '1', round_up: '1', unit: measureUnit,
-            account_id: '<?= (int) ($quote['account_client_id'] ?? 0) ?>'
+            account_id: '<?= (int) ($quote['account_client_id'] ?? 0) ?>',
+            direct_order: '<?= $isDirectOrder ? '1' : '' ?>'
         });
         params.append('multi_fascia[active]', '1');
         widths.forEach(function (w) { params.append('multi_fascia[widths][]', w); });

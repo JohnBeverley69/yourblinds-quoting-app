@@ -102,6 +102,12 @@ function qb_preview_response(PDO $pdo, int $clientId, array $q, bool $canCosts, 
         if (isset($q['markup_override'])   && is_numeric($q['markup_override']))   $input['markup_override']   = (float) $q['markup_override'];
         if (isset($q['discount_override']) && is_numeric($q['discount_override'])) $input['discount_override'] = (float) $q['discount_override'];
     }
+    // Direct order (the builder sends direct_order=1): show the buying price,
+    // same as add_item/update_item will save it.
+    if (!empty($q['direct_order'])) {
+        $input['markup_override']   = 0.0;
+        $input['discount_override'] = 0.0;
+    }
 
     // Multi-blind fascia: several blinds share one fascia. Price the whole group
     // live via the shared pricer (fascia once, other extras per blind) and return a

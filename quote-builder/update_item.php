@@ -157,6 +157,12 @@ if ($canCosts) {
     if (isset($_POST['markup_override'])   && is_numeric($_POST['markup_override']))   $input['markup_override']   = (float) $_POST['markup_override'];
     if (isset($_POST['discount_override']) && is_numeric($_POST['discount_override'])) $input['discount_override'] = (float) $_POST['discount_override'];
 }
+// A direct order is priced at the client's BUYING price: no markup, no retail
+// discount (their trade discount is already in the base).
+if (qb_is_direct_order($quote)) {
+    $input['markup_override']   = 0.0;
+    $input['discount_override'] = 0.0;
+}
 
 $pdo = db();
 $pdo->beginTransaction();
