@@ -57,6 +57,16 @@ if (!$quote) {
 
 $publicUrl = '/quote-history/public.php?token=' . urlencode($token);
 
+// Signed in person on the salesperson's device (quote-builder/sign_start.php):
+// only honoured for a logged-in user of THIS business, and then a drawn
+// signature is required. Keep the in-person page on every bounce back.
+$viewer   = current_user();
+$inPerson = !empty($_POST['in_person']) && $viewer
+         && (int) ($viewer['client_id'] ?? 0) === (int) $quote['client_id'];
+if ($inPerson) {
+    $publicUrl .= '&in_person=1';
+}
+
 if ((string) $quote['status'] !== 'sent') {
     // Already moved on — or never sent. Don't transition anything; just bounce
     // back to the public page where the appropriate state will render.
@@ -102,6 +112,21 @@ if ($action === 'accept') {
         header('Location: ' . $publicUrl);
         exit;
     }
+    // In person: validate the drawn signature — a real PNG, sane size.
+    $sigPng = null;
+    if ($inPerson) {
+        $raw = (string) ($_POST['signature_png'] ?? '');
+        $bin = (strncmp($raw, 'data:image/png;base64,', 22) === 0)
+            ? base64_decode(substr($raw, 22), true) : false;
+        $dim = ($bin !== false && strlen($bin) <= 600000) ? @getimagesizefromstring($bin) : false;
+        if ($dim === false || ($dim[2] ?? 0) !== IMAGETYPE_PNG || $dim[0] < 50 || $dim[1] < 20) {
+            $_SESSION['flash_error'] = 'Please sign in the box to accept the quote.';
+            header('Location: ' . $publicUrl);
+            exit;
+        }
+        $sigPng = 'data:image/png;base64,' . base64_encode($bin);
+    }
+
     $ip = client_ip();
     // AND status = "sent": two submits arriving together can only accept once.
     $accSt = $pdo->prepare(
@@ -116,6 +141,17 @@ if ($action === 'accept') {
     if ($accSt->rowCount() === 0) {
         header('Location: ' . $publicUrl);
         exit;
+    }
+    if ($sigPng !== null) {
+        // Separate statement so a missing migration can't block the accept itself.
+        try {
+            $pdo->prepare(
+                "UPDATE quotes SET acceptance_signature_png = ?, acceptance_method = 'in_person',
+                                   acceptance_by_user_id = ? WHERE id = ?"
+            )->execute([$sigPng, (int) ($viewer['user_id'] ?? 0) ?: null, (int) $quote['id']]);
+        } catch (Throwable $e) {
+            error_log('[YourBlinds] In-person signature not stored (run migrate_quote_signature.php): ' . $e->getMessage());
+        }
     }
 
     // Auto-create the installation appointment so the trade business
