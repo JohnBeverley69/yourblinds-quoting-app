@@ -83,8 +83,15 @@ foreach (array_merge($lists['open'], $lists['done']) as $r) {
 }
 
 // Report — one month.
+// Shape-checked AND real: '2026-13', '2026-00' and '9999-99' all satisfy the
+// pattern, but strtotime('2026-13-01') is false and date('Y-m-t', false) is a
+// TypeError under strict_types — a hand-edited URL or a stale bookmark turned
+// the Report tab into a blank 500. checkdate() settles it before it's used.
 $month = (string) ($_GET['month'] ?? date('Y-m'));
-if (!preg_match('/^\d{4}-\d{2}$/', $month)) $month = date('Y-m');
+if (!preg_match('/^(\d{4})-(\d{2})$/', $month, $mM)
+    || !checkdate((int) $mM[2], 1, (int) $mM[1])) {
+    $month = date('Y-m');
+}
 $rep = null;
 if ($ready && $view === 'report') {
     $from = $month . '-01';
