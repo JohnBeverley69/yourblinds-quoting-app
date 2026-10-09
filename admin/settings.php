@@ -521,7 +521,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             )->execute([$clientId, $bAccName, $bSort, $bAcc, $bInstr]);
             $_SESSION['flash_success'] = 'Bank / payment details saved.';
         } catch (Throwable $e) {
-            $_SESSION['flash_error'] = 'Could not save bank details — run /migrate_bank_details.php first.';
+            $_SESSION['flash_error'] = 'Could not save bank details — run /setup/migrations/migrate_bank_details.php first.';
             error_log('settings: bank details not saved: ' . $e->getMessage());
         }
         header('Location: /admin/settings.php');

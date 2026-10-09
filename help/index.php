@@ -238,7 +238,7 @@ $activeNav = 'help';
                 <?php if ($isSuper): ?>
                     <?php if (!$videoTableOk): ?>
                         <p class="help-empty" style="padding:0.5rem 0 0">
-                            Run <a href="/migrate_help_videos.php"><code>/migrate_help_videos.php</code></a> (super-admin) to enable the video list.
+                            Run <a href="/setup/migrations/migrate_help_videos.php"><code>/setup/migrations/migrate_help_videos.php</code></a> (super-admin) to enable the video list.
                         </p>
                     <?php else: ?>
                         <form method="post" action="/help/index.php" class="vid-add">

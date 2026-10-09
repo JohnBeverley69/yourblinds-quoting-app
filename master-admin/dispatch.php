@@ -119,7 +119,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // ---- Raise one invoice per ticked order ---------------------------------
     if ($action === 'invoice') {
         if (!ar_table_ready($pdo, 'factory_ar_invoices')) {
-            $_SESSION['flash_error'] = 'Invoices need their migration — run /migrate_ar_invoices.php first.';
+            $_SESSION['flash_error'] = 'Invoices need their migration — run /setup/migrations/migrate_ar_invoices.php first.';
             header('Location: /master-admin/dispatch.php'); exit;
         }
         if (!$ids) {
@@ -171,7 +171,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if (!$dnReady) {
-        $_SESSION['flash_error'] = 'Delivery notes need their migration — run /migrate_ar_delivery_notes.php first.';
+        $_SESSION['flash_error'] = 'Delivery notes need their migration — run /setup/migrations/migrate_ar_delivery_notes.php first.';
         header('Location: /master-admin/dispatch.php'); exit;
     }
     if (!$ids) {
@@ -443,7 +443,7 @@ $money     = static fn ($n) => '£' . number_format((float) $n, 2);
 
   <?php if (!$dnReady): ?>
     <div class="alert alert-error" role="alert">
-      Delivery notes need their migration — run <code>/migrate_ar_delivery_notes.php</code> once, then reload.
+      Delivery notes need their migration — run <code>/setup/migrations/migrate_ar_delivery_notes.php</code> once, then reload.
     </div>
   <?php else: ?>
 

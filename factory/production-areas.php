@@ -412,7 +412,7 @@ require __DIR__ . '/../_partials/factory_head.php';
 <?php if ($flashErr !== ''): ?><div class="pa-flash err"><?= e($flashErr) ?></div><?php endif; ?>
 
 <?php if (!$ready): ?>
-  <div class="pa-flash err">The production-areas tables aren't there yet — run <code>/migrate_production_areas.php</code>.</div>
+  <div class="pa-flash err">The production-areas tables aren't there yet — run <code>/setup/migrations/migrate_production_areas.php</code>.</div>
 <?php else: ?>
 <div class="pa-wrap">
   <div class="pa-card">
@@ -490,7 +490,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     <h2>Area scanners</h2>
     <p class="pa-sub" style="margin:.2rem 0 .8rem">Each area is a bench with its own WiFi scanner. Name the scanner and generate its key, then point the scanner at the URL below (put <code>{CODE}</code> where it sends the barcode). A key only finishes the routes in <em>its</em> area — so the fabric bench's scanner rejects a headrail label, and vice versa. The scanner name shows against every scan in the log.</p>
     <?php if (!$hasScanKey): ?>
-      <div class="pa-flash err">Scan keys need the Phase B migration — run <code>/migrate_production_areas_phase_b.php</code>.</div>
+      <div class="pa-flash err">Scan keys need the Phase B migration — run <code>/setup/migrations/migrate_production_areas_phase_b.php</code>.</div>
     <?php elseif (!$areas): ?>
       <p class="pa-sub">Add an area first, then generate its scanner key here.</p>
     <?php else: ?>

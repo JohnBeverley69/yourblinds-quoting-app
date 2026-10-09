@@ -217,7 +217,7 @@ require __DIR__ . '/../_partials/factory_head.php';
 <?php endif; ?>
 
 <?php if (!$ready): ?>
-    <div class="sl-empty">Scan logging isn't set up yet &mdash; run <code>/migrate_factory_scan_in.php</code>.</div>
+    <div class="sl-empty">Scan logging isn't set up yet &mdash; run <code>/setup/migrations/migrate_factory_scan_in.php</code>.</div>
 <?php elseif (!$rows): ?>
     <div class="sl-empty">No scans yet. When a WiFi scanner fires a worksheet's barcode, it lands here.</div>
 <?php else: ?>

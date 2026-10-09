@@ -1229,7 +1229,7 @@ function ar_void_invoice(PDO $pdo, int $factory, int $invId, string $reason = ''
 function ar_create_credit_note(PDO $pdo, int $factory, int $invId, array $lines, string $reason,
                                string $settleMode, int $userId): array
 {
-    if (!ar_table_ready($pdo, 'factory_ar_credit_notes')) throw new RuntimeException('Run /migrate_ar_credit_notes.php first.');
+    if (!ar_table_ready($pdo, 'factory_ar_credit_notes')) throw new RuntimeException('Run /setup/migrations/migrate_ar_credit_notes.php first.');
     $settleMode = $settleMode === 'refund' ? 'refund' : 'credit';
 
     $iv = $pdo->prepare('SELECT * FROM factory_ar_invoices WHERE id = ? AND factory_client_id = ? LIMIT 1');

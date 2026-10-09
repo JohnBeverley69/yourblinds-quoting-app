@@ -46,7 +46,7 @@ if (is_readable($envFile)) {
 echo "APP_URL                 : " . (string) (env('APP_URL', '(unset)')) . "\n";
 echo "APP_ENCRYPTION_KEY      : " . present(pc_get('APP_ENCRYPTION_KEY', '')) . " (auto-provisions on first connect if unset)\n\n";
 
-echo "platform_config table   : " . (pc_table_exists() ? 'exists' : 'MISSING — run /migrate_platform_config.php') . "\n\n";
+echo "platform_config table   : " . (pc_table_exists() ? 'exists' : 'MISSING — run /setup/migrations/migrate_platform_config.php') . "\n\n";
 
 echo "--- QuickBooks config (DB first, then .env; values never shown) ---\n";
 echo "QUICKBOOKS_ENV          : " . (string) (pc_get('QUICKBOOKS_ENV', '(unset)')) . "\n";
@@ -61,6 +61,6 @@ echo "isConfigured()          : " . ($qbo->isConfigured() ? 'YES ✓' : 'NO ✗'
 echo "redirectUri()           : " . $qbo->redirectUri() . "\n";
 echo "  (this MUST match the Redirect URI registered on the Intuit app EXACTLY)\n\n";
 
-echo "connections table       : " . (ac_table_exists() ? 'exists' : 'MISSING — run /migrate_accounting_connections.php') . "\n";
+echo "connections table       : " . (ac_table_exists() ? 'exists' : 'MISSING — run /setup/migrations/migrate_accounting_connections.php') . "\n";
 
 echo "\nDone.\n";

@@ -144,7 +144,7 @@ $when = static function (array $r): string {
   <?php if ($flashOk !== ''): ?><div class="alert alert-success" role="status"><?= e($flashOk) ?></div><?php endif; ?>
 
   <?php if (!$ready): ?>
-    <div class="alert alert-error" role="alert">The calendar needs its migration — run <code>/migrate_office_calendar.php</code> once, then reload.</div>
+    <div class="alert alert-error" role="alert">The calendar needs its migration — run <code>/setup/migrations/migrate_office_calendar.php</code> once, then reload.</div>
   <?php else: ?>
 
   <div class="oc-top">

@@ -600,7 +600,7 @@ require __DIR__ . '/../_partials/factory_head.php';
 <?php if ($flashErr !== ''): ?><div class="ws-flash err"><?= e($flashErr) ?></div><?php endif; ?>
 
 <?php if (!$hasTable): ?>
-    <div class="ws-flash err">The <code>worksheet_templates</code> table isn't there yet — run <code>/migrate_worksheet_templates.php</code>.</div>
+    <div class="ws-flash err">The <code>worksheet_templates</code> table isn't there yet — run <code>/setup/migrations/migrate_worksheet_templates.php</code>.</div>
 <?php elseif (!$products): ?>
     <div class="ws-flash err">No products found for this factory.</div>
 <?php else: ?>

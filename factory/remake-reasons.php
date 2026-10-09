@@ -78,7 +78,7 @@ $activeNav = 'remakes';
     <?php if (!empty($_SESSION[$k])): ?><div class="alert <?= $cls ?>" role="alert"><?= e((string) $_SESSION[$k]) ?></div><?php unset($_SESSION[$k]); endif; ?>
   <?php endforeach; ?>
   <?php if (!$ready): ?>
-    <div class="alert alert-error" role="alert">Remakes need their migration — run <code>/migrate_remakes.php</code> once, then reload.</div>
+    <div class="alert alert-error" role="alert">Remakes need their migration — run <code>/setup/migrations/migrate_remakes.php</code> once, then reload.</div>
   <?php else: ?>
     <form method="post" class="rr">
       <?= csrf_field() ?>

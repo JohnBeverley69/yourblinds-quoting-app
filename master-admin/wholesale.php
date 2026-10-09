@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'dn_raise') {
         $qid = (int) ($_POST['quote_id'] ?? 0);
         try {
-            if (!$dnReady) throw new RuntimeException('Run /migrate_ar_delivery_notes.php first.');
+            if (!$dnReady) throw new RuntimeException('Run /setup/migrations/migrate_ar_delivery_notes.php first.');
 
             $q = $pdo->prepare(
                 "SELECT id, quote_number, {$acctExpr} AS account_id FROM quotes
@@ -98,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'inv_raise') {
         $qid = (int) ($_POST['quote_id'] ?? 0);
         try {
-            if (!$invReady) throw new RuntimeException('Run /migrate_ar_invoices.php first.');
+            if (!$invReady) throw new RuntimeException('Run /setup/migrations/migrate_ar_invoices.php first.');
 
             $q = $pdo->prepare(
                 "SELECT id, quote_number, {$acctExpr} AS account_id FROM quotes
@@ -161,8 +161,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             header('Location: /master-admin/wholesale.php'); exit;
         }
         try {
-            if (!$dnReady)  throw new RuntimeException('Run /migrate_ar_delivery_notes.php first.');
-            if (!$invReady) throw new RuntimeException('Run /migrate_ar_invoices.php first.');
+            if (!$dnReady)  throw new RuntimeException('Run /setup/migrations/migrate_ar_delivery_notes.php first.');
+            if (!$invReady) throw new RuntimeException('Run /setup/migrations/migrate_ar_invoices.php first.');
 
             $q = $pdo->prepare(
                 "SELECT id, quote_number, {$acctExpr} AS account_id FROM quotes
@@ -242,7 +242,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ? ($mode === 'two_step'
                 ? 'Switched to two-step: raise a delivery note, then invoice separately.'
                 : 'Switched to one-step: printing a delivery note creates & sends the invoice automatically.')
-            : "Couldn't save the setting — run /migrate_app_settings.php (super-admin) and try again.";
+            : "Couldn't save the setting — run /setup/migrations/migrate_app_settings.php (super-admin) and try again.";
         header('Location: /master-admin/wholesale.php'); exit;
     }
 
@@ -258,7 +258,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
         $_SESSION[$ok ? 'flash_success' : 'flash_error'] = $ok
             ? 'Delivery charges saved. They apply to deliveries raised from now on.'
-            : "Couldn't save the delivery charges — run /migrate_app_settings.php (super-admin) and try again.";
+            : "Couldn't save the delivery charges — run /setup/migrations/migrate_app_settings.php (super-admin) and try again.";
         header('Location: /master-admin/wholesale.php#delivery-charges'); exit;
     }
 
@@ -269,7 +269,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ? ($on
                 ? 'Auto-invoice ON: dispatching an order now raises & sends its invoice automatically.'
                 : 'Auto-invoice OFF: dispatching an order marks it ready to invoice — you raise it when ready.')
-            : "Couldn't save the setting — run /migrate_app_settings.php (super-admin) and try again.";
+            : "Couldn't save the setting — run /setup/migrations/migrate_app_settings.php (super-admin) and try again.";
         header('Location: /master-admin/wholesale.php'); exit;
     }
 
@@ -315,7 +315,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $invId = (int) ($_POST['inv_id'] ?? 0);
         $reason = trim((string) ($_POST['reason'] ?? ''));
         try {
-            if (!$cnReady) throw new RuntimeException('Run /migrate_ar_credit_notes.php first.');
+            if (!$cnReady) throw new RuntimeException('Run /setup/migrations/migrate_ar_credit_notes.php first.');
             $cn = ar_create_credit_note($pdo, $factory, $invId, [], $reason, 'credit', (int) ($user['user_id'] ?? 0));
             $_SESSION['flash_success'] = 'Credit note ' . $cn['number'] . ' raised (£' . number_format($cn['total'], 2) . '). Email it from the order row.';
         } catch (Throwable $e) {
@@ -582,7 +582,7 @@ $activeNav = 'wholesale';
         <?php if (!$dnReady): ?>
             <div class="alert alert-error" role="alert">
                 The wholesale tables aren't set up yet — run
-                <a href="/migrate_ar_delivery_notes.php"><code>/migrate_ar_delivery_notes.php</code></a> (super-admin), then reload.
+                <a href="/setup/migrations/migrate_ar_delivery_notes.php"><code>/setup/migrations/migrate_ar_delivery_notes.php</code></a> (super-admin), then reload.
             </div>
         <?php endif; ?>
 

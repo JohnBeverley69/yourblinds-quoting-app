@@ -212,7 +212,7 @@ require __DIR__ . '/../_partials/factory_head.php';
 <?php if ($flashErr !== ''): ?><div class="al-flash err"><?= e($flashErr) ?></div><?php endif; ?>
 
 <?php if (!$hasTable): ?>
-    <div class="al-flash err">The <code>allowance_rows</code> table isn't there yet — run <code>/migrate_allowance_rows.php</code>.</div>
+    <div class="al-flash err">The <code>allowance_rows</code> table isn't there yet — run <code>/setup/migrations/migrate_allowance_rows.php</code>.</div>
 <?php elseif ($table === ''): ?>
     <div class="al-card"><?= $productId > 0
         ? 'This product&rsquo;s build rules don&rsquo;t reference any best-fit or lookup charts.'

@@ -26,7 +26,7 @@ $invId   = (int) ($_GET['inv_id'] ?? $_POST['inv_id'] ?? 0);
 $back    = '/master-admin/credit-note.php?inv_id=' . $invId;
 
 if (!ar_table_ready($pdo, 'factory_ar_credit_notes')) {
-    $_SESSION['flash_error'] = 'Run /migrate_ar_credit_notes.php first.';
+    $_SESSION['flash_error'] = 'Run /setup/migrations/migrate_ar_credit_notes.php first.';
     header('Location: /master-admin/wholesale.php');
     exit;
 }
