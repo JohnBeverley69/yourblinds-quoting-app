@@ -159,12 +159,16 @@ if ($restrictToMine) {
     $params[] = (int) $user['user_id'];
 }
 
+// Direct orders (new_order.php) label as "Draft order" — guarded pre-migration.
+$ixDirectSel = '0 AS direct_order,';
+try { db()->query('SELECT direct_order FROM quotes LIMIT 0'); $ixDirectSel = 'q.direct_order,'; } catch (Throwable $e) {}
+
 // Single SELECT covers both old views — pulls the order-side columns
 // (deposit, payments) too. NULL-safe for draft rows that won't have
 // accepted_at yet.
 $sql = "SELECT q.id, q.quote_number, q.end_customer_name, q.end_customer_postcode,
                q.status, q.total, q.accepted_at, q.created_at, q.updated_at,
-               q.deposit_amount, q.deposit_paid_at,
+               q.deposit_amount, q.deposit_paid_at, $ixDirectSel
                IFNULL((SELECT SUM(amount) FROM payments WHERE quote_id = q.id), 0)
                  AS payments_total
           FROM quotes q
@@ -179,7 +183,7 @@ try {
     // payments table absent on very old schemas — re-run without it.
     $sql = "SELECT q.id, q.quote_number, q.end_customer_name, q.end_customer_postcode,
                    q.status, q.total, q.accepted_at, q.created_at, q.updated_at,
-                   q.deposit_amount, q.deposit_paid_at,
+                   q.deposit_amount, q.deposit_paid_at, $ixDirectSel
                    0 AS payments_total
               FROM quotes q
              WHERE " . implode(' AND ', $where) . "
@@ -610,7 +614,10 @@ else                        $activeNav = $scope === 'quotes' ? 'quote-history' :
                                                   style="background:<?= e($pillBg) ?>;color:<?= e(job_status_text_colour($pillBg)) ?>">
                                                 <?= e($pillLabel) ?>
                                             </span>
-                                            <?php if ($rawStatus === 'draft'): ?>
+                                            <?php if ($rawStatus === 'draft' && !empty($r['direct_order'])): ?>
+                                                <span title="This order hasn't been placed yet"
+                                                      style="display:inline-block;margin-left:0.25rem;font-size:0.625rem;font-weight:700;text-transform:uppercase;letter-spacing:0.03em;color:#92400e;background:#fef3c7;border:1px solid #fde68a;border-radius:999px;padding:0.0625rem 0.4375rem">Draft order</span>
+                                            <?php elseif ($rawStatus === 'draft'): ?>
                                                 <span title="This quote hasn't been sent to the customer yet"
                                                       style="display:inline-block;margin-left:0.25rem;font-size:0.625rem;font-weight:700;text-transform:uppercase;letter-spacing:0.03em;color:#92400e;background:#fef3c7;border:1px solid #fde68a;border-radius:999px;padding:0.0625rem 0.4375rem">Not sent</span>
                                             <?php endif; ?>

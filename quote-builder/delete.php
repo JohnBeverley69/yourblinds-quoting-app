@@ -24,7 +24,8 @@ $quote    = qb_load_quote_or_404($quoteId, $clientId);
 // quote-creation rights so a fitter merely assigned to the job can't destroy
 // it. 404 (not 403) so we don't confirm the quote exists to a guesser.
 $perms = current_user_permissions();
-if (($user['role'] ?? '') !== 'admin' && empty($perms['can_create_quotes'])) {
+if (($user['role'] ?? '') !== 'admin' && empty($perms['can_create_quotes'])
+    && !(qb_is_direct_order($quote) && !empty($perms['can_create_orders']))) {
     http_response_code(404);
     exit('Quote not found.');
 }
