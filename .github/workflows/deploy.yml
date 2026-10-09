@@ -24,8 +24,9 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     # Backstop so a hung API call can never sit there burning minutes — the
-    # individual curls have their own timeouts well under this.
-    timeout-minutes: 5
+    # individual curls have their own timeouts well under this. Long enough
+    # to sit out a Cloudways server job (e.g. an OS-update apt_upgrade) below.
+    timeout-minutes: 20
     steps:
       - name: Trigger Cloudways git pull
         env:
@@ -90,9 +91,33 @@ jobs:
           # Same treatment for the git-pull trigger. Cloudways is moving the
           # API to /api/v2, so try that first and fall back to the v1 path —
           # whichever is live gets the deploy.
+          # A 422 "An operation is already in progress for this server" means
+          # Cloudways is busy with its own job (seen 2026-10-09: an apt_upgrade
+          # OS update at 06:00 swallowed a deploy). That isn't a failure — wait
+          # it out, checking every 30s for up to 15 minutes, before the normal
+          # three quick tries.
           echo "Triggering git pull of 'main' into the live app..."
           HTTP="000"
+          for wait in $(seq 1 30); do
+            HTTP=$(curl -sS --connect-timeout 15 --max-time 60 -o /tmp/cw_resp.json -w '%{http_code}' \
+              -X POST "https://api.cloudways.com/api/v2/git/pull" \
+              -H "Authorization: Bearer ${TOKEN}" \
+              -d "server_id=${CW_SERVER_ID}" \
+              -d "app_id=${CW_APP_ID}" \
+              -d "branch_name=main" \
+              -d "deploy_path=" || echo "000")
+            if [ "${HTTP:-000}" = "422" ] && grep -qi 'already in progress' /tmp/cw_resp.json 2>/dev/null; then
+              echo "Cloudways server busy (check $wait/30): $(jq -r '.operation.type // "unknown"' /tmp/cw_resp.json 2>/dev/null || echo unknown) — waiting 30s..."
+              sleep 30
+              continue
+            fi
+            break
+          done
+          if [ "${HTTP:-000}" -ge 200 ] && [ "${HTTP:-000}" -lt 300 ]; then
+            echo "git/pull accepted via v2."
+          fi
           for attempt in 1 2 3; do
+            [ "${HTTP:-000}" -ge 200 ] && [ "${HTTP:-000}" -lt 300 ] && break
             for ver in v2 v1; do
               HTTP=$(curl -sS --connect-timeout 15 --max-time 60 -o /tmp/cw_resp.json -w '%{http_code}' \
                 -X POST "https://api.cloudways.com/api/${ver}/git/pull" \
