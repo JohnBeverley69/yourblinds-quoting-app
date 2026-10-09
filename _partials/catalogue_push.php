@@ -1023,7 +1023,8 @@ function pp_sync_choices(
             $summary['choices_added']++;
         } else {
             $tgtId = (int) $tgtId;
-            // Don't update is_default — the tenant may have moved it.
+            // is_default mirrors the master — pushed products are master-owned,
+            // so the account can't set its own default; ours must land.
             // image_path IS updated so a master-side image swap
             // propagates on the next push.
             //
@@ -1031,13 +1032,14 @@ function pp_sync_choices(
             // the identity. That's what makes a master rename land on the
             // tenant's existing row instead of appearing beside it.
             $sets   = ['label = ?', 'system_id = ?', 'price_delta = ?', 'price_percent = ?',
-                       'price_per_metre = ?', 'sort_order = ?', 'active = ?', 'image_path = ?'];
+                       'price_per_metre = ?', 'is_default = ?', 'sort_order = ?', 'active = ?', 'image_path = ?'];
             $params = [
                 (string) $r['label'],
                 $tgtSystemId,
                 (float) ($r['price_delta']     ?? 0),
                 (float) ($r['price_percent']   ?? 0),
                 (float) ($r['price_per_metre'] ?? 0),
+                (int)   ($r['is_default']      ?? 0),
                 (int)   ($r['sort_order']      ?? 0),
                 (int)   ($r['active']          ?? 1),
                 $imagePath,
