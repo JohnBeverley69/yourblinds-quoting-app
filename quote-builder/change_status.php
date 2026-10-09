@@ -69,6 +69,18 @@ if ($target === 'draft' && $current !== 'draft' && qb_factory_has_received($pdo,
             : 'This order is already being made — contact the factory to change it.'
     );
 }
+// An order the factory has already invoiced or raised a delivery note for
+// can't be reopened and rewritten either — the paperwork is out and the tenant
+// can't put it right. The qb_factory_has_received() test above catches most of
+// these, because an invoiced order has usually been made, but a bought-in-only
+// order is invoiced with no factory_blind_jobs row and slipped straight past
+// it. Same helper as the delete guard so the two stay in step.
+if ($target === 'draft' && $current !== 'draft') {
+    $paper = qb_factory_paperwork_block($pdo, $quoteId, 'reopened');
+    if ($paper !== '') {
+        qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId, 'error', $paper);
+    }
+}
 
 // Update status, plus the timestamp columns where relevant.
 $pdo->beginTransaction();
