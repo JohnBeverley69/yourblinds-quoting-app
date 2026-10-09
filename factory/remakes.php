@@ -37,7 +37,7 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $sentTo = rm_notify_account($pdo, $factory, $id);
             $_SESSION['flash_success'] = 'Approved — remake ' . ($r['remake_number'] ?? '') . ' is in Incoming orders as a new order.'
                 . ($sentTo !== '' ? ' The account has been emailed (' . $sentTo . ').' : '');
-            header('Location: /factory/remakes.php?view=waiting');
+            header('Location: /factory/remakes.php');
             exit;
         }
         if (($_POST['_action'] ?? '') === 'decline') {
@@ -45,7 +45,7 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $sentTo = rm_notify_account($pdo, $factory, $id);
             $_SESSION['flash_success'] = 'Declined — the account sees your reason on their order'
                 . ($sentTo !== '' ? ' and has been emailed (' . $sentTo . ').' : '.');
-            header('Location: /factory/remakes.php?view=waiting');
+            header('Location: /factory/remakes.php');
             exit;
         }
     } catch (RuntimeException $e) {
@@ -54,18 +54,32 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
         error_log('remakes: ' . $e->getMessage());
         $_SESSION['flash_error'] = 'Something went wrong — nothing was changed. Please try again.';
     }
-    header('Location: /factory/remakes.php?view=waiting#rm' . $id);
+    header('Location: /factory/remakes.php#rm' . $id);
     exit;
 }
 
-$waitingCount = $ready ? rm_waiting_count($pdo, $factory) : 0;
-$view = (string) ($_GET['view'] ?? ($waitingCount > 0 ? 'waiting' : 'open'));
-if (!in_array($view, ['waiting', 'open', 'done', 'report'], true)) $view = 'open';
+// Default = Overview: everything at once (waiting, in progress, recently done),
+// so the page never opens on an empty tab while remakes sit on another one.
+$view = (string) ($_GET['view'] ?? 'overview');
+if (!in_array($view, ['overview', 'waiting', 'open', 'done', 'report'], true)) $view = 'overview';
 
-$rows = []; $items = [];
-if ($ready && $view !== 'report') {
-    $rows  = rm_list($pdo, $factory, $view);
-    $items = rm_items_for($pdo, $factory, $rows);
+$lists = ['waiting' => [], 'open' => [], 'done' => []];
+$items = [];
+if ($ready) {
+    foreach (array_keys($lists) as $k) $lists[$k] = rm_list($pdo, $factory, $k);
+    $items = rm_items_for($pdo, $factory, array_merge(...array_values($lists)));
+}
+$waitingCount = count($lists['waiting']);
+// Overview shows "done" for the last 30 days only (the Done tab has them all).
+$recentFrom = date('Y-m-d', strtotime('-30 days'));
+$recentDone = array_values(array_filter($lists['done'], static fn ($r) => substr((string) ($r['decided_at'] ?: $r['created_at']), 0, 10) >= $recentFrom));
+
+// This month at a glance (approved remakes raised this month).
+$monthNow = ['n' => 0, 'blinds' => 0, 'cost' => 0.0];
+foreach (array_merge($lists['open'], $lists['done']) as $r) {
+    if ($r['status'] !== 'approved' || substr((string) $r['created_at'], 0, 7) !== date('Y-m')) continue;
+    $monthNow['n']++; $monthNow['blinds'] += (int) $r['blinds'];
+    $monthNow['cost'] += (float) $r['cost'] - (float) $r['charge_amount'] - ($r['charge_mode'] === 'supplier' ? (float) $r['cost'] : 0.0);
 }
 
 // Report — one month.
@@ -112,7 +126,16 @@ $activeNav = 'remakes';
       .rm-tabs a { padding:.3rem .75rem; font-size:.875rem; border-radius:999px; text-decoration:none;
                    background:var(--bg-subtle-2); color:var(--text-muted); border:1px solid transparent; }
       .rm-tabs a.active { background:var(--brand); color:#fff; }
-      .rm-tabs .n { font-weight:700; }
+      .rm-tabs .n { font-weight:700; opacity:.75; }
+      .rm-tabs .n.hot, .rm-h .n.hot { background:#7c3aed; color:#fff; opacity:1; }
+      .rm-h { font-size:1.05rem; margin:1.4rem 0 .6rem; color:var(--text-primary); display:flex; align-items:center; gap:.5rem; flex-wrap:wrap; }
+      .rm-h .n { font-size:.75rem; font-weight:700; border-radius:999px; padding:0 .5rem; background:var(--bg-subtle-2); color:var(--text-muted); }
+      .rm-h .rm-more { margin-left:auto; font-size:.85rem; font-weight:600; }
+      .rm-none { color:var(--text-faint); margin:0 0 .5rem; }
+      .rm-glance { display:flex; gap:.5rem 1.4rem; flex-wrap:wrap; align-items:center; background:var(--bg-card); border:1px solid var(--border);
+                   border-radius:12px; padding:.7rem 1rem; color:var(--text-muted); }
+      .rm-glance b { color:var(--text-primary); font-variant-numeric:tabular-nums; }
+      .rm-glance a { margin-left:auto; font-weight:600; }
       .rm-card { background:var(--bg-card); border:1px solid var(--border); border-left:4px solid #7c3aed; border-radius:12px;
                  padding:1rem 1.15rem; margin-bottom:1rem; display:grid; grid-template-columns:minmax(0,1.3fr) minmax(0,1fr); gap:1.25rem; }
       .rm-card h2 { font-size:1.05rem; margin:0 0 .25rem; color:var(--text-primary); }
@@ -159,17 +182,17 @@ $activeNav = 'remakes';
   <?php else: ?>
 
   <nav class="rm-tabs" aria-label="Remakes">
-    <a href="?view=waiting" class="<?= $view === 'waiting' ? 'active' : '' ?>">Waiting for approval<?= $waitingCount ? ' <span class="n">' . $waitingCount . '</span>' : '' ?></a>
-    <a href="?view=open" class="<?= $view === 'open' ? 'active' : '' ?>">In progress</a>
-    <a href="?view=done" class="<?= $view === 'done' ? 'active' : '' ?>">Done</a>
+    <a href="/factory/remakes.php" class="<?= $view === 'overview' ? 'active' : '' ?>">Overview</a>
+    <a href="?view=waiting" class="<?= $view === 'waiting' ? 'active' : '' ?>">Waiting for approval <span class="n<?= $waitingCount ? ' hot' : '' ?>"><?= $waitingCount ?></span></a>
+    <a href="?view=open" class="<?= $view === 'open' ? 'active' : '' ?>">In progress <span class="n"><?= count($lists['open']) ?></span></a>
+    <a href="?view=done" class="<?= $view === 'done' ? 'active' : '' ?>">Done <span class="n"><?= count($lists['done']) ?></span></a>
     <a href="?view=report" class="<?= $view === 'report' ? 'active' : '' ?>">Report</a>
   </nav>
 
-  <?php if ($view === 'waiting'): ?>
-    <?php if (!$rows): ?>
-      <div class="rm-wrap"><div class="rm-empty">Nothing waiting. When an account reports a fault on one of their orders, it appears here.</div></div>
-    <?php endif; ?>
-    <?php foreach ($rows as $r): $rid = (int) $r['id']; ?>
+  <?php
+  // Waiting-for-approval cards (approve with who pays, or decline).
+  $cards = static function (array $rows) use ($items, $money): void {
+      foreach ($rows as $r): $rid = (int) $r['id']; ?>
       <section class="rm-card" id="rm<?= $rid ?>">
         <div>
           <h2><?= e((string) $r['account_name']) ?> · order <?= e((string) $r['source_number']) ?></h2>
@@ -205,50 +228,90 @@ $activeNav = 'remakes';
           </form>
         </div>
       </section>
-    <?php endforeach; ?>
+  <?php endforeach;
+  };
+
+  // In progress / done table.
+  $table = static function (array $rows) use ($items, $money, $modes): void { ?>
+    <div class="rm-wrap"><div class="table-wrap"><table class="table">
+      <thead><tr><th>Remake</th><th>Account</th><th>Blinds</th><th>Reason</th><th>Who pays</th><th class="num">Cost</th><th>Status</th></tr></thead>
+      <tbody>
+      <?php foreach ($rows as $r): $rid = (int) $r['id']; ?>
+        <tr>
+          <td>
+            <?php if ($r['remake_number']): ?>
+              <a href="/factory/edit-order.php?order=<?= (int) $r['remake_quote_id'] ?>"><b><?= e((string) $r['remake_number']) ?></b></a>
+            <?php else: ?><b>—</b><?php endif; ?>
+            <div class="rm-sub">from <?= e((string) $r['source_number']) ?> · <?= e(date('j M', strtotime((string) $r['created_at']))) ?>
+              <?= $r['due_date'] ? ' · due ' . e(date('j M', strtotime((string) $r['due_date']))) : '' ?></div>
+          </td>
+          <td><?= e((string) $r['account_name']) ?><?= $r['raised_by'] === 'account' ? '<div class="rm-sub">reported by them</div>' : '' ?></td>
+          <td><?php foreach ($items[$rid] ?? [] as $it): ?><div><?= (int) $it['quantity'] ?> × <?= e($it['label']) ?></div><?php endforeach; ?></td>
+          <td><?= e((string) $r['reason_label']) ?><?php if (!empty($r['photo_path'])): ?> · <a href="/remakes/photo.php?id=<?= $rid ?>" target="_blank" rel="noopener">photo</a><?php endif; ?></td>
+          <td>
+            <?php if ($r['status'] === 'declined'): ?>—
+            <?php else: ?>
+              <?= e($modes[$r['charge_mode']] ?? '') ?>
+              <?= $r['charge_mode'] === 'charge' ? '<div class="rm-sub">' . e($money($r['charge_amount'])) . ' charged</div>' : '' ?>
+              <?= $r['charge_mode'] === 'supplier' && $r['supplier_name'] ? '<div class="rm-sub">' . e((string) $r['supplier_name']) . '</div>' : '' ?>
+            <?php endif; ?>
+          </td>
+          <td class="num"><?= e($money($r['cost'])) ?></td>
+          <td>
+            <?php if ($r['status'] === 'declined'): ?>
+              <span class="fc-pill">Declined</span><div class="rm-sub"><?= e((string) $r['decline_reason']) ?></div>
+            <?php else: ?>
+              <span class="fc-pill"><?= e($r['remake_stage'] ? os_stage_label((string) $r['remake_stage']) : 'New') ?></span>
+            <?php endif; ?>
+          </td>
+        </tr>
+      <?php endforeach; ?>
+      </tbody>
+    </table></div></div>
+  <?php };
+  ?>
+
+  <?php if ($view === 'overview'): ?>
+    <div class="rm-glance" aria-label="This month">
+      <span><b><?= (int) $monthNow['n'] ?></b> remake<?= $monthNow['n'] === 1 ? '' : 's' ?> this month</span>
+      <span><b><?= (int) $monthNow['blinds'] ?></b> blind<?= $monthNow['blinds'] === 1 ? '' : 's' ?></span>
+      <span><b><?= e($money($monthNow['cost'])) ?></b> cost to us</span>
+      <a href="?view=report">Full report &rarr;</a>
+    </div>
+
+    <?php if (!$lists['waiting'] && !$lists['open'] && !$lists['done']): ?>
+      <div class="rm-wrap"><div class="rm-empty">
+        <b>No remakes yet.</b><br>
+        To raise one, open the order on <a href="/factory/orders.php">Orders</a> and click <b>↻ Remake</b>.
+        When an account reports a fault from their side, it appears here for you to approve.
+      </div></div>
+    <?php else: ?>
+      <h2 class="rm-h">Waiting for approval <span class="n<?= $waitingCount ? ' hot' : '' ?>"><?= $waitingCount ?></span></h2>
+      <?php if ($lists['waiting']): $cards($lists['waiting']); else: ?>
+        <p class="rm-none">Nothing waiting — accounts’ fault reports appear here.</p>
+      <?php endif; ?>
+
+      <h2 class="rm-h">In progress <span class="n"><?= count($lists['open']) ?></span></h2>
+      <?php if ($lists['open']): $table($lists['open']); else: ?>
+        <p class="rm-none">No remakes being made right now.</p>
+      <?php endif; ?>
+
+      <h2 class="rm-h">Done in the last 30 days <span class="n"><?= count($recentDone) ?></span>
+        <?php if (count($lists['done']) > count($recentDone)): ?><a href="?view=done" class="rm-more">All done (<?= count($lists['done']) ?>) &rarr;</a><?php endif; ?></h2>
+      <?php if ($recentDone): $table($recentDone); else: ?>
+        <p class="rm-none">Nothing finished in the last 30 days.</p>
+      <?php endif; ?>
+    <?php endif; ?>
+
+  <?php elseif ($view === 'waiting'): ?>
+    <?php if (!$lists['waiting']): ?>
+      <div class="rm-wrap"><div class="rm-empty">Nothing waiting. When an account reports a fault on one of their orders, it appears here.</div></div>
+    <?php else: $cards($lists['waiting']); endif; ?>
 
   <?php elseif ($view === 'open' || $view === 'done'): ?>
-    <div class="rm-wrap">
-      <?php if (!$rows): ?>
-        <div class="rm-empty"><?= $view === 'open' ? 'No remakes in progress.' : 'Nothing here yet.' ?></div>
-      <?php else: ?>
-        <div class="table-wrap"><table class="table">
-          <thead><tr><th>Remake</th><th>Account</th><th>Blinds</th><th>Reason</th><th>Who pays</th><th class="num">Cost</th><th>Status</th></tr></thead>
-          <tbody>
-          <?php foreach ($rows as $r): $rid = (int) $r['id']; ?>
-            <tr>
-              <td>
-                <?php if ($r['remake_number']): ?>
-                  <a href="/factory/edit-order.php?order=<?= (int) $r['remake_quote_id'] ?>"><b><?= e((string) $r['remake_number']) ?></b></a>
-                <?php else: ?><b>—</b><?php endif; ?>
-                <div class="rm-sub">from <?= e((string) $r['source_number']) ?> · <?= e(date('j M', strtotime((string) $r['created_at']))) ?>
-                  <?= $r['due_date'] ? ' · due ' . e(date('j M', strtotime((string) $r['due_date']))) : '' ?></div>
-              </td>
-              <td><?= e((string) $r['account_name']) ?><?= $r['raised_by'] === 'account' ? '<div class="rm-sub">reported by them</div>' : '' ?></td>
-              <td><?php foreach ($items[$rid] ?? [] as $it): ?><div><?= (int) $it['quantity'] ?> × <?= e($it['label']) ?></div><?php endforeach; ?></td>
-              <td><?= e((string) $r['reason_label']) ?><?php if (!empty($r['photo_path'])): ?> · <a href="/remakes/photo.php?id=<?= $rid ?>" target="_blank" rel="noopener">photo</a><?php endif; ?></td>
-              <td>
-                <?php if ($r['status'] === 'declined'): ?>—
-                <?php else: ?>
-                  <?= e($modes[$r['charge_mode']] ?? '') ?>
-                  <?= $r['charge_mode'] === 'charge' ? '<div class="rm-sub">' . e($money($r['charge_amount'])) . ' charged</div>' : '' ?>
-                  <?= $r['charge_mode'] === 'supplier' && $r['supplier_name'] ? '<div class="rm-sub">' . e((string) $r['supplier_name']) . '</div>' : '' ?>
-                <?php endif; ?>
-              </td>
-              <td class="num"><?= e($money($r['cost'])) ?></td>
-              <td>
-                <?php if ($r['status'] === 'declined'): ?>
-                  <span class="fc-pill">Declined</span><div class="rm-sub"><?= e((string) $r['decline_reason']) ?></div>
-                <?php else: ?>
-                  <span class="fc-pill"><?= e($r['remake_stage'] ? os_stage_label((string) $r['remake_stage']) : 'New') ?></span>
-                <?php endif; ?>
-              </td>
-            </tr>
-          <?php endforeach; ?>
-          </tbody>
-        </table></div>
-      <?php endif; ?>
-    </div>
+    <?php if (!$lists[$view]): ?>
+      <div class="rm-wrap"><div class="rm-empty"><?= $view === 'open' ? 'No remakes in progress.' : 'Nothing finished yet.' ?></div></div>
+    <?php else: $table($lists[$view]); endif; ?>
 
   <?php else: /* report */ ?>
     <form method="get" style="display:flex;gap:.5rem;align-items:center;margin:0 0 1rem;flex-wrap:wrap">
