@@ -123,6 +123,34 @@ function qb_client_vat_percent(PDO $pdo, int $clientId): float
 }
 
 /**
+ * Why the factory's own paperwork blocks changing this order, or '' when it
+ * doesn't. Shared by qb_delete_block_reason() and the reopen-to-draft guard in
+ * change_status.php, so the two can't drift the way the tenant and factory
+ * delete paths did (#946, #958).
+ *
+ * Both are things the tenant can neither see nor put right, and both have to be
+ * unpicked by the factory — a credit note, or cancelling the delivery note.
+ * Guarded per lookup for installs where the AR tables were never migrated.
+ */
+function qb_factory_paperwork_block(PDO $pdo, int $quoteId, string $verb = 'deleted'): string
+{
+    if ($quoteId <= 0) return '';
+    foreach ([
+        'SELECT 1 FROM factory_ar_invoice_orders WHERE quote_id = ? LIMIT 1'
+            => 'The factory has invoiced this order, so it can’t be ' . $verb . ' — ask them for a credit note.',
+        'SELECT 1 FROM factory_ar_delivery_notes WHERE source_quote_id = ? AND status <> \'cancelled\' LIMIT 1'
+            => 'The factory has raised a delivery note for this order, so it can’t be ' . $verb . ' — contact them to cancel it.',
+    ] as $sql => $why) {
+        try {
+            $st = $pdo->prepare($sql);
+            $st->execute([$quoteId]);
+            if ($st->fetchColumn()) return $why;
+        } catch (Throwable $e) { /* table not migrated on this install */ }
+    }
+    return '';
+}
+
+/**
  * Why this job can't be deleted, or '' when it can. Shared by the Delete button
  * and quote-builder/delete.php.
  *   - the factory has started it (received / on the floor): it would vanish from
@@ -135,30 +163,11 @@ function qb_delete_block_reason(PDO $pdo, array $quote): string
 {
     if (!empty($quote['remake_of_quote_id'])) return 'This is a remake order — the factory manages it. Contact them to change or cancel it.';
     if (qb_factory_has_received($pdo, (int) $quote['id'])) return 'The factory has already started this order, so it can’t be deleted — contact them to change or cancel it.';
-    // The factory's paperwork, which the tenant can't see and can't put right.
-    // factory/save-order.php refuses a delete for exactly these two, because in
-    // the go-live test a dispatched order was deleted and left a delivery note
-    // that could never be invoiced. That lesson only reached the factory's own
-    // delete button: this function, which is the whole of the tenant's side
-    // (the Delete button, delete.php, and bulk_delete.php since #946), had no
-    // factory_ar check at all.
-    //
-    // qb_factory_has_received() usually catches these first, since an invoiced
-    // order has normally been made. Not always: a bought-in-only order is
-    // invoiced without ever getting a factory_blind_jobs row, so it slipped
-    // through both tests.
-    foreach ([
-        'SELECT 1 FROM factory_ar_invoice_orders WHERE quote_id = ? LIMIT 1'
-            => 'The factory has invoiced this order, so it can’t be deleted — ask them for a credit note.',
-        'SELECT 1 FROM factory_ar_delivery_notes WHERE source_quote_id = ? AND status <> \'cancelled\' LIMIT 1'
-            => 'The factory has raised a delivery note for this order, so it can’t be deleted — contact them to cancel it.',
-    ] as $sql => $why) {
-        try {
-            $st = $pdo->prepare($sql);
-            $st->execute([(int) $quote['id']]);
-            if ($st->fetchColumn()) return $why;
-        } catch (Throwable $e) { /* table not migrated on this install */ }
-    }
+    // The factory's paperwork — an invoice or an uncancelled delivery note.
+    // Shared with the reopen guard so the two can't drift (#958 added these
+    // here; change_status.php needed exactly the same test).
+    $paper = qb_factory_paperwork_block($pdo, (int) $quote['id'], 'deleted');
+    if ($paper !== '') return $paper;
 
     if (qb_is_direct_order($quote) && (string) $quote['status'] !== 'draft') {
         return 'This order has been placed. To delete it, use Reopen as draft first (while the factory hasn’t started it), then delete.';
