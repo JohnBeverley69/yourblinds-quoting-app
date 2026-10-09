@@ -1006,7 +1006,7 @@ return [
       <li><strong>Quote prefix</strong> — the letters at the front of every quote number. Numbers come out as
       <code>BRI-2026-0042</code>: your prefix, the year, then a number that counts up on its own each year. Leave it
       empty and the app uses the first three letters of your company name.</li>
-      <li><strong>VAT %</strong> — normally 20.</li>
+      <li><strong>VAT %</strong> — now on the <strong>Company</strong> tab, right beside your VAT number. It fills in at the UK rate of 20% once a VAT number is entered, and you can change it.</li>
       <li><strong>Default deposit</strong> — choose <em>Percentage of total</em> or <em>Flat amount</em> and type the
       figure. It only seeds the deposit on a quote the moment it moves into Accepted, and you can still change it on
       the job itself.</li>

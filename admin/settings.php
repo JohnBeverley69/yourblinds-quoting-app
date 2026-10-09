@@ -104,22 +104,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             trim((string) ($_POST['postcode']     ?? '')) ?: null,
             $clientId,
         ]);
-        // VAT rate follows VAT registration. While there's no VAT number the
-        // Quote-defaults VAT field is disabled and a save there stores 0 — so
-        // adding a number later left the rate at 0 and quotes carried no VAT.
-        // With a number: a 0 rate becomes the UK standard 20% (any positive
-        // rate is kept) and unsent drafts still at 0 are brought up to it.
-        // Without one: the rate is 0, same as the Quote-defaults guard.
+        // VAT % sits beside the VAT number and follows it: with a number the
+        // posted rate is used (blank = the UK standard 20%) and unsent drafts
+        // still at 0% are brought up to it; without one the rate is 0 - you
+        // can't charge VAT unless you're VAT-registered.
         $vatNo = trim((string) ($_POST['vat_number'] ?? ''));
         try {
             if ($vatNo !== '') {
+                $rawRate = trim((string) ($_POST['vat_percent'] ?? ''));
+                $rate    = $rawRate === '' ? 20.0 : max(0.0, min(100.0, (float) $rawRate));
                 db()->prepare(
-                    'INSERT INTO client_settings (client_id, vat_percent) VALUES (?, 20)
-                     ON DUPLICATE KEY UPDATE vat_percent = IF(vat_percent > 0, vat_percent, 20)'
-                )->execute([$clientId]);
-                $rs = db()->prepare('SELECT vat_percent FROM client_settings WHERE client_id = ? LIMIT 1');
-                $rs->execute([$clientId]);
-                $rate = (float) $rs->fetchColumn();
+                    'INSERT INTO client_settings (client_id, vat_percent) VALUES (?, ?)
+                     ON DUPLICATE KEY UPDATE vat_percent = VALUES(vat_percent)'
+                )->execute([$clientId, $rate]);
                 $ds = db()->prepare(
                     "SELECT id FROM quotes
                       WHERE client_id = ? AND status = 'draft' AND COALESCE(vat_percent, 0) = 0"
@@ -139,7 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     ->execute([$clientId]);
             }
         } catch (Throwable $e) {
-            error_log('[YourBlinds] VAT rate sync on company save failed: ' . $e->getMessage());
+            error_log('[YourBlinds] VAT rate save on company save failed: ' . $e->getMessage());
         }
         // Refresh session-cached company name in case it changed
         $newName = trim((string) ($_POST['company_name'] ?? ''));
@@ -339,29 +336,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
 
-        // Absent (the field is disabled when there's no VAT number) means no VAT,
-        // not the old default of 20 — otherwise a disabled field would post nothing
-        // and the VAT-number guard below would wrongly block an unrelated save.
-        $vat        = (float) ($_POST['vat_percent'] ?? 0);
-        // VAT bounded like the deposit % — accept 0–100 only.
-        if ($vat < 0)   $vat = 0;
-        if ($vat > 100) $vat = 100;
-        // You can't charge VAT without being VAT-registered — so a VAT rate is
-        // only valid once a VAT number is set in Company settings. Block a
-        // positive rate otherwise and point them to where it's fixed.
-        if ($vat > 0) {
-            $vatNo = '';
-            try {
-                $vs = db()->prepare('SELECT vat_number FROM clients WHERE id = ? LIMIT 1');
-                $vs->execute([$clientId]);
-                $vatNo = trim((string) ($vs->fetchColumn() ?: ''));
-            } catch (Throwable $e) { /* if we can't check, don't block the save */ }
-            if ($vatNo === '') {
-                $_SESSION['flash_error'] = 'Add your VAT number on the Company tab before setting a VAT rate — '
-                    . 'you can only charge VAT once you\'re VAT-registered.';
-                header('Location: /admin/settings.php#company'); exit;
-            }
-        }
+        // VAT % lives on the Company tab now, next to the VAT number - not saved here.
         $depMode    = (string) ($_POST['default_deposit_mode'] ?? 'percent');
         if (!in_array($depMode, ['percent', 'flat'], true)) {
             $depMode = 'percent';
@@ -385,13 +360,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $stmt = db()->prepare(
                     'INSERT INTO client_settings
-                      (client_id, quote_prefix, vat_percent,
+                      (client_id, quote_prefix,
                        default_deposit_mode, default_deposit_percent, default_deposit_flat,
                        email_from_name, reply_to_email, quote_footer)
-                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     ON DUPLICATE KEY UPDATE
                       quote_prefix            = VALUES(quote_prefix),
-                      vat_percent             = VALUES(vat_percent),
                       default_deposit_mode    = VALUES(default_deposit_mode),
                       default_deposit_percent = VALUES(default_deposit_percent),
                       default_deposit_flat    = VALUES(default_deposit_flat),
@@ -400,7 +374,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                       quote_footer            = VALUES(quote_footer)'
                 );
                 $stmt->execute([
-                    $clientId, $prefix ?: null, $vat,
+                    $clientId, $prefix ?: null,
                     $depMode, $depPct, $depFlat,
                     $emailFrom, $replyTo, $footer,
                 ]);
@@ -411,20 +385,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($e->getCode() !== '42S22') throw $e;
                 $stmt = db()->prepare(
                     'INSERT INTO client_settings
-                      (client_id, quote_prefix, vat_percent,
+                      (client_id, quote_prefix,
                        default_deposit_percent,
                        email_from_name, reply_to_email, quote_footer)
-                      VALUES (?, ?, ?, ?, ?, ?, ?)
+                      VALUES (?, ?, ?, ?, ?, ?)
                     ON DUPLICATE KEY UPDATE
                       quote_prefix            = VALUES(quote_prefix),
-                      vat_percent             = VALUES(vat_percent),
                       default_deposit_percent = VALUES(default_deposit_percent),
                       email_from_name         = VALUES(email_from_name),
                       reply_to_email          = VALUES(reply_to_email),
                       quote_footer            = VALUES(quote_footer)'
                 );
                 $stmt->execute([
-                    $clientId, $prefix ?: null, $vat, $depPct,
+                    $clientId, $prefix ?: null, $depPct,
                     $emailFrom, $replyTo, $footer,
                 ]);
                 $_SESSION['flash_error'] =
@@ -1064,7 +1037,13 @@ $activeNav = 'settings';
                     </div>
                 </div>
 
-                <div class="form-row full">
+                <?php
+                    $hasVatNo   = trim((string) ($client['vat_number'] ?? '')) !== '';
+                    $storedRate = (float) ($settings['vat_percent'] ?? 0);
+                    // UK standard 20% unless they've set their own positive rate.
+                    $vatFill    = rtrim(rtrim(number_format($storedRate > 0 ? $storedRate : 20, 2, '.', ''), '0'), '.');
+                ?>
+                <div class="form-row cols-2">
                     <div class="form-group">
                         <label for="vat_number">VAT number</label>
                         <input id="vat_number" name="vat_number" type="text" maxlength="50"
@@ -1074,18 +1053,38 @@ $activeNav = 'settings';
                             Leave blank if your business isn't VAT-registered.
                             When set, it appears below your contact details on every quote PDF.
                         </small>
-                        <?php /* Plain span, not .ui-hint — compact mode hides hints, and this is
-                                 the link between the number and the rate people miss. */ ?>
-                        <span style="display:block;color:var(--text-muted,#667);font-size:0.8125rem;margin-top:0.25rem">
-                            <?php if (trim((string) ($client['vat_number'] ?? '')) !== ''): ?>
-                                VAT is charged on quotes at <strong><?= e(rtrim(rtrim(number_format((float) ($settings['vat_percent'] ?? 20), 2, '.', ''), '0'), '.')) ?>%</strong>
-                                — change the rate in <a href="/admin/settings.php#quoting">Quote defaults</a>.
-                            <?php else: ?>
-                                Saving a VAT number turns on VAT at 20% (adjustable in Quote defaults).
-                            <?php endif; ?>
+                    </div>
+                    <div class="form-group">
+                        <label for="vat_percent">VAT %</label>
+                        <input id="vat_percent" name="vat_percent" type="number"
+                               step="0.01" min="0" max="99"
+                               value="<?= e($vatFill) ?>"
+                               <?= $hasVatNo ? '' : 'disabled' ?>>
+                        <?php /* Plain span, not .ui-hint - compact mode hides hints, and this
+                                 explains why the box can be greyed out. */ ?>
+                        <span id="vat_percent_note" style="display:block;color:var(--text-muted,#667);font-size:0.8125rem;margin-top:0.25rem">
+                            <?= $hasVatNo
+                                ? 'UK standard rate is 20%. New quotes use this rate; existing quotes keep theirs.'
+                                : 'Add a VAT number to charge VAT.' ?>
                         </span>
                     </div>
                 </div>
+                <script>
+                (function () {
+                    var no = document.getElementById('vat_number'),
+                        pc = document.getElementById('vat_percent'),
+                        nt = document.getElementById('vat_percent_note');
+                    if (!no || !pc || !nt) return;
+                    no.addEventListener('input', function () {
+                        var on = no.value.trim() !== '';
+                        pc.disabled = !on;
+                        if (on && (pc.value === '' || parseFloat(pc.value) === 0)) pc.value = '20';
+                        nt.textContent = on
+                            ? 'UK standard rate is 20%. New quotes use this rate; existing quotes keep theirs.'
+                            : 'Add a VAT number to charge VAT.';
+                    });
+                })();
+                </script>
 
                 <div class="form-row full">
                     <div class="form-group">
@@ -1587,20 +1586,11 @@ $activeNav = 'settings';
                                placeholder="e.g. BRI"
                                value="<?= e((string) ($prefixFill ?? ($settings['quote_prefix'] ?? ''))) ?>">
                     </div>
-                    <?php $hasVatNo = trim((string) ($client['vat_number'] ?? '')) !== ''; ?>
                     <div class="form-group">
-                        <label for="vat_percent">VAT %</label>
-                        <input id="vat_percent" name="vat_percent" type="number"
-                               step="0.01" min="0" max="99"
-                               value="<?= $hasVatNo ? e((string) ($settings['vat_percent'] ?? '20')) : '0' ?>"
-                               <?= $hasVatNo ? '' : 'disabled' ?>>
-                        <?php if (!$hasVatNo): ?>
-                            <?php /* Plain span, NOT .ui-hint — compact mode hides .ui-hint, and this
-                                     explains why the field is greyed out, so it must always show. */ ?>
-                            <span style="display:block;color:var(--text-muted,#667);font-size:0.8125rem;margin-top:0.25rem">
-                                Add your <a href="/admin/settings.php#company">VAT number</a> on the Company tab to set a VAT rate.
-                            </span>
-                        <?php endif; ?>
+                        <label>VAT %</label>
+                        <span style="display:block;color:var(--text-muted,#667);font-size:0.875rem;padding-top:0.5rem">
+                            Set beside your VAT number on the <a href="/admin/settings.php#company">Company</a> tab.
+                        </span>
                     </div>
                 </div>
 
