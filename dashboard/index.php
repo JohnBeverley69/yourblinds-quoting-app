@@ -180,7 +180,7 @@ $inWon     = implode(',', array_fill(0, count($wonStatuses), '?'));
 // close-rate, team, product and profit figures: the system only knows what
 // the client pays us for them, not what they sold the blinds for, so counting
 // them would book their cost as sales and drag the margin down. They get
-// their own "Orders placed with us" tile instead. Guarded pre-migration.
+// their own "Direct orders" tile instead. Guarded pre-migration.
 $hasDirectOrder = false;
 try { $pdo->query('SELECT direct_order FROM quotes LIMIT 0'); $hasDirectOrder = true; } catch (Throwable $e) {}
 $noDirect  = $hasDirectOrder ? ' AND COALESCE(direct_order, 0) = 0'   : '';
@@ -268,7 +268,7 @@ if ($canSeeRevenue) {
         : null;
 }
 
-// Orders placed with us (direct orders) — their own figure, at cost.
+// Direct orders — their own figure, at cost.
 $directOrders = null;
 if ($canSeeRevenue && $hasDirectOrder) {
     [$doUser, $doUserParams] = $buildUserFilter('created_by_user_id');
@@ -1121,10 +1121,10 @@ $activeNav = 'dashboard';
                 <div class="kpi-sub">accepted &amp; beyond</div>
             </div>
             <?php if ($directOrders !== null && (int) $directOrders['n'] > 0): ?>
-            <div class="kpi-tile" title="Orders placed straight with us (New order). Shown at what you pay us; kept out of revenue, close rate and profit because the system doesn't know what you sold them for.">
-                <div class="kpi-label">Orders placed with us</div>
+            <div class="kpi-tile" title="Orders sent straight through with New order, without a quote. Shown at what you pay for them; kept out of revenue, close rate and profit because the system doesn't know what you sold them for.">
+                <div class="kpi-label">Direct orders</div>
                 <div class="kpi-value">£<?= number_format((float) $directOrders['spend'], 2) ?></div>
-                <div class="kpi-sub"><?= (int) $directOrders['n'] ?> order<?= (int) $directOrders['n'] === 1 ? '' : 's' ?> &middot; your cost, ex VAT &middot; not in the figures above</div>
+                <div class="kpi-sub"><?= (int) $directOrders['n'] ?> order<?= (int) $directOrders['n'] === 1 ? '' : 's' ?> placed without a quote &middot; at your cost, ex VAT &middot; not in the figures above</div>
             </div>
             <?php endif; ?>
         </div>
