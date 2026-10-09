@@ -25,9 +25,23 @@ RedirectMatch 403 ^/_partials(/|$)
 # Block the server-side library folder (vendored code, include-only).
 RedirectMatch 403 ^/_lib(/|$)
 
-# Block the seed CSVs — these are SUPPLIER WHOLESALE PRICE LISTS. They sit
-# in the web root and were being served to anyone who guessed the filename.
-RedirectMatch 403 ^/seed_data(/|$)
+# Block the seed CSVs — these are SUPPLIER WHOLESALE PRICE LISTS.
+#
+# Anchored on the DIRECTORY NAME, not on the root, because anchoring it to the
+# root is what broke it: #943 moved seed_data from / to /setup/seeds/seed_data,
+# the old root-anchored rule kept matching only the old path, and the files went
+# back to being served to anyone who asked. Verified live: the old URL 403'd
+# while the new one returned 200 and 70 KB of wholesale pricing, no login.
+# Matching the folder wherever it sits means the next tidy-up cannot undo it.
+#
+# These are static files: unlike everything else under setup/, which is PHP and
+# redirects to the login page, nothing else was standing between them and the
+# open web.
+RedirectMatch 403 (^|/)seed_data(/|$)
+
+# Belt and braces for the same tree: no CSV anywhere under setup/ should ever be
+# fetchable, whatever it is called or wherever it is moved to next.
+RedirectMatch 403 ^/setup/.*\.csv$
 
 # Block direct access to the .git folder
 RedirectMatch 403 ^/\.git(/|$)
