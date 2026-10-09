@@ -139,26 +139,46 @@ $deletable = array_values(array_diff(
 $deleted = 0;
 if ($deletable) {
     $delPh  = implode(',', array_fill(0, count($deletable), '?'));
-    // supplier_orders has no FK to quotes — clean its send-log rows so they
-    // don't outlive the deleted quotes.
+    // All three deletes are one unit of work. The children go first and the
+    // quotes DELETE is the only one not wrapped in a try, so if it threw —
+    // a lock timeout, a deadlock, an FK added later — the send-log rows and
+    // the appointments were already gone while the quotes themselves
+    // survived, and the fatal meant no redirect and no message either. The
+    // order would then be sitting in the list with its fitting silently
+    // missing from the calendar.
+    $owned = !$pdo->inTransaction();
+    if ($owned) $pdo->beginTransaction();
     try {
-        $pdo->prepare(
-            "DELETE FROM supplier_orders WHERE quote_id IN ($delPh) AND client_id = ?"
-        )->execute(array_merge($deletable, [$clientId]));
-    } catch (Throwable $e) { /* table absent — nothing to clean */ }
-    // Remove the deleted orders' calendar appointments (e.g. pending fittings) so
-    // they don't linger as phantoms. Scoped to the tenant: $deletable is the
-    // posted id list, so without client_id another tenant's quote ids would
-    // wipe THEIR appointments even though their quotes survive.
-    try {
-        $pdo->prepare("DELETE FROM appointments WHERE quote_id IN ($delPh) AND client_id = ?")
-            ->execute(array_merge($deletable, [$clientId]));
-    } catch (Throwable $e) { /* appointments table absent — nothing to clean */ }
-    $stmt   = $pdo->prepare(
-        "DELETE FROM quotes WHERE id IN ($delPh) AND client_id = ?"
-    );
-    $stmt->execute(array_merge($deletable, [$clientId]));
-    $deleted = $stmt->rowCount();
+        // supplier_orders has no FK to quotes — clean its send-log rows so they
+        // don't outlive the deleted quotes.
+        try {
+            $pdo->prepare(
+                "DELETE FROM supplier_orders WHERE quote_id IN ($delPh) AND client_id = ?"
+            )->execute(array_merge($deletable, [$clientId]));
+        } catch (Throwable $e) { /* table absent — nothing to clean */ }
+        // Remove the deleted orders' calendar appointments (e.g. pending fittings) so
+        // they don't linger as phantoms. Scoped to the tenant: $deletable is the
+        // posted id list, so without client_id another tenant's quote ids would
+        // wipe THEIR appointments even though their quotes survive.
+        try {
+            $pdo->prepare("DELETE FROM appointments WHERE quote_id IN ($delPh) AND client_id = ?")
+                ->execute(array_merge($deletable, [$clientId]));
+        } catch (Throwable $e) { /* appointments table absent — nothing to clean */ }
+        $stmt   = $pdo->prepare(
+            "DELETE FROM quotes WHERE id IN ($delPh) AND client_id = ?"
+        );
+        $stmt->execute(array_merge($deletable, [$clientId]));
+        $deleted = $stmt->rowCount();
+        if ($owned) $pdo->commit();
+    } catch (Throwable $e) {
+        if ($owned && $pdo->inTransaction()) $pdo->rollBack();
+        $deleted = 0;
+        $_SESSION['flash_error'] = 'Nothing was deleted — the delete could not be completed. '
+            . 'Everything has been left as it was. Try again, and if it keeps happening '
+            . 'pass this on to whoever looks after your site.';
+        header('Location: ' . $back);
+        exit;
+    }
 }
 
 $msgs = [];
