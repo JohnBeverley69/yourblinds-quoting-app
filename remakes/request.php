@@ -43,6 +43,7 @@ $old   = [];
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $src) {
     csrf_check();
     $old = $_POST;
+    $photo = '';   // tracked so a failed save can bin the upload
     try {
         $photo = rm_store_photo($_FILES['photo'] ?? []);
         rm_create($pdo, $factory, $qid, (array) ($_POST['items'] ?? []), (int) ($_POST['reason_id'] ?? 0),
@@ -51,8 +52,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $src) {
         header('Location: /quote-builder/edit.php?id=' . $qid);
         exit;
     } catch (RuntimeException $e) {
+        rm_discard_photo($photo);   // nothing saved — do not leave the upload on disk
         $error = $e->getMessage();
     } catch (Throwable $e) {
+        rm_discard_photo($photo);
         error_log('remake request: ' . $e->getMessage());
         $error = 'Something went wrong sending your request — nothing was sent. Please try again.';
     }
