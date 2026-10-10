@@ -668,7 +668,18 @@ $activeNav = 'wholesale';
             <span class="wh-muted" style="font-size:0.8rem">
                 Net values. Collected is always free. The threshold is the whole delivery &mdash; every order going out to
                 an account on the same day by the same method. A charge of £0 switches it off. Set each account's method
-                (or "No delivery charge") on its <a href="/master-admin/trade-accounts.php">account page</a>.
+                (or "No delivery charge") on its
+                <?php
+                // This page is requireFactoryOffice(), which admits a factory
+                // admin or any factory user with "Can create orders";
+                // trade-accounts.php is requireSuperAdmin(). The link was
+                // ungated, so a non-super office user reading this help text
+                // clicked through to a bare 403 with no way back.
+                // _partials/sidebar.php:307 gates the same destination on
+                // $isSuperAdmin — this was the one place that didn't.
+                // Also: it pointed at the account LIST, not an account page.
+                ?>
+                <?php if (is_super_admin()): ?><a href="/master-admin/trade-accounts.php">Trade accounts page</a><?php else: ?>Trade accounts page<?php endif; ?>.
             </span>
         </form>
         <?php endif; ?>
