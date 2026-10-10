@@ -35,7 +35,9 @@ if (!qb_is_editable($quote)) {
 
 // Ownership check — the item must belong to this quote.
 $ownerSt = db()->prepare(
-    'SELECT id, line_no FROM quote_items WHERE id = ? AND quote_id = ? LIMIT 1'
+    // markup_percent / discount_percent come along so a user who cannot see the
+    // override panel can still be re-priced without losing what is stored.
+    'SELECT id, line_no, markup_percent, discount_percent FROM quote_items WHERE id = ? AND quote_id = ? LIMIT 1'
 );
 $ownerSt->execute([$itemId, $quoteId]);
 $existing = $ownerSt->fetch();
@@ -156,6 +158,26 @@ $canCosts = ($user['role'] ?? '') === 'admin' || !empty(current_user_permissions
 if ($canCosts) {
     if (isset($_POST['markup_override'])   && is_numeric($_POST['markup_override']))   $input['markup_override']   = (float) $_POST['markup_override'];
     if (isset($_POST['discount_override']) && is_numeric($_POST['discount_override'])) $input['discount_override'] = (float) $_POST['discount_override'];
+} else {
+    // Keep what is already on the line. The "Adjust price for this blind" panel
+    // only renders for cost-viewers (edit.php:1759, hidden markup field at
+    // :1789), so a user without View costs posts neither field — and with no
+    // override in $input the engine falls back to the product/client default
+    // and overwrites the stored rate.
+    //
+    // So a salesperson correcting a drop on a line an admin had set to 10%
+    // markup (product default 50%) silently re-priced it from £110 to ~£150,
+    // changing the quote total. No field for it was on their screen, nothing
+    // warned, and the customer had already been quoted £110.
+    //
+    // Same approach qb_reprice_stored_line() takes (_helpers.php:307): read the
+    // line's stored markup_percent / discount_percent and pass them back as the
+    // overrides, so a re-price with no form input is a no-op on the rate.
+    // Only when a value is actually stored. Coercing a NULL to 0.0 would mean
+    // "0% markup" rather than "no override", which on a legacy row with no
+    // stored rate would price it at cost — worse than the bug being fixed.
+    if (($existing['markup_percent']   ?? null) !== null) $input['markup_override']   = (float) $existing['markup_percent'];
+    if (($existing['discount_percent'] ?? null) !== null) $input['discount_override'] = (float) $existing['discount_percent'];
 }
 // A direct order is priced at the client's BUYING price: no markup, no retail
 // discount (their trade discount is already in the base).
