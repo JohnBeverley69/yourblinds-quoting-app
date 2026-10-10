@@ -834,7 +834,7 @@ foreach ($cuts as $c) {
     }
 
     $cutsGrid[] = [
-        'name'      => $c['name'], 'friendly' => $c['friendly'], 'base' => $c['base'], 'dir' => $dir,
+        'name'      => $c['name'], 'friendly' => $c['friendly'], 'label' => $c['label'], 'base' => $c['base'], 'dir' => $dir,
         'keyCols'   => $keyCols,
         'keyLabels' => array_map(static fn ($i) => $labels[$i] ?? '', $keyCols),
         'basisKeys' => $basisKeys,
