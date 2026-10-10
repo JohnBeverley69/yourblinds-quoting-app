@@ -15,6 +15,7 @@ require __DIR__ . '/../auth/middleware.php';
 require_once __DIR__ . '/../quote-builder/_helpers.php';      // qb_reprice_stored_line / qb_recompute_totals
 require_once __DIR__ . '/../_partials/pricing_engine.php';    // pe_calculate_item (same engine as the quote builder)
 require_once __DIR__ . '/../_partials/order_stage.php';       // os_line_edit_lock / recompute_order_stage (+ blind_jobs)
+require_once __DIR__ . '/../_partials/factory_order_delete.php'; // fod_delete_block_reason / fod_delete_order
 
 requireFactoryOffice();
 
@@ -115,90 +116,16 @@ if (isset($_POST['del_order'])) {
     // order was deleted in the go-live test and left a delivery note that could
     // never be invoiced. Those need a credit note / cancellation, not a delete.
     //
-    // The invoice and delivery-note tests come from qb_factory_paperwork_tests()
-    // rather than a copy kept here, so this and the tenant's own delete guard
-    // can't drift again (#946, #958 were the same drift twice). Voiding an
-    // invoice now releases the order — see that helper.
-    $tests = [];
-    foreach (qb_factory_paperwork_tests() as $t) { $tests[$t['sql']] = $t['short']; }
-    // Retail deposits taken against the order. Not part of the shared tests: the
-    // tenant's own guard has no business refusing on money it took itself, and
-    // `payments` has no voided_at — a retail payment is deleted, not voided.
-    $tests['SELECT 1 FROM payments WHERE quote_id = ? LIMIT 1'] = 'payments are recorded against it';
-    foreach ($tests as $sql => $why) {
-        try {
-            $chk = $pdo->prepare($sql);
-            $chk->execute([$qid]);
-            $hit = (bool) $chk->fetchColumn();
-        } catch (Throwable $e) { $hit = false; /* table not migrated on this install */ }
-        if ($hit) { $fail('This order can\'t be deleted — ' . $why . '.'); }
-    }
+    // The guard and the deletion sequence both live in _partials/factory_order_delete.php
+    // now, because cancelling a remake has to delete the same kind of order in
+    // exactly the same way. Keeping a second copy here is how the tenant and
+    // factory delete paths drifted twice already (#946, #958).
+    $why = fod_delete_block_reason($pdo, $qid);
+    if ($why !== '') { $fail('This order can\'t be deleted — ' . $why . '.'); }
     try {
-        // Note any supplier send BEFORE its log row goes, so the office can be
-        // told. Deleting the order cancels nothing at the supplier, and once the
-        // supplier_orders row is gone there is no record left that a send ever
-        // happened — so saying nothing would quietly lose a live order with a
-        // third party.
-        $supplierSends = [];
-        try {
-            $ss = $pdo->prepare('SELECT DISTINCT supplier_name FROM supplier_orders WHERE quote_id = ?');
-            $ss->execute([$qid]);
-            $supplierSends = array_values(array_filter(array_map('strval', $ss->fetchAll(PDO::FETCH_COLUMN))));
-        } catch (Throwable $e) { /* table absent */ }
-        $pdo->beginTransaction();
-        // The factory's own job rows for the order go with it. bj_clear_order()
-        // rather than a raw DELETE on factory_blind_jobs: factory_blind_streams
-        // is keyed on blind_job_id, so deleting the jobs first orphans every
-        // stream row for the order — invisible, because floor.php and scan.php
-        // reach streams through jobs. The helper deletes the streams first and
-        // is already the thing set-status.php uses for the same job.
-        if (bj_tables_ready($pdo)) bj_clear_order($pdo, $qid);
-        try { $pdo->prepare('DELETE FROM factory_jobs WHERE quote_id = ?')->execute([$qid]); }
-        catch (Throwable $e) { /* not migrated */ }
-        // Scan-log rows key on quote_item_id, which is about to go, leaving them
-        // permanently unmatchable in the log.
-        try {
-            $pdo->prepare('DELETE FROM factory_scan_log WHERE quote_item_id IN (SELECT id FROM quote_items WHERE quote_id = ?)')
-                ->execute([$qid]);
-        } catch (Throwable $e) { /* scan log not migrated */ }
-        // The supplier send-log has no FK to quotes, so its rows outlive the
-        // order pointing at nothing. Not scoped by client_id on purpose: a
-        // factory send is stamped with the FACTORY's client_id, which is the
-        // bug #976 fixed on the tenant-side delete paths.
-        try { $pdo->prepare('DELETE FROM supplier_orders WHERE quote_id = ?')->execute([$qid]); }
-        catch (Throwable $e) { /* table absent */ }
-        $pdo->prepare('DELETE FROM quote_item_extras WHERE quote_item_id IN (SELECT id FROM quote_items WHERE quote_id = ?)')->execute([$qid]);
-        $pdo->prepare('DELETE FROM quote_items WHERE quote_id = ?')->execute([$qid]);
-        // Remove the order's calendar appointments (e.g. the pending fitting) so
-        // deleting the order doesn't leave phantom fittings on the account's calendar.
-        $pdo->prepare('DELETE FROM appointments WHERE quote_id = ?')->execute([$qid]);
-        // If this order IS a remake, put its remake back in the waiting queue
-        // rather than stranding it. factory_remakes has no FK to quotes and the
-        // only code that ever deleted from it is the whole-account delete, so
-        // deleting a remake order left the row at status='approved' with
-        // remake_quote_id pointing at a dead id. rm_list('open') LEFT JOINs that
-        // quote, so COALESCE(rq.fulfilment_stage,'') <> 'dispatched' stayed true
-        // for ever: a permanent In-progress row reading "—", counted by the
-        // console tile, and unreachable — rm_approve() only accepts 'requested',
-        // so it could never be approved or declined again either.
-        //
-        // Back to 'requested' with the decision cleared, which is the documented
-        // initial state (migrate_remakes.php:66). The account's own side — the
-        // request, its reason, note, photo and the blinds ticked — is untouched,
-        // so the office can approve it again or decline it. Deleting the order
-        // un-approves the remake; it doesn't discard what the account reported.
-        try {
-            $pdo->prepare(
-                "UPDATE factory_remakes
-                    SET status = 'requested', remake_quote_id = NULL,
-                        charge_mode = NULL, charge_amount = 0, supplier_name = NULL,
-                        due_date = NULL, decided_by_user_id = NULL, decided_at = NULL
-                  WHERE remake_quote_id = ? AND factory_client_id = ?"
-            )->execute([$qid, $MASTER]);
-        } catch (Throwable $e) { /* remakes not migrated — nothing to put back */ }
-        $pdo->prepare('DELETE FROM quotes WHERE id = ?')->execute([$qid]);
-        $pdo->commit();
-    } catch (Throwable $e) { if ($pdo->inTransaction()) $pdo->rollBack(); $fail('Could not delete order: ' . $e->getMessage()); }
+        $del = fod_delete_order($pdo, $qid, $MASTER);
+    } catch (Throwable $e) { $fail('Could not delete order: ' . $e->getMessage()); }
+    $supplierSends = $del['supplier_sends'];
     $_SESSION['flash_success'] = 'Order deleted.'
         . ($supplierSends
             ? ' Note: it had already been ordered from ' . implode(', ', $supplierSends)

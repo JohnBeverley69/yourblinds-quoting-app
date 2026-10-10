@@ -57,6 +57,23 @@ function rm_dn_ready(PDO $pdo): bool
     return $ok;
 }
 
+/**
+ * Are the cancel columns there? rm_cancel() writes cancelled_at / cancel_reason /
+ * cancelled_by_user_id, and the Remakes page must still work on an install that
+ * has remakes but has not run migrate_remake_cancel.php — the buttons simply
+ * don't appear.
+ */
+function rm_cancel_ready(PDO $pdo): bool
+{
+    static $ok = null;
+    if ($ok !== null) return $ok;
+    try {
+        $pdo->query('SELECT cancelled_at, cancel_reason, cancelled_by_user_id FROM factory_remakes LIMIT 0');
+        $ok = true;
+    } catch (Throwable $e) { $ok = false; }
+    return $ok;
+}
+
 /** Who-pays choices => label. */
 function rm_charge_modes(): array
 {
@@ -403,6 +420,143 @@ function rm_decline(PDO $pdo, int $factory, int $id, string $reason, int $userId
 }
 
 /**
+ * Why this approved remake can't be cancelled or undone, or '' when it can be.
+ *
+ * Both actions delete the remake ORDER that approval created, so both are
+ * refused by the same things that refuse any order delete — plus work already
+ * done at the bench, which a plain delete doesn't check.
+ *
+ * The paperwork tests come from fod_delete_block_reason(), the one definition
+ * the factory's own del_order reads, rather than a copy here: the audit found
+ * duplicated guards drifting apart repeatedly, and the standing rule is that a
+ * guard on one destructive path belongs on all of them.
+ *
+ * Returns a whole sentence, because the office needs to know what to do about it.
+ */
+function rm_cancel_block_reason(PDO $pdo, array $r): string
+{
+    if (($r['status'] ?? '') !== 'approved') {
+        return 'Only an approved remake can be cancelled — this one is ' . (string) ($r['status'] ?? 'unknown') . '.';
+    }
+    // Already gone out. The delivery-note test below would normally catch this
+    // (os_mark_dispatched_dn guarantees a dispatched remake has one), but not if
+    // that note were later cancelled — and this function must not depend on the
+    // page hiding the button to be correct.
+    if ((string) ($r['remake_stage'] ?? '') === 'dispatched') {
+        return 'That remake has already been dispatched, so it can’t be withdrawn. Raise a credit note instead.';
+    }
+    $rqid = (int) ($r['remake_quote_id'] ?? 0);
+    // No remake order left: either the factory deleted it from the order screen
+    // (which already put this remake back to 'requested'), or this is a legacy
+    // row stranded before that reset existed. Nothing to delete, so cancelling
+    // or undoing it is purely a status change — and it is how such a row gets
+    // resolved without SQL.
+    if ($rqid <= 0) return '';
+
+    require_once __DIR__ . '/factory_order_delete.php';
+    $why = fod_delete_block_reason($pdo, $rqid);
+    if ($why === '') $why = fod_floor_progress_reason($pdo, $rqid);
+    if ($why === '') return '';
+
+    $no = (string) ($r['remake_number'] ?? '') !== '' ? ' ' . (string) $r['remake_number'] : '';
+    return 'The remake order' . $no . ' can\'t be withdrawn — ' . $why
+         . '. Unpick that first (void the invoice, cancel the delivery note), or leave the remake to finish.';
+}
+
+/**
+ * Cancel an approved remake: it is not happening after all. Final state.
+ *
+ * Deletes the remake order so it leaves the factory floor and the incoming-orders
+ * list, and records who cancelled it and why. The account's own side — the
+ * request, reason, note, photo and the blinds ticked — is kept, so the history
+ * still shows what was reported and what became of it.
+ *
+ * Distinct from a DECLINE on purpose (John 2026-10-10). Declining says "we are
+ * not remaking this" before any work starts; cancelling withdraws a remake the
+ * office had already approved, which is usually the office's own mistake rather
+ * than a judgement about the account's claim.
+ *
+ * Throws RuntimeException with a user-facing message.
+ */
+function rm_cancel(PDO $pdo, int $factory, int $id, string $reason, int $userId): void
+{
+    if (!rm_cancel_ready($pdo)) {
+        throw new RuntimeException('Cancelling needs its migration — run /setup/migrations/migrate_remake_cancel.php once, then try again.');
+    }
+    $r = rm_get($pdo, $factory, $id);
+    if (!$r) throw new RuntimeException('That remake no longer exists.');
+    $block = rm_cancel_block_reason($pdo, $r);
+    if ($block !== '') throw new RuntimeException($block);
+    $reason = mb_substr(trim($reason), 0, 255);
+    if ($reason === '') throw new RuntimeException('Say briefly why it’s cancelled — the account sees this.');
+
+    require_once __DIR__ . '/factory_order_delete.php';
+    $rqid = (int) ($r['remake_quote_id'] ?? 0);
+    $own  = $pdo->inTransaction() ? false : $pdo->beginTransaction();
+    try {
+        // resetRemake: false — fod_delete_order() would otherwise put this remake
+        // back to 'requested', which is exactly what the cancel is undoing.
+        if ($rqid > 0) fod_delete_order($pdo, $rqid, $factory, false);
+        // remake_quote_id cleared: the order it pointed at is gone, and leaving a
+        // dead id behind is what stranded remakes in the first place. The charge
+        // goes with it — a cancelled remake is never billed, and rm_charges_for_quotes()
+        // keys on remake_quote_id, so there is nothing left for an invoice to pick up.
+        $pdo->prepare("UPDATE factory_remakes
+                          SET status = 'cancelled', remake_quote_id = NULL, charge_amount = 0,
+                              cancel_reason = ?, cancelled_by_user_id = ?, cancelled_at = NOW()
+                        WHERE id = ? AND factory_client_id = ?")
+            ->execute([$reason, $userId ?: null, $id, $factory]);
+        if ($own) $pdo->commit();
+    } catch (Throwable $e) {
+        if ($own && $pdo->inTransaction()) $pdo->rollBack();
+        throw $e;
+    }
+}
+
+/**
+ * Undo an approval: approved → 'requested', so it can be approved or declined
+ * again. For "that was approved by mistake", as opposed to rm_cancel()'s "this
+ * remake is not happening".
+ *
+ * Deletes the remake order and clears the decision, which is precisely what
+ * fod_delete_order() already does when a remake order is deleted from the order
+ * screen (#0b56b58) — so this is that same path, reachable from the Remakes page
+ * instead of by deleting an order. The remake returns to Waiting for approval and
+ * the sidebar badge counts it again.
+ *
+ * Throws RuntimeException with a user-facing message.
+ */
+function rm_undo(PDO $pdo, int $factory, int $id, int $userId): void
+{
+    $r = rm_get($pdo, $factory, $id);
+    if (!$r) throw new RuntimeException('That remake no longer exists.');
+    $block = rm_cancel_block_reason($pdo, $r);
+    if ($block !== '') throw new RuntimeException($block);
+
+    require_once __DIR__ . '/factory_order_delete.php';
+    $rqid = (int) ($r['remake_quote_id'] ?? 0);
+    $own  = $pdo->inTransaction() ? false : $pdo->beginTransaction();
+    try {
+        // resetRemake: true does the whole status reset for us when there is an
+        // order. With no order left there is nothing to delete, so do it here.
+        if ($rqid > 0) {
+            fod_delete_order($pdo, $rqid, $factory, true);
+        } else {
+            $pdo->prepare("UPDATE factory_remakes
+                              SET status = 'requested', remake_quote_id = NULL,
+                                  charge_mode = NULL, charge_amount = 0, supplier_name = NULL,
+                                  due_date = NULL, decided_by_user_id = NULL, decided_at = NULL
+                            WHERE id = ? AND factory_client_id = ?")
+                ->execute([$id, $factory]);
+        }
+        if ($own) $pdo->commit();
+    } catch (Throwable $e) {
+        if ($own && $pdo->inTransaction()) $pdo->rollBack();
+        throw $e;
+    }
+}
+
+/**
  * Copy the original order's chosen blinds into a new placed order, tagged as a
  * remake. Prices on the remake order carry the CHARGE (0 when free) so the
  * account's own screen and the invoice agree.
@@ -629,7 +783,11 @@ function rm_list(PDO $pdo, int $factory, string $view = 'all', string $from = ''
     $where = 'r.factory_client_id = ?'; $args = [$factory];
     if ($view === 'waiting') $where .= " AND r.status = 'requested'";
     if ($view === 'open')    $where .= " AND r.status = 'approved' AND COALESCE(rq.fulfilment_stage,'') <> 'dispatched'";
-    if ($view === 'done')    $where .= " AND (r.status = 'declined' OR (r.status = 'approved' AND rq.fulfilment_stage = 'dispatched'))";
+    // Done = finished with, however it finished: declined, cancelled, or approved
+    // and dispatched. A cancelled remake is no longer 'approved', so it drops out
+    // of "open" on its own — but it has to land somewhere, or it would vanish from
+    // every tab while still being counted by the "all" view.
+    if ($view === 'done')    $where .= " AND (r.status IN ('declined', 'cancelled') OR (r.status = 'approved' AND rq.fulfilment_stage = 'dispatched'))";
     if ($from !== '') { $where .= ' AND r.created_at >= ?'; $args[] = $from; }
     if ($to !== '')   { $where .= ' AND r.created_at < DATE_ADD(?, INTERVAL 1 DAY)'; $args[] = $to; }
     // The source order is LEFT JOINed, and its number falls back to a visible
@@ -651,12 +809,16 @@ function rm_list(PDO $pdo, int $factory, string $view = 'all', string $from = ''
     // completion time. decided_at = the APPROVAL date, which is why a remake
     // approved in August and sent yesterday fell out of the Overview's "Done in
     // the last 30 days" while also being too late for "In progress".
-    // Falls back to decided_at for a decline, and to created_at for neither.
+    // Falls back to cancelled_at for a cancel, decided_at for a decline, and to
+    // created_at for none of them. cancelled_at comes BEFORE decided_at: a
+    // cancelled remake was approved first, so decided_at holds the APPROVAL date
+    // — the same trap that kept dispatched remakes off the Overview.
+    $cancelledAt = rm_cancel_ready($pdo) ? 'r.cancelled_at, ' : '';
     $finished = rm_dn_ready($pdo)
         ? "COALESCE((SELECT dn.dispatched_at FROM factory_ar_delivery_notes dn
                       WHERE dn.source_quote_id = r.remake_quote_id AND dn.status = 'dispatched'
-                   ORDER BY dn.dispatched_at DESC, dn.id DESC LIMIT 1), r.decided_at, r.created_at)"
-        : 'COALESCE(r.decided_at, r.created_at)';
+                   ORDER BY dn.dispatched_at DESC, dn.id DESC LIMIT 1), {$cancelledAt}r.decided_at, r.created_at)"
+        : "COALESCE({$cancelledAt}r.decided_at, r.created_at)";
     $st = $pdo->prepare("SELECT r.*, COALESCE(q.quote_number, CONCAT('#', r.source_quote_id, ' (order deleted)')) AS source_number, q.customer_reference AS source_ref,
                                 rq.quote_number AS remake_number, rq.fulfilment_stage AS remake_stage, $finished AS finished_at,
                                 c.company_name AS account_name,
@@ -696,7 +858,7 @@ function rm_notify_account(PDO $pdo, int $factory, int $id): string
 {
     try {
         $r = rm_get($pdo, $factory, $id);
-        if (!$r || $r['raised_by'] !== 'account' || !in_array($r['status'], ['approved', 'declined'], true)) return '';
+        if (!$r || $r['raised_by'] !== 'account' || !in_array($r['status'], ['approved', 'declined', 'cancelled'], true)) return '';
         $email = '';
         if ((int) ($r['raised_by_user_id'] ?? 0) > 0) {
             $st = $pdo->prepare('SELECT email FROM client_users WHERE id = ? LIMIT 1');
@@ -725,6 +887,18 @@ function rm_notify_account(PDO $pdo, int $factory, int $id): string
                   . $what . "\n\n" . $charge
                   . ($r['due_date'] ? "\nWe expect it to be ready by " . date('j F Y', strtotime((string) $r['due_date'])) . '.' : '')
                   . "\n\nYou can follow it on your order:\n{LINK}\n\nThanks,\n{$factoryName}";
+        } elseif ($r['status'] === 'cancelled') {
+            // A remake THEY reported, which we approved and have now withdrawn.
+            // Saying nothing would leave them waiting for blinds that are no
+            // longer being made, so this is not optional — but it is worded as
+            // our change of plan, not as a judgement on their claim the way a
+            // decline is.
+            $subject = "Remake cancelled — order {$orderNo}";
+            $body = "Hello,\n\nWe've had to cancel the remake we approved for you, so it is no longer being made.\n\n"
+                  . $what . "\n\nWhy: " . (string) $r['cancel_reason']
+                  . "\n\nThere's no charge for it."
+                  . "\n\nIf this isn't right, or you still need these blinds, just reply to this email and we'll sort it out.\n\n"
+                  . "Your order:\n{LINK}\n\nThanks,\n{$factoryName}";
         } else {
             $subject = "Remake request — order {$orderNo}";
             $body = "Hello,\n\nWe've looked at your remake request and won't be remaking this one.\n\n"

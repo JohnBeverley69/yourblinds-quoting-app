@@ -7,8 +7,12 @@ declare(strict_types=1);
  *   Waiting for approval — remakes accounts have reported from their side. Any
  *                          office user approves (deciding who pays + a due date)
  *                          or declines with a short reason the account sees.
- *   In progress          — approved remakes not dispatched yet.
- *   Done                 — dispatched or declined.
+ *   In progress          — approved remakes not dispatched yet. A factory ADMIN can
+ *                          Undo the approval (back to waiting, to decide again) or
+ *                          Cancel the remake outright with a reason; both remove the
+ *                          remake order, and both refuse once it has paperwork or
+ *                          has been started on the floor.
+ *   Done                 — dispatched, declined or cancelled.
  *   Report               — a month at a time: how many, what they cost us (trade
  *                          price of the blinds), what was charged back, supplier
  *                          claims; by reason and by account.
@@ -45,6 +49,33 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $sentTo = rm_notify_account($pdo, $factory, $id);
             $_SESSION['flash_success'] = 'Declined — the account sees your reason on their order'
                 . ($sentTo !== '' ? ' and has been emailed (' . $sentTo . ').' : '.');
+            header('Location: /factory/remakes.php');
+            exit;
+        }
+        // Cancel / Undo — factory ADMIN only, and only on an approved remake.
+        // Both delete the remake order the approval created, so neither is for
+        // every office user (factory_user_is_admin() vs the page's own
+        // requireFactoryOffice()).
+        if (in_array($_POST['_action'] ?? '', ['cancel', 'undo'], true)) {
+            if (!factory_user_is_admin()) {
+                $_SESSION['flash_error'] = 'Only a factory Admin can cancel or undo an approved remake.';
+                header('Location: /factory/remakes.php#rm' . $id);
+                exit;
+            }
+            if (($_POST['_action'] ?? '') === 'cancel') {
+                $was = rm_get($pdo, $factory, $id);
+                rm_cancel($pdo, $factory, $id, (string) ($_POST['cancel_reason'] ?? ''), (int) ($user['user_id'] ?? 0));
+                $sentTo = rm_notify_account($pdo, $factory, $id);
+                $_SESSION['flash_success'] = 'Remake cancelled'
+                    . (($was['remake_number'] ?? '') !== '' ? ' — order ' . $was['remake_number'] . ' has been removed from the factory' : '')
+                    . ($sentTo !== '' ? '. The account has been emailed (' . $sentTo . ').' : '.');
+            } else {
+                rm_undo($pdo, $factory, $id, (int) ($user['user_id'] ?? 0));
+                // No email: nothing has been decided now, so there is nothing to
+                // tell the account. They see it as waiting again on their order.
+                $_SESSION['flash_success'] = 'Approval undone — it is back in Waiting for approval, and the remake order has been removed. '
+                    . 'Approve or decline it again when you have decided.';
+            }
             header('Location: /factory/remakes.php');
             exit;
         }
@@ -129,6 +160,22 @@ if ($ready && $view === 'report') {
 
 $money = static fn ($n) => '£' . number_format((float) $n, 2);
 $modes = rm_charge_modes();
+
+// Cancel / Undo an approved remake: factory ADMIN only (John 2026-10-10 — not
+// super-admin only, which is his login alone and no screen can grant), and only
+// once migrate_remake_cancel.php has added the columns.
+$canCancel = $ready && rm_cancel_ready($pdo) && factory_user_is_admin();
+// Why each in-progress remake can't be withdrawn, worked out once per row rather
+// than per render — the Overview draws the open list and the recently-done list
+// from the same closure. Only the rows that could offer the buttons are checked,
+// since each row costs a few lookups.
+$blockBy = [];
+if ($canCancel) {
+    foreach ($lists['open'] as $r) {
+        if ($r['status'] !== 'approved' || (string) ($r['remake_stage'] ?? '') === 'dispatched') continue;
+        $blockBy[(int) $r['id']] = rm_cancel_block_reason($pdo, $r);
+    }
+}
 $activeNav = 'remakes';
 ?><!doctype html>
 <html lang="en">
@@ -173,6 +220,17 @@ $activeNav = 'remakes';
       .rm-cols h3 { font-size:1rem; margin:.2rem 0 .5rem; color:var(--text-primary); }
       .fc-pill { display:inline-block; padding:.0625rem .5rem; font-size:.6875rem; font-weight:700; border-radius:999px; white-space:nowrap;
                  background:var(--bg-subtle-2); color:var(--text-muted); }
+      /* Cancelled reads as withdrawn, not as a failure — a quiet amber, theme-safe. */
+      .rm-pill-cancelled { background:rgba(217,119,6,.16); color:#b45309; }
+      :root[data-theme="dark"] .rm-pill-cancelled { color:#fbbf24; }
+      @media (prefers-color-scheme:dark) { :root:not([data-theme="light"]) .rm-pill-cancelled { color:#fbbf24; } }
+      .rm-blocked { font-style:italic; cursor:help; }
+      .rm-undo summary { cursor:pointer; font-size:.8125rem; color:var(--text-muted); margin-top:.35rem; }
+      .rm-undo form { display:flex; flex-direction:column; gap:.3rem; align-items:flex-start; margin-top:.5rem;
+                      padding-top:.5rem; border-top:1px solid var(--border); }
+      .rm-undo input[type=text] { padding:.3rem .45rem; border:1px solid var(--border-strong); border-radius:6px;
+                                  background:var(--bg-input); color:var(--text-body); font:inherit; font-size:.8125rem; min-width:14rem; }
+      .btn-small { padding:.25rem .6rem; font-size:.8125rem; }
       @media (max-width:820px){ .rm-card { grid-template-columns:1fr; } }
     </style>
 </head>
@@ -248,7 +306,7 @@ $activeNav = 'remakes';
   };
 
   // In progress / done table.
-  $table = static function (array $rows) use ($items, $money, $modes): void { ?>
+  $table = static function (array $rows) use ($items, $money, $modes, $canCancel, $blockBy): void { ?>
     <div class="rm-wrap"><div class="table-wrap"><table class="table">
       <thead><tr><th>Remake</th><th>Account</th><th>Blinds</th><th>Reason</th><th>Who pays</th><th class="num">Cost</th><th>Status</th></tr></thead>
       <tbody>
@@ -265,7 +323,8 @@ $activeNav = 'remakes';
           <td><?php foreach ($items[$rid] ?? [] as $it): ?><div><?= (int) $it['quantity'] ?> × <?= e($it['label']) ?></div><?php endforeach; ?></td>
           <td><?= e((string) $r['reason_label']) ?><?php if (!empty($r['photo_path'])): ?> · <a href="/remakes/photo.php?id=<?= $rid ?>" target="_blank" rel="noopener">photo</a><?php endif; ?></td>
           <td>
-            <?php if ($r['status'] === 'declined'): ?>—
+            <?php /* Nothing is charged for a remake that was never made. */ ?>
+            <?php if (in_array($r['status'], ['declined', 'cancelled'], true)): ?>—
             <?php else: ?>
               <?= e($modes[$r['charge_mode']] ?? '') ?>
               <?= $r['charge_mode'] === 'charge' ? '<div class="rm-sub">' . e($money($r['charge_amount'])) . ' charged</div>' : '' ?>
@@ -276,8 +335,39 @@ $activeNav = 'remakes';
           <td>
             <?php if ($r['status'] === 'declined'): ?>
               <span class="fc-pill">Declined</span><div class="rm-sub"><?= e((string) $r['decline_reason']) ?></div>
+            <?php elseif ($r['status'] === 'cancelled'): ?>
+              <span class="fc-pill rm-pill-cancelled">Cancelled</span><div class="rm-sub"><?= e((string) ($r['cancel_reason'] ?? '')) ?></div>
             <?php else: ?>
               <span class="fc-pill"><?= e($r['remake_stage'] ? os_stage_label((string) $r['remake_stage']) : 'New') ?></span>
+              <?php
+              // Cancel / Undo, on an approved remake that hasn't gone out yet.
+              // Admin only, and only once migrate_remake_cancel.php has run.
+              $blocked = $blockBy[$rid] ?? '';
+              if ($canCancel && $r['status'] === 'approved' && (string) ($r['remake_stage'] ?? '') !== 'dispatched'):
+                if ($blocked !== ''): ?>
+                  <div class="rm-sub rm-blocked" title="<?= e($blocked) ?>">Can’t be withdrawn now</div>
+                <?php else: ?>
+                  <details class="rm-undo">
+                    <summary>Approved by mistake?</summary>
+                    <form method="post">
+                      <?= csrf_field() ?>
+                      <input type="hidden" name="_action" value="undo">
+                      <input type="hidden" name="remake_id" value="<?= $rid ?>">
+                      <button class="btn btn-small">Undo approval</button>
+                      <div class="rm-sub">Back to Waiting for approval, to decide again. The remake order is removed.</div>
+                    </form>
+                    <form method="post">
+                      <?= csrf_field() ?>
+                      <input type="hidden" name="_action" value="cancel">
+                      <input type="hidden" name="remake_id" value="<?= $rid ?>">
+                      <label for="rmCan<?= $rid ?>">Or cancel it — why? <span class="rm-sub">(the account sees this and is emailed it)</span></label>
+                      <input type="text" id="rmCan<?= $rid ?>" name="cancel_reason" maxlength="255" required
+                             placeholder="e.g. Raised twice by mistake">
+                      <button class="btn btn-small">Cancel remake</button>
+                    </form>
+                  </details>
+                <?php endif;
+              endif; ?>
             <?php endif; ?>
           </td>
         </tr>
