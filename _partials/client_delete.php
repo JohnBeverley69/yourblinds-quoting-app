@@ -107,7 +107,17 @@ function cl_delete_client(PDO $pdo, int $clientId): array
         $cns = $in($ids('SELECT id FROM factory_ar_credit_notes WHERE account_client_id = ?', $a));
         $pay = $in($ids('SELECT id FROM factory_ar_payments WHERE account_client_id = ?', $a));
         $dns = $in($ids('SELECT id FROM factory_ar_delivery_notes WHERE account_client_id = ? OR source_quote_id IN (' . $q . ')', $a));
-        $run("UPDATE factory_bank_transactions SET payment_id = NULL WHERE payment_id IN ($pay)");
+        // Back to 'new', not just payment_id = NULL. The file header says these
+        // "become unmatched again", but nothing set the status, so the row kept
+        // status = 'matched' with a NULL payment_id — and every route back was
+        // closed: bank.php's self-heal is
+        //   JOIN factory_ar_payments p ON p.id = t.payment_id
+        // which can never match a NULL payment_id, and the New tab keys on
+        // status = 'new'. So a real bank receipt showed under Matched with an
+        // empty "Recorded as" and no button, never reappeared under New, and
+        // could not be reconciled to anything again — while the Matched count
+        // over-stated by one for ever.
+        $run("UPDATE factory_bank_transactions SET payment_id = NULL, status = 'new' WHERE payment_id IN ($pay)");
         $run("DELETE FROM factory_ar_payment_allocations WHERE payment_id IN ($pay) OR invoice_id IN ($inv)");
         $run("DELETE FROM factory_ar_credit_note_lines WHERE credit_note_id IN ($cns)");
         $run("DELETE FROM factory_ar_credit_notes WHERE id IN ($cns)");

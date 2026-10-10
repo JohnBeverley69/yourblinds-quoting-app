@@ -37,9 +37,22 @@ $clientId = (int) $user['client_id'];
 
 // Deleting quotes/orders is a back-office action — gate on admin or
 // quote-creation rights (a plain fitter must not be able to bulk-destroy
-// orders). Matches quote-builder/delete.php.
+// orders).
+//
+// can_create_orders is admitted too, because quote-builder/delete.php:27 does:
+// admin, or can_create_quotes, OR a direct order with can_create_orders. This
+// file's comment used to claim it matched that file and didn't — a
+// direct-order-only client (the #916 persona: Create orders, no Create quotes)
+// could delete one of their draft direct orders from the order page but got a
+// blank "Not permitted." from "Delete selected" on the very same rows.
+//
+// Which rows they may actually delete is enforced per row below, since
+// can_create_orders alone must not reach an ordinary retail quote.
 $perms = function_exists('current_user_permissions') ? current_user_permissions() : [];
-if (($user['role'] ?? '') !== 'admin' && empty($perms['can_create_quotes'])) {
+$isAdminUser    = ($user['role'] ?? '') === 'admin';
+$canAllQuotes   = $isAdminUser || !empty($perms['can_create_quotes']);
+$canOrdersOnly  = !$canAllQuotes && !empty($perms['can_create_orders']);
+if (!$canAllQuotes && !$canOrdersOnly) {
     http_response_code(403);
     exit('Not permitted.');
 }
@@ -116,6 +129,13 @@ $chk = $pdo->prepare(
 $chk->execute(array_merge($ids, [$clientId]));
 foreach ($chk->fetchAll(PDO::FETCH_ASSOC) as $row) {
     $ownedIds[] = (int) $row['id'];
+    // A can_create_orders-only user may delete their direct orders and nothing
+    // else — the same line quote-builder/delete.php:28 draws.
+    if ($canOrdersOnly && !qb_is_direct_order($row)) {
+        $blocked[(int) $row['id']] = (string) $row['quote_number'];
+        $ruleBlocked[(string) $row['quote_number']] = 'You can only delete your own direct orders.';
+        continue;
+    }
     $why = qb_delete_block_reason($pdo, $row);
     if ($why !== '') {
         $blocked[(int) $row['id']] = (string) $row['quote_number'];
