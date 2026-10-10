@@ -282,6 +282,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     );
                     $cstmt->execute(array_merge([$clientId], array_values($custVals)));
                     $newCustomerId = (int) $pdo->lastInsertId();
+                    // Stamp the creator so a restricted user can still find
+                    // this customer after logging out (customer_access.php).
+                    cm_remember_created($newCustomerId);
                 }
 
                 // 2) Appointment record. Title defaults to customer name so it
@@ -393,8 +396,7 @@ $custSql    = 'SELECT c.id, c.name, c.email, c.phone, c.mobile, c.has_whatsapp,
 $custParams = [$clientId];
 if (!cm_can_view_all_customers($user)) {
     $custSql     .= ' AND ' . cm_mine_sql();
-    $custParams[] = (int) $user['user_id'];
-    $custParams[] = (int) $user['user_id'];
+    $custParams   = array_merge($custParams, cm_mine_params((int) $user['user_id']));
 }
 $custSql .= ' ORDER BY c.name LIMIT 500';
 $customerOptions = [];
