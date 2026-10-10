@@ -291,9 +291,45 @@ function rm_items_for(PDO $pdo, int $factory, array $remakes): array
     $st  = $pdo->prepare("SELECT remake_id, source_item_id, quantity FROM factory_remake_items WHERE remake_id IN ($ph) ORDER BY id");
     $st->execute($ids);
     $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+    // Labels from ONE query over quote_items, not rm_order_lines() per source
+    // order. This used to loop every distinct source_quote_id and call
+    // rm_order_lines(), which runs ar_order_lines_for_doc() plus a full
+    // ar_invoice_lines_from_order() rebuild — quote lookup, extras rows, per-line
+    // trade-discount resolution, the lot — around 8-10 queries each. All of it to
+    // produce display strings like "2 x Roller, Bedroom".
+    //
+    // The Remakes page defaults to the Overview tab and is also where every
+    // approve/decline redirects, and it calls this across waiting + open + done
+    // (500 each). With a year of remakes over ~450 distinct source orders that
+    // was several thousand queries to render a handful of labels.
+    //
+    // rm_line_label() only needs the snapshots, which are all on quote_items —
+    // no pricing is involved. Ownership isn't filtered because labels are only
+    // ever read for item ids that appear in factory_remake_items.
     $labels = [];
-    foreach (array_keys($bySource) as $qid) {
-        foreach (rm_order_lines($pdo, $factory, $qid) as $l) $labels[$l['id']] = rm_line_label($l);
+    $srcIds = array_keys($bySource);
+    if ($srcIds) {
+        $sph = implode(',', array_fill(0, count($srcIds), '?'));
+        $ls  = $pdo->prepare(
+            "SELECT id, room_name, product_name_snapshot, system_name_snapshot,
+                    fabric_name_snapshot, fabric_colour_snapshot, width_mm, drop_mm
+               FROM quote_items WHERE quote_id IN ($sph)"
+        );
+        $ls->execute($srcIds);
+        foreach ($ls->fetchAll(PDO::FETCH_ASSOC) as $l) {
+            $fab = trim(implode(' / ', array_filter(
+                [(string) $l['fabric_name_snapshot'], (string) $l['fabric_colour_snapshot']],
+                static fn ($s) => trim($s) !== ''
+            )));
+            $labels[(int) $l['id']] = rm_line_label([
+                'product'   => (string) $l['product_name_snapshot'],
+                'system'    => (string) ($l['system_name_snapshot'] ?? ''),
+                'fabric'    => $fab,
+                'width_mm'  => $l['width_mm'],
+                'drop_mm'   => $l['drop_mm'],
+                'room_name' => (string) ($l['room_name'] ?? ''),
+            ]);
+        }
     }
     foreach ($rows as $r) {
         $out[(int) $r['remake_id']][] = [
