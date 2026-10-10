@@ -88,6 +88,16 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
     // ---- outbox ------------------------------------------------------------
     function all()  { var a = lsGet(OUTBOX_KEY); return Array.isArray(a) ? a : []; }
     function mine() { return all().filter(function (i) { return i.userId === USER_ID; }); }
+    // A new quote with no customer name and no blinds yet — the blank screen
+    // was only opened. It isn't sent (the server would refuse it for the name)
+    // and isn't counted in the bar, so a look round doesn't leave a warning behind.
+    function emptyCreate(i, list) {
+        if (i.kind !== 'create') return false;
+        var n = (i.pairs || []).find(function (p) { return p[0] === 'end_customer_name'; });
+        if (n && String(n[1]).trim()) return false;
+        return !(list || all()).some(function (j) { return j.scope === i.scope && j.kind !== 'create'; });
+    }
+    function live() { var a = mine(); return a.filter(function (i) { return !emptyCreate(i, a); }); }
     function write(a) { lsSet(OUTBOX_KEY, a); changed(); }
     var outbox = {
         list:  function (scope) { return mine().filter(function (i) { return scope == null || i.scope === String(scope); }); },
@@ -173,6 +183,12 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
                 pairs: detailsForCreate(detailsPairs, pid), summary: 'New quote for ' + (nameIn(detailsPairs) || '(no name yet)') });
             return item ? pid : null;
         },
+        // Throw a new quote away before it ever reached the server: its 'create',
+        // its blinds and its details go. Nothing was sent, so nothing to undo there.
+        discard: function (pid) {
+            write(all().filter(function (i) { return i.scope !== 'p:' + pid; }));
+            var a = provAll(); delete a[pid]; lsSet(PROV_KEY, a);
+        },
         // Customer details changed: keep the waiting 'create' in step.
         setDetails: function (pid, detailsPairs) {
             prov.save(pid, { details: detailsPairs });
@@ -228,7 +244,7 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
 
     async function flush() {
         if (sending) return;
-        var queue = mine().filter(function (i) { return i.status === 'waiting'; });
+        var queue = live().filter(function (i) { return i.status === 'waiting'; });
         if (!queue.length) return;
         sending = true; changed();
         var sent = [], again = false;
@@ -276,7 +292,7 @@ $ybOfflineUserId = (int) (current_user()['user_id'] ?? 0);
     var bar = document.getElementById('yb-net-bar');
     function renderBar() {
         if (!bar) return;
-        var items = mine();
+        var items = live();
         var waiting  = items.filter(function (i) { return i.status === 'waiting'; }).length;
         var rejected = items.filter(function (i) { return i.status === 'rejected'; });
         var txt = '', cls = '';

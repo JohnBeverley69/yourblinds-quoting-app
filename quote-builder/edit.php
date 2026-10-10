@@ -4497,8 +4497,22 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
             var ce = document.createElement('div');
             ce.style.color = '#9b1c1c';
             ce.textContent = 'The quote couldn’t be created: ' + (createErr.error || 'please check the customer details')
-                           + ' — fix the details above and press Save.';
+                           + ' — fill in Customer details further down and save them, or delete this draft.';
             outboxPanel.appendChild(ce);
+        }
+        // A quote that only exists on this device can always be thrown away —
+        // nothing of it has reached the server.
+        if (provId && creates.length) {
+            var drop = document.createElement('button');
+            drop.type = 'button';
+            drop.textContent = 'Delete this draft quote';
+            drop.style.alignSelf = 'flex-start';
+            drop.addEventListener('click', function () {
+                if (!confirm('Delete this draft quote and anything on it? It was never sent, so nothing else changes.')) return;
+                OFF.prov.discard(provId);
+                location.href = '/';
+            });
+            outboxPanel.appendChild(drop);
         }
         items.forEach(function (it) {
             var row = document.createElement('div');
