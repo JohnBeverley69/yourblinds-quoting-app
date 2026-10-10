@@ -61,7 +61,6 @@ function fc_orders(PDO $pdo, int $factoryId): array
     };
     $hasFj      = $has('SELECT 1 FROM factory_jobs LIMIT 0');
     $hasStage   = $has('SELECT fulfilment_stage FROM quotes LIMIT 0');
-    $hasArchive = $has('SELECT archived_at FROM quotes LIMIT 0');
     $hasAcct    = $has('SELECT account_client_id FROM quotes LIMIT 0');
     // The factory's own UNPLACED quotes used to be narrowed to trade ones
     // ($tradeOwn: sale_type = 'trade' OR an account), which contradicted the
@@ -91,6 +90,18 @@ function fc_orders(PDO $pdo, int $factoryId): array
     // the fuller stage value is derived in PHP afterwards from the factory-job
     // rows, which are fetched by id once this query has run. With more than 400
     // orders still open the counts would narrow again — raise the cap then.
+    // The tenant's archive flag is deliberately NOT applied to this query.
+    // archived_at is set from the ACCOUNT's own Order history
+    // (orders/archive.php) with no status restriction, so they can archive a
+    // live placed order — their staff reasonably treat archiving as "finished
+    // with on our side".
+    //
+    // No other factory consumer looks at it: not factory/incoming-orders.php,
+    // not factory/floor.php, not master-admin/dispatch.php, not
+    // ar_placed_orders(). Only this one did, so an archived order disappeared
+    // from Console Orders and the dashboard while its blinds were still on the
+    // floor, still in Incoming orders and still in the invoicing list — made
+    // and shipped without ever showing on the screen the office works from.
     $sql = "SELECT q.id, q.client_id, q.quote_number, q.status, q.created_at,
                    q.customer_reference, q.end_customer_name, q.subtotal,
                    " . ($hasAcct ? 'q.account_client_id' : 'NULL') . " AS account_client_id,
@@ -109,7 +120,6 @@ function fc_orders(PDO $pdo, int $factoryId): array
                      AND EXISTS (SELECT 1 FROM quote_items qi JOIN products p ON p.id = qi.product_id
                                   WHERE qi.quote_id = q.id AND $owner = ?))
                  OR (q.client_id = ? AND q.status IN ('draft','sent','accepted') ))
-               " . ($hasArchive ? 'AND q.archived_at IS NULL' : '') . "
           ORDER BY " . ($hasStage ? "CASE WHEN COALESCE(q.fulfilment_stage, '') = 'dispatched' THEN 1 ELSE 0 END, " : '') . "q.created_at DESC, q.id DESC
              LIMIT 400";
     try {
