@@ -38,7 +38,7 @@ if (($user['role'] ?? '') !== 'admin' && empty($perms['can_create_orders']) && e
 try {
     qb_save_sold_for(db(), $quoteId, $clientId, (string) ($_POST['sold_for'] ?? ''), !empty($_POST['sold_for_inc_vat']));
 } catch (Throwable $e) {
-    qb_flash_redirect($back, 'error', 'Could not save the price — run migrate_direct_orders.php. (' . $e->getMessage() . ')');
+    qb_flash_redirect($back, 'error', 'Could not save the price — run /setup/migrations/migrate_direct_orders.php. (' . $e->getMessage() . ')');
 }
 // The message has to describe what was actually STORED, not what was typed.
 // qb_save_sold_for() (_helpers.php:147) treats anything non-numeric or <= 0 the

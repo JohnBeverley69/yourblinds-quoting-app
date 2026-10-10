@@ -32,7 +32,7 @@ if ($ok) {
         ? 'Testing mode ON — all outgoing emails are paused. Remember to turn this off before going live.'
         : 'Testing mode OFF — outgoing emails are sending normally again.';
 } else {
-    $_SESSION['flash_error'] = 'Could not change the email setting. Has migrate_app_settings.php been run?';
+    $_SESSION['flash_error'] = 'Could not change the email setting. Has /setup/migrations/migrate_app_settings.php been run?';
 }
 
 header('Location: /master-admin/index.php');

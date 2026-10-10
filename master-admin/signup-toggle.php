@@ -33,7 +33,7 @@ if ($ok) {
         ? 'Public sign-up is now CLOSED — new self sign-ups are turned off. Existing accounts are unaffected.'
         : 'Public sign-up is now OPEN — anyone can create an account again.';
 } else {
-    $_SESSION['flash_error'] = 'Could not change the sign-up setting. Has migrate_app_settings.php been run?';
+    $_SESSION['flash_error'] = 'Could not change the sign-up setting. Has /setup/migrations/migrate_app_settings.php been run?';
 }
 
 header('Location: /master-admin/index.php');

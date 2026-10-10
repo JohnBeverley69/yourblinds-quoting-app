@@ -48,7 +48,7 @@ if ($bankTxnId > 0 && bf_ready($pdo)) {
 }
 
 if (!ar_payments_ready($pdo)) {
-    $_SESSION['flash_error'] = 'Payments are not set up yet — run migrate_ar_payments.php.';
+    $_SESSION['flash_error'] = 'Payments are not set up yet — run /setup/migrations/migrate_ar_payments.php.';
 }
 
 // ── Record / void ───────────────────────────────────────────────────────────
