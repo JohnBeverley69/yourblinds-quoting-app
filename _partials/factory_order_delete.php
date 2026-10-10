@@ -96,6 +96,158 @@ function fod_floor_progress_reason(PDO $pdo, int $quoteId): string
 }
 
 /**
+ * What a FORCE delete would destroy, for the confirmation screen and for the
+ * message afterwards. Read-only.
+ *
+ *   ['invoices' => [['id','inv_number','status','total'], …],
+ *    'delivery_notes' => [['id','dn_number','status'], …],
+ *    'payments' => ['n' => int, 'total' => float],   // retail deposits
+ *    'credit_notes' => int,
+ *    'shared' => ''|'why it must be refused']
+ *
+ * `shared` is the one case a force delete must NOT touch: an invoice that also
+ * covers OTHER orders. ar_create_invoice() writes one factory_ar_invoice_orders
+ * row per invoice, so today that shouldn't happen — but the join table allows
+ * several, and factory_ar_invoice_lines carries source_quote_id, so multi-order
+ * invoices are anticipated. Deleting one would silently take another order's
+ * billing with it, so it is refused and explained instead.
+ */
+function fod_force_delete_preview(PDO $pdo, int $quoteId): array
+{
+    $out = ['invoices' => [], 'delivery_notes' => [], 'payments' => ['n' => 0, 'total' => 0.0],
+            'credit_notes' => 0, 'shared' => ''];
+    if ($quoteId <= 0) return $out;
+
+    try {
+        $s = $pdo->prepare('SELECT i.id, i.inv_number, i.status, i.total
+                              FROM factory_ar_invoice_orders io
+                              JOIN factory_ar_invoices i ON i.id = io.invoice_id
+                             WHERE io.quote_id = ? ORDER BY i.id');
+        $s->execute([$quoteId]);
+        $out['invoices'] = $s->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (Throwable $e) { /* not migrated */ }
+
+    foreach ($out['invoices'] as $inv) {
+        try {
+            $s = $pdo->prepare('SELECT COUNT(*) FROM factory_ar_invoice_orders WHERE invoice_id = ? AND quote_id <> ?');
+            $s->execute([(int) $inv['id'], $quoteId]);
+            if ((int) $s->fetchColumn() > 0) {
+                $out['shared'] = 'invoice ' . $inv['inv_number'] . ' also covers other orders, so deleting this one would '
+                               . 'take their billing with it. Credit that invoice and re-raise it without this order first.';
+            }
+        } catch (Throwable $e) { /* not migrated */ }
+        try {
+            $s = $pdo->prepare("SELECT COUNT(*) FROM factory_ar_credit_notes WHERE against_invoice_id = ?");
+            $s->execute([(int) $inv['id']]);
+            $out['credit_notes'] += (int) $s->fetchColumn();
+        } catch (Throwable $e) { /* not migrated */ }
+    }
+
+    try {
+        $s = $pdo->prepare('SELECT id, dn_number, status FROM factory_ar_delivery_notes WHERE source_quote_id = ? ORDER BY id');
+        $s->execute([$quoteId]);
+        $out['delivery_notes'] = $s->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (Throwable $e) { /* not migrated */ }
+
+    try {
+        $s = $pdo->prepare('SELECT COUNT(*), COALESCE(SUM(amount),0) FROM payments WHERE quote_id = ?');
+        $s->execute([$quoteId]);
+        $row = $s->fetch(PDO::FETCH_NUM) ?: [0, 0];
+        $out['payments'] = ['n' => (int) $row[0], 'total' => (float) $row[1]];
+    } catch (Throwable $e) { /* not migrated */ }
+
+    return $out;
+}
+
+/**
+ * FORCE delete: unpick the paperwork that fod_delete_block_reason() refuses on,
+ * then delete the order. The one-click version of "void the invoice, cancel the
+ * delivery note, then delete" — which is the only route out otherwise, and is
+ * laborious when clearing a run of test orders.
+ *
+ * Built for the pre-launch test phase (John 2026-10-10): dummy orders pushed all
+ * the way through to invoicing can't be tidied away, and the system has to be
+ * clean at go-live. It is NOT the everyday way to fix a mistake — voiding the
+ * invoice and raising a credit note keeps the audit trail, and this does not.
+ *
+ * SUPER-ADMIN ONLY. The caller enforces that; this is destructive enough that it
+ * should never be reachable from an ordinary office screen.
+ *
+ * Invoices are VOIDED before they are deleted rather than simply dropped:
+ * ar_void_invoice() releases their payment allocations (money already received
+ * becomes credit on the account instead of vanishing with the invoice) and voids
+ * the credit notes against them. The released total comes back so the caller can
+ * say so — it is the one consequence that outlives the order.
+ *
+ * factory_ar_payments rows are deliberately NOT deleted: a payment is money the
+ * account actually sent and may cover other invoices too. Its allocation to this
+ * order's invoices is released, so it shows as unallocated credit.
+ *
+ * Returns ['destroyed' => <the preview>, 'released' => float, 'supplier_sends' => []].
+ * Throws RuntimeException when it must refuse.
+ */
+function fod_force_delete_order(PDO $pdo, int $quoteId, int $factory): array
+{
+    $pre = fod_force_delete_preview($pdo, $quoteId);
+    if ($pre['shared'] !== '') {
+        throw new RuntimeException('This order can’t be force-deleted — ' . $pre['shared']);
+    }
+    require_once __DIR__ . '/factory_ar.php';   // ar_void_invoice
+
+    $released = 0.0;
+    $own = $pdo->inTransaction() ? false : $pdo->beginTransaction();
+    try {
+        $invIds = array_map(static fn ($i) => (int) $i['id'], $pre['invoices']);
+        foreach ($invIds as $invId) {
+            // Void first, so allocations are released and credit notes voided by
+            // the one function that knows how. Already-void invoices no-op.
+            try { $r = ar_void_invoice($pdo, $factory, $invId, 'Order force-deleted'); $released += (float) ($r['released'] ?? 0); }
+            catch (Throwable $e) { /* best-effort: the deletes below still run */ }
+        }
+        if ($invIds) {
+            $ph = implode(',', array_fill(0, count($invIds), '?'));
+            foreach ([
+                "DELETE FROM factory_ar_payment_allocations WHERE invoice_id IN ($ph)",
+                "DELETE FROM factory_ar_credit_note_lines WHERE credit_note_id IN (SELECT id FROM factory_ar_credit_notes WHERE against_invoice_id IN ($ph))",
+                "DELETE FROM factory_ar_credit_notes WHERE against_invoice_id IN ($ph)",
+                "DELETE FROM factory_ar_invoice_lines WHERE invoice_id IN ($ph)",
+                "DELETE FROM factory_ar_invoice_orders WHERE invoice_id IN ($ph)",
+                "DELETE FROM factory_ar_invoices WHERE id IN ($ph)",
+            ] as $sql) {
+                try { $pdo->prepare($sql)->execute($invIds); }
+                catch (Throwable $e) { /* table not migrated on this install */ }
+            }
+        }
+        $dnIds = array_map(static fn ($d) => (int) $d['id'], $pre['delivery_notes']);
+        if ($dnIds) {
+            $ph = implode(',', array_fill(0, count($dnIds), '?'));
+            foreach ([
+                "DELETE FROM factory_ar_delivery_note_lines WHERE delivery_note_id IN ($ph)",
+                "DELETE FROM factory_ar_delivery_notes WHERE id IN ($ph)",
+            ] as $sql) {
+                try { $pdo->prepare($sql)->execute($dnIds); }
+                catch (Throwable $e) { /* not migrated */ }
+            }
+        }
+        // Retail deposits are order-scoped (payments.quote_id), so they go with it.
+        try { $pdo->prepare('DELETE FROM payments WHERE quote_id = ?')->execute([$quoteId]); }
+        catch (Throwable $e) { /* not migrated */ }
+
+        // Nothing blocks it now. Belt and braces: if something still does, the
+        // throw rolls the whole lot back rather than half-unpicking the paperwork.
+        $why = fod_delete_block_reason($pdo, $quoteId);
+        if ($why !== '') throw new RuntimeException('Could not clear the paperwork — ' . $why . '.');
+
+        $res = fod_delete_order($pdo, $quoteId, $factory);
+        if ($own) $pdo->commit();
+        return ['destroyed' => $pre, 'released' => round($released, 2), 'supplier_sends' => $res['supplier_sends']];
+    } catch (Throwable $e) {
+        if ($own && $pdo->inTransaction()) $pdo->rollBack();
+        throw $e;
+    }
+}
+
+/**
  * Delete a factory order and everything keyed to it. Call fod_delete_block_reason()
  * FIRST — this does not re-check it.
  *

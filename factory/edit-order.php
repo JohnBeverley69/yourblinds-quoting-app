@@ -36,6 +36,7 @@ try {
 // Only a PLACED order is the factory's to edit — a tenant's unplaced draft /
 // sent / accepted quote carries factory lines too, but it's still theirs.
 require_once __DIR__ . '/../_partials/order_stage.php';
+require_once __DIR__ . '/../_partials/factory_order_delete.php';   // fod_delete_block_reason / fod_force_delete_preview
 $notPlaced = $order && !in_array((string) ($order['status'] ?? ''), os_placed_statuses(), true);
 if ($notPlaced) $order = null;
 
@@ -127,6 +128,13 @@ require __DIR__ . '/../_partials/factory_head.php';
     .fe-danger { border: 1px solid #fca5a5; background: #fef2f2; border-radius: 12px; padding: 0.9rem 1.1rem; margin: 1.5rem 0 0; }
     .fe-danger h3 { margin: 0 0 0.4rem; font-size: 0.95rem; color: #991b1b; }
     .fe-danger .fe-btn { background: #dc2626; color: #fff; }
+    .fe-del-why { margin: 0.6rem 0 0; font-size: 0.875rem; color: #991b1b; }
+    .fe-force { margin-top: 0.6rem; }
+    .fe-force > summary { cursor: pointer; font-size: 0.875rem; font-weight: 600; color: #991b1b; }
+    .fe-force p { margin: 0.5rem 0; font-size: 0.85rem; color: #7f1d1d; }
+    .fe-force label { display: block; margin: 0.6rem 0 0.25rem; font-size: 0.85rem; color: #7f1d1d; }
+    .fe-force input[type=text] { font: inherit; font-size: 0.875rem; padding: 0.35rem 0.5rem; border: 1px solid #fca5a5;
+                                 border-radius: 8px; background: #fff; color: #111; min-width: 14rem; margin-right: 0.5rem; }
     .fe-empty { background: var(--bg-subtle, #f8fafc); border: 1px dashed var(--border, #e5e7eb); border-radius: 12px; padding: 1.75rem; color: var(--text-faint, #94a3b8); text-align: center; }
     .fe-fabric .fab-row { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
     .fe-fabric .fab-current { font-size: 0.92rem; font-weight: 600; }
@@ -307,6 +315,48 @@ require __DIR__ . '/../_partials/factory_head.php';
                      looks and behaves exactly as before. */ ?>
             <button type="submit" form="fe-del-order" name="del_order" value="1" class="fe-btn" formnovalidate
                     data-confirm="Delete this ENTIRE order (<?= (int) count($items) ?> blind<?= count($items) === 1 ? '' : 's' ?>)? This cannot be undone.">Delete whole order</button>
+            <?php
+            // Say WHY up front rather than letting the button be pressed and
+            // refused. Super-admins also get the way through: clearing that
+            // paperwork by hand (void the invoice, cancel the delivery note) is
+            // the only other route, and it is laborious over a run of orders.
+            $delBlock = fod_delete_block_reason($pdo, $qid);
+            if ($delBlock !== ''): ?>
+                <p class="fe-del-why">This order can’t be deleted — <?= e($delBlock) ?>.</p>
+                <?php if (is_super_admin()):
+                    $fdPre = fod_force_delete_preview($pdo, $qid);
+                    $fdBits = [];
+                    foreach ($fdPre['invoices'] as $i)       $fdBits[] = 'invoice ' . $i['inv_number'];
+                    foreach ($fdPre['delivery_notes'] as $n) $fdBits[] = 'delivery note ' . $n['dn_number'];
+                    if ($fdPre['credit_notes'] > 0)  $fdBits[] = $fdPre['credit_notes'] . ' credit note' . ($fdPre['credit_notes'] === 1 ? '' : 's');
+                    if ($fdPre['payments']['n'] > 0) $fdBits[] = $fdPre['payments']['n'] . ' deposit' . ($fdPre['payments']['n'] === 1 ? '' : 's');
+                ?>
+                <details class="fe-force">
+                    <summary>Force delete (super-admin)</summary>
+                    <?php if ($fdPre['shared'] !== ''): ?>
+                        <p class="fe-del-why">Not available here — <?= e($fdPre['shared']) ?></p>
+                    <?php else: ?>
+                        <p>For clearing test data before go-live. This deletes the order <b>and</b> its paperwork
+                           <?= $fdBits ? '(' . e(implode(', ', $fdBits)) . ')' : '' ?> outright, leaving no audit trail.
+                           To correct a real order instead, void the invoice and raise a credit note.</p>
+                        <?php if ($fdPre['payments']['n'] > 0 || $fdPre['invoices']): ?>
+                        <p class="fe-del-why">Money already received against it stays on the account as unallocated
+                           credit — the payment itself is not deleted.</p>
+                        <?php endif; ?>
+                        <?php /* Like the Delete button above, these belong to a
+                                 SEPARATE form declared after the edit form — the
+                                 two must not nest, and keeping force_del_order out
+                                 of the edit form means nothing that gathers its
+                                 fields can ever ask for one. */ ?>
+                        <label for="fe-confirm-ref">Type <b><?= e((string) ($order['quote_number'] ?? '')) ?></b> to confirm</label>
+                        <input type="text" id="fe-confirm-ref" name="confirm_ref" form="fe-force-del" autocomplete="off"
+                               placeholder="<?= e((string) ($order['quote_number'] ?? '')) ?>">
+                        <button type="submit" form="fe-force-del" name="force_del_order" value="1" class="fe-btn" formnovalidate
+                                data-confirm="Force delete this order AND its paperwork? This cannot be undone.">Force delete</button>
+                    <?php endif; ?>
+                </details>
+                <?php endif; ?>
+            <?php endif; ?>
         </div>
     </form>
 
@@ -320,6 +370,14 @@ require __DIR__ . '/../_partials/factory_head.php';
       behaves exactly as it did.
     */ ?>
     <form method="post" action="/factory/save-order.php" id="fe-del-order" hidden>
+        <?= csrf_field() ?>
+        <input type="hidden" name="quote_id" value="<?= $qid ?>">
+    </form>
+
+    <?php /* Same again for the super-admin force delete. The typed confirmation
+             field in the Danger zone is wired to this form by its form= attribute,
+             so it posts here and not with the edit form. */ ?>
+    <form method="post" action="/factory/save-order.php" id="fe-force-del" hidden>
         <?= csrf_field() ?>
         <input type="hidden" name="quote_id" value="<?= $qid ?>">
     </form>
