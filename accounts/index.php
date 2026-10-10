@@ -124,18 +124,48 @@ $summaryRow = $summary->fetch() ?: ['all_time' => 0, 'this_month' => 0];
 // orders when the permission requires it.
 // The deposit subtraction is dropped once the deposit is its own payment row
 // (it's then already inside the payments SUM); kept pre-migration.
+
+// What a direct order is worth to the CLIENT's own customer, and whether it
+// belongs in this page's figures at all.
+//
+// This page is "Payments received against your orders" — their customer
+// receivables. A direct order's q.total is the BUYING price, i.e. what the
+// client pays the factory, which is a payable and not a receivable; including
+// it added the client's own cost to what their customers supposedly owe them.
+// Their customer-side value is sold_for_net.
+//
+// So: a direct order counts at its Sold for price, and one with no Sold for
+// entered counts for nothing here (there is no customer sale to collect yet) —
+// the same rule dashboard/index.php:198 applies with $keepSales.
+//
+// Remakes are excluded too. A remake is putting a fault right, not a new sale,
+// which is the rule every other sales figure in the app follows
+// (dashboard/index.php:204-207), and its subtotal is the factory's charge to
+// the client rather than anything their customer owes.
+$hasSoldFor = false;
+try { $pdo->query('SELECT sold_for_net FROM quotes LIMIT 0'); $hasSoldFor = true; }
+catch (Throwable $e) { /* pre-migration: no direct orders exist */ }
+$hasRemakeCol = false;
+try { $pdo->query('SELECT remake_of_quote_id FROM quotes LIMIT 0'); $hasRemakeCol = true; }
+catch (Throwable $e) { /* pre-migration: no remakes exist */ }
+
+$acctValue = $hasSoldFor
+    ? 'CASE WHEN COALESCE(q.direct_order, 0) = 1 THEN q.sold_for_net ELSE q.total END'
+    : 'q.total';
+$acctKeep  = ($hasSoldFor   ? ' AND (COALESCE(q.direct_order, 0) = 0 OR q.sold_for_net IS NOT NULL)' : '')
+           . ($hasRemakeCol ? ' AND q.remake_of_quote_id IS NULL' : '');
 $depTermSql = payments_has_is_deposit() ? '' : "
          - CASE WHEN q.deposit_paid_at IS NOT NULL
                 THEN IFNULL(q.deposit_amount, 0)
                 ELSE 0 END";
 $outSql = "SELECT
        IFNULL(SUM(
-         q.total
+         $acctValue
          - IFNULL((SELECT SUM(amount) FROM payments WHERE quote_id = q.id), 0)$depTermSql
        ), 0) AS outstanding
        FROM quotes q
       WHERE q.client_id = ?
-        AND q.status IN ('accepted','ordered','fitted','invoiced','paid')";
+        AND q.status IN ('accepted','ordered','fitted','invoiced','paid')$acctKeep";
 $outParams = [$clientId];
 if ($restrictToMine) {
     $outSql      .= ' AND q.id IN (SELECT quote_id FROM appointments WHERE client_user_id = ?)';
@@ -149,13 +179,14 @@ $outstandingTotal = (float) $outSt->fetchColumn();
 // beyond, with their per-quote outstanding pre-computed so the picker
 // can offer a sensible default amount when one is chosen. Same
 // restriction as the rest of the page.
-$pickSql = "SELECT q.id, q.quote_number, q.end_customer_name, q.total,
+$pickSql = "SELECT q.id, q.quote_number, q.end_customer_name,
+            $acctValue AS total,   -- direct orders at their Sold for, as above
             q.deposit_amount, q.deposit_paid_at,
             IFNULL((SELECT SUM(amount) FROM payments WHERE quote_id = q.id), 0)
               AS payments_total
        FROM quotes q
       WHERE q.client_id = ?
-        AND q.status IN ('accepted','ordered','fitted','invoiced','paid')";
+        AND q.status IN ('accepted','ordered','fitted','invoiced','paid')$acctKeep";
 $pickParams = [$clientId];
 if ($restrictToMine) {
     $pickSql      .= ' AND q.id IN (SELECT quote_id FROM appointments WHERE client_user_id = ?)';
