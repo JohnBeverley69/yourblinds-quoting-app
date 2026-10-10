@@ -69,6 +69,20 @@ function fc_orders(PDO $pdo, int $factoryId): array
         ? ($hasAcct ? "(q.sale_type = 'trade' OR q.account_client_id IS NOT NULL)" : "q.sale_type = 'trade'")
         : ($hasAcct ? 'q.account_client_id IS NOT NULL' : '0');
 
+    // The 400-row cap below is ordered so it can only ever drop FINISHED
+    // orders. It used to be a plain created_at DESC cap, and both consumers
+    // count the truncated set in PHP rather than asking the database:
+    // factory/dashboard.php loops the rows into the New / Received / In
+    // production / Ready tiles, and factory/orders.php builds its stage chips
+    // the same way. So past 400 orders the rows discarded were the OLDEST —
+    // exactly where a job stuck in production for three months sits. The tile
+    // under-counted it and it showed on no Console screen at all. Dropping the
+    // oldest dispatched orders instead is the harmless direction.
+    //
+    // fulfilment_stage is the only stage signal available in SQL at this point;
+    // the fuller stage value is derived in PHP afterwards from the factory-job
+    // rows, which are fetched by id once this query has run. With more than 400
+    // orders still open the counts would narrow again — raise the cap then.
     $sql = "SELECT q.id, q.client_id, q.quote_number, q.status, q.created_at,
                    q.customer_reference, q.end_customer_name, q.subtotal,
                    " . ($hasAcct ? 'q.account_client_id' : 'NULL') . " AS account_client_id,
@@ -88,7 +102,7 @@ function fc_orders(PDO $pdo, int $factoryId): array
                                   WHERE qi.quote_id = q.id AND $owner = ?))
                  OR (q.client_id = ? AND q.status IN ('draft','sent','accepted') AND $tradeOwn))
                " . ($hasArchive ? 'AND q.archived_at IS NULL' : '') . "
-          ORDER BY q.created_at DESC, q.id DESC
+          ORDER BY " . ($hasStage ? "CASE WHEN COALESCE(q.fulfilment_stage, '') = 'dispatched' THEN 1 ELSE 0 END, " : '') . "q.created_at DESC, q.id DESC
              LIMIT 400";
     try {
         $st = $pdo->prepare($sql);
