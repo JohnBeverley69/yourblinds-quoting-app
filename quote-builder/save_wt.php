@@ -7,8 +7,9 @@ declare(strict_types=1);
  *
  *   POST quote_id, wt_amount
  *
- * Gated by the tenant's feature_wt setting + can_create_quotes AND can_view_costs
- * to customers — the WT only lives on the builder.
+ * Gated by the tenant's feature_wt setting, plus can_create_quotes AND
+ * can_view_costs (WT is an internal cost figure). Never exposed to customers —
+ * the WT only lives on the builder.
  */
 
 require __DIR__ . '/../bootstrap.php';
