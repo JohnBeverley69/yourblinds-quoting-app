@@ -361,6 +361,24 @@ try {
     // order's trade account, so the account discount still applies), then the
     // order totals. Before this, a qty 1→2 left line_total / the order total at
     // the old figure and the invoice worked out a negative line charge.
+    // A remake order's money is the charge the office agreed when they approved
+    // it, spread across its lines by rm_create_remake_order — £0 on a free one.
+    // It is not a computed trade price, so re-pricing would overwrite the
+    // decision. A remake order is an ordinary placed order in Incoming orders
+    // and os_line_edit_lock only locks once it is dispatched or invoiced, so
+    // Edit order opens it: correcting a drop from 1800 to 1850 on a free remake
+    // re-priced the line to full trade value and qb_recompute_totals pushed that
+    // into quotes.total, so the account's Order history and the tenant dashboard
+    // showed a £246 order they had been told was free while the factory invoice
+    // for it billed £0.00 — and the free remake booked £246 of phantom revenue.
+    //
+    // The spec edits themselves are allowed through: the factory may well need
+    // to correct the size or fabric of the blind it is remaking. Only the money
+    // is left alone.
+    $isRemakeOrder = (int) ($order['remake_of_quote_id'] ?? 0) > 0;
+    if ($isRemakeOrder) {
+        $dirty = [];
+    }
     $lineNo = $pdo->prepare('SELECT line_no FROM quote_items WHERE id = ?');
     foreach (array_keys($dirty) as $iid) {
         $err = qb_reprice_stored_line($pdo, (int) $iid, $clientId, $accountId);
@@ -370,7 +388,7 @@ try {
         }
     }
     qb_reconcile_fascia_groups($pdo, $qid, $clientId, $accountId);
-    qb_recompute_totals($qid);
+    if (!$isRemakeOrder) qb_recompute_totals($qid);
 
     $pdo->commit();
 } catch (Throwable $e) {
