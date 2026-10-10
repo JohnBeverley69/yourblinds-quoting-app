@@ -59,13 +59,15 @@ $qs = static function (array $over) use ($stage, $account, $q): string {
 };
 $money = static fn ($n) => $n === null ? '' : '£' . number_format((float) $n, 2);
 
-$activeNav = 'factory-orders';
+// Highlight Quotes in the sidebar when that is the stage being shown, so the
+// new tab lights up rather than Orders staying lit for both.
+$activeNav = $stage === 'notplaced' ? 'factory-quotes' : 'factory-orders';
 ?><!doctype html>
 <html lang="en">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Orders &middot; Factory Console &middot; YourBlinds</title>
+    <title><?= $stage === 'notplaced' ? 'Quotes' : 'Orders' ?> &middot; Factory Console &middot; YourBlinds</title>
     <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
       .fc-chips { display:flex; gap:.5rem; flex-wrap:wrap; margin:0 0 .75rem; }
@@ -112,9 +114,20 @@ $activeNav = 'factory-orders';
   <?php if ($flashErr !== ''): ?><div class="alert alert-error"   role="alert"><?= e($flashErr) ?></div><?php endif; ?>
   <div class="page-header">
     <div>
-      <h1 class="page-title">Orders</h1>
+      <?php
+      // The Quotes sidebar tab lands on this same page filtered to the quotes
+      // stage, so the heading follows the filter — otherwise clicking Quotes
+      // gives you a page headed "Orders".
+      $onQuotes = $stage === 'notplaced';
+      ?>
+      <h1 class="page-title"><?= $onQuotes ? 'Quotes' : 'Orders' ?></h1>
+      <?php if ($onQuotes): ?>
+      <p class="page-subtitle ui-hint">Our own quotes &mdash; trade and retail &mdash; that haven&rsquo;t been placed as
+         orders yet. Open one to add blinds or place it.</p>
+      <?php else: ?>
       <p class="page-subtitle ui-hint">Every order placed with us, whoever placed it: from their portal, as a direct order,
-         or keyed in here. Our own trade quotes that aren&rsquo;t placed yet show as <b>Not placed</b>.</p>
+         or keyed in here. Our own quotes that aren&rsquo;t placed yet show as <b>Quotes</b>.</p>
+      <?php endif; ?>
     </div>
     <a href="/master-admin/new-order.php" class="btn btn-primary">+ New order</a>
   </div>
