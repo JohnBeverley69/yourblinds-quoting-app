@@ -51,12 +51,21 @@ $productName = '';
 foreach ($products as $p) { if ((int) $p['id'] === $productId) $productName = (string) $p['name']; }
 
 /** Load this product's build variables in evaluation order. */
+// Does this install carry a variable's own display name and plumbing flag?
+// (setup/migrations/migrate_build_variable_labels.php.) Before that migration
+// both came from arrays keyed by one product's variable names, so the fallback
+// below reproduces exactly what they said.
+$bvHasLabel = false;
+try { $pdo->query('SELECT label, plumbing FROM build_variables LIMIT 0'); $bvHasLabel = true; }
+catch (Throwable $e) { /* pre migration */ }
+
 $vars = [];
 if ($productId > 0) {
     try {
         $vs = $pdo->prepare(
-            'SELECT name, columns_json, rows_json, seq
-               FROM build_variables WHERE product_id = ? ORDER BY seq, id'
+            'SELECT name, columns_json, rows_json, seq'
+            . ($bvHasLabel ? ', label, plumbing' : ", NULL AS label, 0 AS plumbing")
+            . ' FROM build_variables WHERE product_id = ? ORDER BY seq, id'
         );
         $vs->execute([$productId]);
         $vars = $vs->fetchAll(PDO::FETCH_ASSOC);
@@ -239,20 +248,49 @@ if (($_GET['action'] ?? '') === 'checkcalc') {
     exit;
 }
 
-// Friendly names for the cryptic variable codes.
+// These two were the display name and the "the floor never sees this" flag for
+// every product, keyed by Bev Vertical Blinds' variable names — so that product
+// read "Headrail cut"/"Fabric drop" and hid its working values, while every
+// other product showed raw names like Fabric_Cut and could hide nothing. They
+// live on the variable now (label, plumbing); these are only the fallback for
+// an install that has not run migrate_build_variable_labels.php, which is also
+// what the migration seeds from.
+//
+// $CALC_GLOSS went with them: it was built into $calcs and never rendered, and
+// its "Vanes = number of trucks + 1" was untrue for Fabric Only, whose Vanes is
+// Quantity + 1. Dead and wrong is not worth migrating.
 $FRIENDLY = [
-    'H_Cut' => 'Headrail cut', 'Hem_To_Hem' => 'Fabric drop', 'Vanes' => 'Vanes',
+    'H_Cut' => 'Headrail cut', 'Hem_To_Hem' => 'Fabric drop',
     'Mtrs' => 'Fabric metres', 'CH_L' => 'Tilt chain', 'C_L' => 'Draw cord',
-    'Trucks' => 'Trucks', 'Truck_Size' => 'Truck size', 'Truck_Spec' => 'Truck spec',
+    'Truck_Size' => 'Truck size', 'Truck_Spec' => 'Truck spec',
     'Spacing' => 'Truck spacing', 'Truck_Spacing' => 'Truck spacing',
 ];
-// Variables that are internal plumbing (never printed on a ticket).
 $PLUMBING = ['Spacing', 'Truck_Spacing', 'Trucks', 'Truck_Size', 'Truck_Spec'];
-// A little plain-English gloss for the known calcs (fallbacks to raw rows).
-$CALC_GLOSS = [
-    'Vanes' => 'number of trucks + 1',
-    'Mtrs'  => 'round up  (Drop + 95) × Vanes ÷ 1000',
-];
+
+/**
+ * A variable's display name: its own label, else its raw name — and only on a
+ * pre-migration install, the retired $FRIENDLY table. "Try a size" reports
+ * values for the RULES-SOURCE product, which may not be the one on screen, so
+ * the lookup is by name across whichever product owns the rules.
+ */
+$bvLabelOf = static function (string $name) use ($pdo, $productId, $bvHasLabel, $FRIENDLY): string {
+    static $byName = null;
+    if ($byName === null) {
+        $byName = [];
+        if ($bvHasLabel) {
+            try {
+                $q = $pdo->prepare('SELECT name, label FROM build_variables WHERE product_id = ?');
+                $q->execute([build_rules_source($pdo, $productId)]);
+                foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $r) {
+                    $l = trim((string) ($r['label'] ?? ''));
+                    if ($l !== '') $byName[(string) $r['name']] = $l;
+                }
+            } catch (Throwable $e) { /* fall through to the name */ }
+        }
+    }
+    if (isset($byName[$name])) return $byName[$name];
+    return $bvHasLabel ? $name : ($FRIENDLY[$name] ?? $name);
+};
 
 // Live "Try a size" formula-variable eval. The client computes the simple cuts
 // itself, but Vanes / Trucks / Truck size need the real engine (BESTFIT / ROUNDUP
@@ -278,7 +316,7 @@ if (($_GET['action'] ?? '') === 'evalbuild') {
         foreach ($ev['results'] as $r) {
             $out[] = [
                 'name'     => (string) $r['name'],
-                'friendly' => $FRIENDLY[$r['name']] ?? (string) $r['name'],
+                'friendly' => $bvLabelOf((string) $r['name']),
                 'ok'       => (bool) $r['ok'],
                 'blank'    => !empty($r['blank']),
                 'value'    => !empty($r['blank']) ? '—' : $r['value'],
@@ -374,6 +412,36 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         header('Location: /factory/build-rules-v2.php?product_id=' . $productId);
         exit;
+    }
+
+    // ---- Set a rule's display name, or move it in/out of the plumbing --------
+    // Both live on the variable itself, so each product says what it wants to
+    // call its own rules instead of inheriting one product's vocabulary.
+    if (($lbOf = trim((string) ($_POST['labelvar'] ?? ''))) !== '') {
+        $lbTo = mb_substr(trim((string) ($_POST['labelto'] ?? '')), 0, 80);
+        try {
+            if (!$bvHasLabel) throw new RuntimeException('run /setup/migrations/migrate_build_variable_labels.php first.');
+            // Blank means "just use the name" — stored as NULL, not an empty string.
+            $pdo->prepare('UPDATE build_variables SET label = ? WHERE product_id = ? AND name = ?')
+                ->execute([$lbTo === '' ? null : $lbTo, $productId, $lbOf]);
+            $_SESSION['flash_success'] = $lbTo === ''
+                ? "“{$lbOf}” is shown by its own name again."
+                : "“{$lbOf}” is now shown as “{$lbTo}”.";
+        } catch (Throwable $e) { $_SESSION['flash_error'] = 'Could not set the label: ' . $e->getMessage(); }
+        header('Location: /factory/build-rules-v2.php?product_id=' . $productId); exit;
+    }
+
+    if (($plOf = trim((string) ($_POST['plumbvar'] ?? ''))) !== '') {
+        $plTo = (string) ($_POST['plumbto'] ?? '') === '1' ? 1 : 0;
+        try {
+            if (!$bvHasLabel) throw new RuntimeException('run /setup/migrations/migrate_build_variable_labels.php first.');
+            $pdo->prepare('UPDATE build_variables SET plumbing = ? WHERE product_id = ? AND name = ?')
+                ->execute([$plTo, $productId, $plOf]);
+            $_SESSION['flash_success'] = $plTo
+                ? "“{$plOf}” is a working value now — the floor won't see it."
+                : "“{$plOf}” shows on the ticket again.";
+        } catch (Throwable $e) { $_SESSION['flash_error'] = 'Could not change it: ' . $e->getMessage(); }
+        header('Location: /factory/build-rules-v2.php?product_id=' . $productId); exit;
     }
 
     // ---- Rename a rule --------------------------------------------------------
@@ -586,7 +654,12 @@ foreach ($vars as $v) {
     $rows    = json_decode((string) $v['rows_json'], true) ?: [];
     $labels  = array_map(static fn ($c) => (string) ($c['label'] ?? ($c['ref'] ?? '')), $cols);
     $colrefs = array_map(static fn ($c) => (string) ($c['ref'] ?? ''), $cols);
-    $friendly = $FRIENDLY[$name] ?? $name;
+    // The variable's own label, or its name. Falls back to the retired table
+    // only on an install without the migration.
+    $friendly = trim((string) ($v['label'] ?? ''));
+    if ($friendly === '') $friendly = ($bvHasLabel ? $name : ($FRIENDLY[$name] ?? $name));
+    $isPlumbing = $bvHasLabel ? (int) ($v['plumbing'] ?? 0) === 1 : in_array($name, $PLUMBING, true);
+    $rawLabel   = trim((string) ($v['label'] ?? ''));   // '' = shown by its own name
 
     $rawResults = array_map(static fn ($r) => (string) ($r['result'] ?? ''), $rows);
     $hasBestfit = false;
@@ -625,12 +698,12 @@ foreach ($vars as $v) {
         foreach ($labels as $i => $lab) {
             foreach ($cutRows as $cr) { if (($cr['cells'][$i] ?? '') !== '') { $active[] = $i; break; } }
         }
-        $cuts[] = ['name' => $name, 'friendly' => $friendly, 'base' => $base,
+        $cuts[] = ['name' => $name, 'friendly' => $friendly, 'label' => $rawLabel, 'base' => $base,
                    'labels' => $labels, 'colrefs' => $colrefs, 'active' => $active, 'rows' => $cutRows];
-    } elseif (in_array($name, $PLUMBING, true)) {
-        $plumbing[] = ['name' => $name, 'friendly' => $friendly, 'results' => $rawResults, 'bestfit' => $hasBestfit];
+    } elseif ($isPlumbing) {
+        $plumbing[] = ['name' => $name, 'friendly' => $friendly, 'label' => $rawLabel, 'results' => $rawResults, 'bestfit' => $hasBestfit];
     } else {
-        $calcs[] = ['name' => $name, 'friendly' => $friendly, 'gloss' => $CALC_GLOSS[$name] ?? '',
+        $calcs[] = ['name' => $name, 'friendly' => $friendly, 'label' => $rawLabel,
                     'rows' => $rows, 'labels' => $labels];
     }
 }
@@ -832,6 +905,13 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
       background:none; border:1px solid var(--line); border-radius:6px; padding:.12rem .5rem; cursor:pointer; }
   .brv2 .rnbtn:hover{ color:#1f6feb; border-color:#9fc3f5; }
   .brv2 .rnbtn + .rmbtn{ margin-left:.35rem; }
+  /* Label sits with Rename and Remove; it is the leftmost of the three, so it
+     takes the margin-left:auto that pushes the group right. */
+  .brv2 .lbbtn{ margin-left:auto; font:inherit; font-size:.7rem; font-weight:600; color:var(--faint);
+      background:none; border:1px solid var(--line); border-radius:6px; padding:.12rem .5rem; cursor:pointer; }
+  .brv2 .lbbtn:hover{ color:#15803d; border-color:#9ad4ae; }
+  .brv2 .lbbtn + .rnbtn{ margin-left:.35rem; }
+  .brv2 .pl .lbbtn{ margin-left:.4rem; }
   .brv2 .calcedit-head{ display:flex; align-items:center; gap:.45rem; }
   .brv2 table{ width:100%; border-collapse:collapse; margin-top:.7rem; font-size:.9rem; }
   .brv2 th{ text-align:left; font-size:.68rem; letter-spacing:.05em; text-transform:uppercase; color:var(--faint);
@@ -978,6 +1058,34 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
       edit them there and both follow. Systems are matched by name (e.g. “SlimLine” uses “SlimLine Vert”).</div>
   <?php endif; endif; ?>
   <script>
+  function postPair(btn, k1, v1, k2, v2){
+    // The cut and calc cards sit inside their own form; the Working values list
+    // does not, so build one there. $productId is read from the query string,
+    // so the action has to keep it.
+    var f = btn.form;
+    if(!f){
+      f = document.createElement('form');
+      f.method = 'post';
+      f.action = location.pathname + location.search;
+      var tok = document.querySelector('input[name="_csrf"]');
+      if(!tok) return;
+      var c = document.createElement('input'); c.type='hidden'; c.name='_csrf'; c.value=tok.value;
+      f.appendChild(c);
+      document.body.appendChild(f);
+    }
+    [[k1,v1],[k2,v2]].forEach(function(p){
+      var i = document.createElement('input'); i.type='hidden'; i.name=p[0]; i.value=p[1]; f.appendChild(i);
+    });
+    f.submit();
+  }
+  function lbVar(btn, name, current){
+    var to = prompt('What should "'+name+'" be called on this page?\n\nThis is the display name only — the rule is still ' + name + ' in formulas and on the worksheet. Leave it empty to use the name itself.', current || '');
+    if(to === null) return;
+    postPair(btn, 'labelvar', name, 'labelto', to.trim());
+  }
+  function plVar(btn, name, to){
+    postPair(btn, 'plumbvar', name, 'plumbto', to);
+  }
   function rnVar(btn, name){
     var to = prompt('Rename "'+name+'" to what?\n\nLetters, digits and underscores only. Every rule and worksheet field that names it is updated too.', name);
     if(to === null) return;
@@ -1020,7 +1128,9 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
             <span class="cut-def">= <span class="m"><?= $e2($c['base']) ?></span> <?= $def ?></span>
             <span class="dirtag <?= $tagc ?>"><?= $e2($tag) ?></span>
             <span class="code-name">(<?= $e2($c['name']) ?>)</span>
+            <?php if ($bvHasLabel): ?><button type="button" class="lbbtn" onclick="lbVar(this,'<?= $e2($c['name']) ?>','<?= $e2($c['label']) ?>')">Label</button><?php endif; ?>
             <button type="button" class="rnbtn" onclick="rnVar(this,'<?= $e2($c['name']) ?>')">Rename</button>
+            <?php if ($bvHasLabel): ?><button type="button" class="rnbtn" title="Move it to Working values — the floor never sees those" onclick="plVar(this,'<?= $e2($c['name']) ?>','1')">Hide</button><?php endif; ?>
             <button type="button" class="rmbtn" onclick="rmVar(this,'<?= $e2($c['name']) ?>')">Remove</button>
           </div>
           <div class="scroll">
@@ -1062,7 +1172,7 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
         <div class="cut">
         <?php foreach ($calcs as $cc): ?>
           <div class="calcedit">
-            <div class="calcedit-head"><span class="cut-name"><?= $e2($cc['friendly']) ?></span> <span class="code-name">(<?= $e2($cc['name']) ?>)</span><button type="button" class="rnbtn" onclick="rnVar(this,'<?= $e2($cc['name']) ?>')">Rename</button><button type="button" class="rmbtn" onclick="rmVar(this,'<?= $e2($cc['name']) ?>')">Remove</button></div>
+            <div class="calcedit-head"><span class="cut-name"><?= $e2($cc['friendly']) ?></span> <span class="code-name">(<?= $e2($cc['name']) ?>)</span><?php if ($bvHasLabel): ?><button type="button" class="lbbtn" onclick="lbVar(this,'<?= $e2($cc['name']) ?>','<?= $e2($cc['label']) ?>')">Label</button><?php endif; ?><button type="button" class="rnbtn" onclick="rnVar(this,'<?= $e2($cc['name']) ?>')">Rename</button><?php if ($bvHasLabel): ?><button type="button" class="rnbtn" title="Move it to Working values — the floor never sees those" onclick="plVar(this,'<?= $e2($cc['name']) ?>','1')">Hide</button><?php endif; ?><button type="button" class="rmbtn" onclick="rmVar(this,'<?= $e2($cc['name']) ?>')">Remove</button></div>
             <?php foreach ($cc['rows'] as $ri => $r):
               $ctx = [];
               foreach ((array) ($r['cells'] ?? []) as $cv) { $cv = trim((string) $cv); if ($cv !== '') $ctx[] = $cv; }
@@ -1134,7 +1244,9 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
       <details class="working">
         <summary>Show the internal plumbing (<?= (int) count($plumbing) ?> values)</summary>
         <?php foreach ($plumbing as $pl): ?>
-          <div class="pl"><b><?= $e2($pl['friendly']) ?></b> <span class="code-name">(<?= $e2($pl['name']) ?>)</span> — <?php
+          <div class="pl"><b><?= $e2($pl['friendly']) ?></b> <span class="code-name">(<?= $e2($pl['name']) ?>)</span>
+            <?php if ($bvHasLabel): ?><button type="button" class="lbbtn" onclick="lbVar(this,'<?= $e2($pl['name']) ?>','<?= $e2($pl['label']) ?>')">Label</button><button type="button" class="rnbtn" title="Put it back on the ticket" onclick="plVar(this,'<?= $e2($pl['name']) ?>','0')">Show</button><?php endif; ?>
+            — <?php
             $u = array_values(array_unique(array_filter($pl['results'])));
             echo $pl['bestfit'] ? 'from the Vogue chart, else <code>width ÷ spacing</code>' : $e2(implode(' · ', array_slice($u, 0, 3)));
           ?></div>
