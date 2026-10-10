@@ -45,6 +45,30 @@ function cl_delete_block_reason(PDO $pdo, int $clientId, int $myClientId): strin
     $s = $pdo->prepare('SELECT COUNT(*) FROM client_users WHERE client_id = ? AND is_super_admin = 1');
     $s->execute([$clientId]);
     if ((int) $s->fetchColumn() > 0) return 'This account has a master admin login. Clear the super-admin flag on that login first.';
+    // A live PayPal subscription has to be cancelled first. Nothing in this
+    // function talks to PayPal, and the only code that does is the
+    // cancel_paypal action on master-admin/subscriptions.php, which POSTs to
+    // /v1/billing/subscriptions/{id}/cancel — the local `delete` action there
+    // says in so many words that it is local-only.
+    //
+    // Deleting the client without cancelling left PayPal still charging, and
+    // put the subscription beyond reach: Platform → Subscriptions INNER JOINs
+    // clients, so the orphan row disappears from the one screen with a cancel
+    // button on it, while the renewal webhook keeps finding it and marking it
+    // active for a client_id that no longer exists.
+    try {
+        $sub = $pdo->prepare(
+            "SELECT COUNT(*) FROM tenant_subscriptions
+              WHERE client_id = ?
+                AND COALESCE(external_subscription_id, '') <> ''
+                AND COALESCE(status, 'active') <> 'cancelled'"
+        );
+        $sub->execute([$clientId]);
+        if ((int) $sub->fetchColumn() > 0) {
+            return 'This account still has a live PayPal subscription. Cancel it on Platform → Subscriptions first, '
+                 . 'otherwise PayPal keeps charging it and the subscription becomes invisible once the account is gone.';
+        }
+    } catch (Throwable $e) { /* tenant_subscriptions absent — nothing billing */ }
     return '';
 }
 
@@ -117,6 +141,15 @@ function cl_delete_client(PDO $pdo, int $clientId): array
 
         // Per-account trade terms.
         foreach (['trade_discounts', 'trade_discount_audit', 'trade_commissions', 'trade_promotions'] as $t) {
+            $run("DELETE FROM $t WHERE client_id = ?", $a);
+        }
+
+        // Billing rows for the account. A live subscription is refused up front
+        // by cl_delete_block_reason(), so anything here is already cancelled —
+        // but left behind it is an orphan that Platform → Subscriptions can't
+        // show (it INNER JOINs clients) and that the renewal webhook can still
+        // match on client_id.
+        foreach (['tenant_subscriptions', 'client_plan_overrides', 'trial_grants'] as $t) {
             $run("DELETE FROM $t WHERE client_id = ?", $a);
         }
 
