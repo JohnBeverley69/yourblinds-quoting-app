@@ -145,11 +145,26 @@ $dupBy = [];
 if (!empty($ids)) {
     try {
         $dph = implode(',', array_fill(0, count($ids), '?'));
+        // Matched on the EFFECTIVE trade account, not on client_id and
+        // account_client_id separately. The same account's order is stored in
+        // two different shapes depending on who keyed it in: a portal order is
+        // client_id = the account with account_client_id NULL, while one the
+        // office keys in is client_id = the factory with account_client_id = the
+        // account. The old join required b.client_id = a.client_id, so those two
+        // never matched — and "they ordered through the portal and also rang it
+        // in" is precisely the double entry this badge was added for (#917). It
+        // only ever caught duplicates keyed in the same way.
+        //
+        // COALESCE(NULLIF(account_client_id,0), client_id) is the expression the
+        // rest of the factory code uses for this — ar_account_expr(),
+        // _partials/factory_ar.php:186. Inlined rather than requiring
+        // factory_ar.php, which this page does not otherwise pull in.
+        $acctExpr = static fn (string $p): string
+            => "COALESCE(NULLIF({$p}account_client_id, 0), {$p}client_id)";
         $dSt = $pdo->prepare(
             "SELECT a.id, b.quote_number
                FROM quotes a
-               JOIN quotes b ON b.client_id = a.client_id
-                            AND COALESCE(b.account_client_id, 0) = COALESCE(a.account_client_id, 0)
+               JOIN quotes b ON " . $acctExpr('b.') . " = " . $acctExpr('a.') . "
                             AND b.id <> a.id
                             AND b.status IN ($inPlaced)
                             AND b.remake_of_quote_id IS NULL
