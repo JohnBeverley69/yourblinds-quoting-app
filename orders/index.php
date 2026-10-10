@@ -51,11 +51,29 @@ $canCreateQuotes = $isAdmin || $_perms['can_create_quotes'];
 // A restricted user who can place orders also sees the direct orders
 // (quote-builder/new_order.php) — those are theirs to place and track.
 // Guarded so the list still loads before migrate_direct_orders.php has run.
-$mineSql = 'id IN (SELECT quote_id FROM appointments WHERE client_user_id = ?)';
+//
+// created_by_user_id is in here as well as the appointment check. Without it a
+// salesperson with "Create quotes" but not "View all customers' jobs" could not
+// find a quote they had built themselves until a fitting was booked on it: this
+// is the only quote/order list (quote-history/index.php is a 301 to it), so
+// Retail → Quotes and Retail → Orders both came back empty while
+// orders/pipeline.php:131 — filtering the same data as
+// "(q.created_by_user_id = ? OR EXISTS (appointments…))" — showed the quote as a
+// card, and opening it by URL worked because quote-builder/edit.php:70 treats
+// can_create_quotes as access. The list was the only screen denying it.
+//
+// Built as two explicit strings, bare and q.-prefixed, rather than one string
+// put through str_replace/preg_replace to add the prefix. That worked while the
+// clause began "id IN", and silently would not have once it begins
+// "created_by_user_id = ?".
+$mineBare   = '(created_by_user_id = ? OR id IN (SELECT quote_id FROM appointments WHERE client_user_id = ?))';
+$mineQ      = '(q.created_by_user_id = ? OR q.id IN (SELECT quote_id FROM appointments WHERE client_user_id = ?))';
+$mineParams = [(int) $user['user_id'], (int) $user['user_id']];
 if ($restrictToMine && !empty($_perms['can_create_orders'])) {
     try {
         db()->query('SELECT direct_order FROM quotes LIMIT 0');
-        $mineSql = '(' . $mineSql . ' OR direct_order = 1)';
+        $mineBare = '(' . $mineBare . ' OR direct_order = 1)';
+        $mineQ    = '(' . $mineQ . ' OR q.direct_order = 1)';
     } catch (Throwable $e) { /* pre-migration */ }
 }
 
@@ -155,8 +173,8 @@ if ($q !== '') {
     $params[] = $like; $params[] = $like; $params[] = $like;
 }
 if ($restrictToMine) {
-    $where[]  = str_replace(['(id IN', 'direct_order'], ['(q.id IN', 'q.direct_order'], preg_replace('/^id IN/', 'q.id IN', $mineSql));
-    $params[] = (int) $user['user_id'];
+    $where[] = $mineQ;
+    foreach ($mineParams as $mp) $params[] = $mp;
 }
 
 // Direct orders (new_order.php) label as "Draft order" — guarded pre-migration.
@@ -280,8 +298,8 @@ if ($rowIds) {
 $countWhere   = ['client_id = ?'];
 $countParams  = [$clientId];
 if ($restrictToMine) {
-    $countWhere[]   = $mineSql;
-    $countParams[]  = (int) $user['user_id'];
+    $countWhere[]  = $mineBare;
+    foreach ($mineParams as $mp) $countParams[] = $mp;
 }
 // Chip counts reflect the current (active/archived) view.
 if ($hasArchive) {
@@ -313,8 +331,8 @@ if ($hasArchive) {
     $azParams = array_merge([$clientId], $scopeStatuses);
     if (($tca = $typeClause('')) !== '') $azWhere[] = $tca;
     if ($restrictToMine) {
-        $azWhere[]  = $mineSql;
-        $azParams[] = (int) $user['user_id'];
+        $azWhere[]  = $mineBare;
+        foreach ($mineParams as $mp) $azParams[] = $mp;
     }
     $azSt = db()->prepare('SELECT COUNT(*) FROM quotes WHERE ' . implode(' AND ', $azWhere));
     $azSt->execute($azParams);
