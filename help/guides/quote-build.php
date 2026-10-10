@@ -476,7 +476,7 @@ return [
                       <div class="a-fade" style="--d:21.6s">Discount <small>(to agreed price)</small> <b>&minus;&pound;27.00</b></div>
                       <div>Subtotal <b><span class="swap"><span class="a-out" style="--d:20.4s">&pound;977.00</span><span class="a-fade" style="--d:20.4s">&pound;950.00</span></span></b></div>
                       <div>VAT (20.00%) <b><span class="swap"><span class="a-out" style="--d:20.4s">&pound;195.40</span><span class="a-fade" style="--d:20.4s">&pound;190.00</span></span></b></div>
-                      <div>' . $eye . ' Total <b><span class="swap"><span class="a-out" style="--d:20.4s">&pound;1,172.40</span><span class="a-fade" style="--d:20.4s">&pound;1,140.00</span></span></b></div>
+                      <div>Total <b><span class="swap"><span class="a-out" style="--d:20.4s">&pound;1,172.40</span><span class="a-fade" style="--d:20.4s">&pound;1,140.00</span></span></b></div>
                       <div class="ovrow">Override price <small>(agreed price ex VAT &mdash; VAT added on top; blank to clear)</small>
                         <span class="mini">&pound;<span class="ib a-ring" style="--d:16.4s"><span class="a-type" style="--d:17.4s;--ts:3;--tt:.4s">950</span></span><span class="btns a-press" style="--d:19.8s">Set</span></span></div>
                     </div>
@@ -551,7 +551,7 @@ return [
              &pound;77.00 each&rdquo;</em>. If you are allowed to see costs, the line can also show the <b>base</b>, the <b>extras</b>, the <b>markup</b> (or margin), the
              <b>discount</b> and any <b>trade discount</b> (the <b>base</b> is the price-table figure <em>before</em> the trade discount, so a
              trade line reads e.g. <em>&ldquo;base &pound;23.56 &middot; trade discount 15% &middot; &pound;20.03 per blind&rdquo;</em>, the buying price last) &mdash; but <b>those start hidden every time the page opens</b>, because quotes are often built
-             with the customer looking at the screen. A small, unlabelled <b>eye</b> icon at the end of the line (and another beside <b>Total</b>) shows
+             with the customer looking at the screen. A small, unlabelled <b>eye</b> icon at the end of the line shows
              them; tap it again to hide them. It is never remembered, so the next page starts hidden again.
              <b>Both save buttons stay greyed out until the box is green</b> &mdash; a blind with no price cannot go on a quote.</p>
 

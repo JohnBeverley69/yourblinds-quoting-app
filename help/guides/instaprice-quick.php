@@ -557,7 +557,7 @@ return [
              <b>Linked customer</b>) and press <b>Save details</b>. Until you do, the quotes list shows the placeholder name
              <b>&ldquo;Quick price (add customer)&rdquo;</b>. To put a haggled rate back, open the blind and use <b>Adjust price for this blind</b>
              (<b>Discount % (this blind)</b>, <b>Markup % (this blind)</b> &mdash; for admins and people allowed to see costs, and hidden there too until
-             you tap the eye in the price line or beside <b>Total</b>).</p>
+             you tap the eye in the price line).</p>
 
           <p><b>No &ldquo;Turn into full quote&rdquo; button?</b> It is only shown to admins and users with the <b>Create quotes</b> permission
              (<b>Setup &rarr; Users</b>). Everybody else can price all day but cannot keep it.</p>',

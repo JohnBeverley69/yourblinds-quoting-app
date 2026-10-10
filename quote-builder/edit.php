@@ -2055,7 +2055,16 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                                 </tr>
                             <?php endif; ?>
                             <tr class="totals-row grand">
-                                <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right"><?php if (($isAdmin || $_perms['can_view_costs']) && !$isDirectOrder) echo cost_reveal_button(); ?> <?= $isDirectOrder ? 'Order total <span style="font-weight:400;font-size:0.75rem;color:var(--text-faint)">(your price, ex VAT)</span>' : 'Total' ?></td>
+                                <?php
+                                // The cost eye lives in the green price bar of the Add blind
+                                // form (John, 2026-10-10: the Override price row already lets
+                                // you change the total). Beside Total it stays only when there
+                                // is a WT row to reveal — the one cost figure in this table,
+                                // which a quote with no Add blind form could not show otherwise.
+                                $totalsEye = ($wtEnabled || $wtAmount > 0.0049) && !$isDirectOrder
+                                          && ($isAdmin || $_perms['can_view_costs']);
+                                ?>
+                                <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right"><?php if ($totalsEye) echo cost_reveal_button(); ?> <?= $isDirectOrder ? 'Order total <span style="font-weight:400;font-size:0.75rem;color:var(--text-faint)">(your price, ex VAT)</span>' : 'Total' ?></td>
                                 <td class="num"><?= e(qb_fmt_money($quote['total'])) ?></td>
                                 <?php if ($editable): ?><td colspan="2"></td><?php endif; ?>
                             </tr>
