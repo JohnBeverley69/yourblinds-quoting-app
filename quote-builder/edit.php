@@ -2478,6 +2478,16 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                        . " from " . (string) $user['company_name'] . ":\n"
                        . $publicUrl;
         ?>
+        <?php
+        // Only for users who may actually send. email_pdf.php and
+        // change_status.php both require can_create_quotes for a 'sent' target
+        // (qb_target_permission('sent')), so a fitter who can merely open the
+        // quote was being shown "Email PDF + accept link", the public link and
+        // the WhatsApp button — all of which put the quote in front of the
+        // customer and move it on.
+        $canSendQuote = qb_user_can_change_to($isAdmin, $_perms, 'sent');
+        ?>
+        <?php if ($canSendQuote): ?>
         <section class="section">
             <div class="section-header">
                 <h2 class="section-title">Send to customer</h2>
@@ -2530,6 +2540,7 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                 </small>
             </form>
         </section>
+        <?php endif; /* $canSendQuote */ ?>
 
         <script>
         (function () {
