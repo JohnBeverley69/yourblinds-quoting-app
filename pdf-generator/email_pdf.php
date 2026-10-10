@@ -27,6 +27,19 @@ $quote    = qb_load_quote_or_404($id, (int) $user['client_id']);
 qb_require_quote_access($quote, $user, current_user_permissions());
 $backUrl  = '/quote-builder/edit.php?id=' . $id;
 
+// Access to READ a quote is not permission to SEND it. qb_require_quote_access()
+// admits a fitter who merely has an appointment on the job, and this handler
+// emails the quote to the customer and flips draft -> sent (line 121). Sending
+// is the same act change_status.php guards with
+// qb_user_can_change_to($isAdmin, $perms, 'sent'), and
+// qb_target_permission('sent') already names the permission it needs:
+// can_create_quotes. This file simply never consulted it, so a view-only user
+// could put a quote in front of the customer and move it on.
+$_epPerms = current_user_permissions();
+if (!qb_user_can_change_to(($user['role'] ?? '') === 'admin', $_epPerms, 'sent')) {
+    qb_flash_redirect($backUrl, 'error', 'You don’t have permission to send quotes to customers.');
+}
+
 // An email queued on a tablet with no signal carries a one-off client_ref. If the
 // signal dropped after we sent it but before the tablet heard back, the tablet
 // sends it again: don't email the customer twice.
