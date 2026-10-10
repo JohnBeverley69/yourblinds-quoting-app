@@ -667,6 +667,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'update_meta') {
                     $u->execute([$newBand, $productIdOfTable, $clientId, $oldBand]);
                 }
                 $cascaded = $u->rowCount();
+
+                // Option choices scoped to bands (Tape Width shown only on the
+                // tape bands) hold the band NAME too. Without this, renaming
+                // "50mm Tape" to "Tape" hid every tape-only choice — including
+                // the required Tape Width — on exactly the band it was for.
+                // Choice scopes aren't per system, so leave them while another
+                // table on the product still carries the old name.
+                $stillUsed = $pdo->prepare(
+                    'SELECT 1 FROM price_tables
+                      WHERE product_id = ? AND client_id = ? AND band_code = ? AND id <> ?
+                      LIMIT 1'
+                );
+                $stillUsed->execute([$productIdOfTable, $clientId, $oldBand, $tableId]);
+                if (!$stillUsed->fetchColumn()) {
+                    try {
+                        $scope = 'SELECT c.id FROM product_extra_choices c
+                                    JOIN product_extras pe ON pe.id = c.product_extra_id
+                                   WHERE pe.product_id = ? AND pe.client_id = ?';
+                        // IGNORE: a choice already scoped to both names keeps one row.
+                        $pdo->prepare(
+                            "UPDATE IGNORE product_extra_choice_bands SET band_code = ?
+                              WHERE band_code = ? AND choice_id IN (SELECT id FROM ($scope) s)"
+                        )->execute([$newBand, $oldBand, $productIdOfTable, $clientId]);
+                        $pdo->prepare(
+                            "DELETE FROM product_extra_choice_bands
+                              WHERE band_code = ? AND BINARY band_code <> BINARY ?
+                                AND choice_id IN (SELECT id FROM ($scope) s)"
+                        )->execute([$oldBand, $newBand, $productIdOfTable, $clientId]);
+                    } catch (Throwable $e) {
+                        // No band-scoping table on this schema — nothing to carry.
+                    }
+                }
             }
 
             $pdo->commit();
