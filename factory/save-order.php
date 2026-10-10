@@ -138,6 +138,30 @@ if (isset($_POST['del_order'])) {
         // Remove the order's calendar appointments (e.g. the pending fitting) so
         // deleting the order doesn't leave phantom fittings on the account's calendar.
         $pdo->prepare('DELETE FROM appointments WHERE quote_id = ?')->execute([$qid]);
+        // If this order IS a remake, put its remake back in the waiting queue
+        // rather than stranding it. factory_remakes has no FK to quotes and the
+        // only code that ever deleted from it is the whole-account delete, so
+        // deleting a remake order left the row at status='approved' with
+        // remake_quote_id pointing at a dead id. rm_list('open') LEFT JOINs that
+        // quote, so COALESCE(rq.fulfilment_stage,'') <> 'dispatched' stayed true
+        // for ever: a permanent In-progress row reading "—", counted by the
+        // console tile, and unreachable — rm_approve() only accepts 'requested',
+        // so it could never be approved or declined again either.
+        //
+        // Back to 'requested' with the decision cleared, which is the documented
+        // initial state (migrate_remakes.php:66). The account's own side — the
+        // request, its reason, note, photo and the blinds ticked — is untouched,
+        // so the office can approve it again or decline it. Deleting the order
+        // un-approves the remake; it doesn't discard what the account reported.
+        try {
+            $pdo->prepare(
+                "UPDATE factory_remakes
+                    SET status = 'requested', remake_quote_id = NULL,
+                        charge_mode = NULL, charge_amount = 0, supplier_name = NULL,
+                        due_date = NULL, decided_by_user_id = NULL, decided_at = NULL
+                  WHERE remake_quote_id = ? AND factory_client_id = ?"
+            )->execute([$qid, $MASTER]);
+        } catch (Throwable $e) { /* remakes not migrated — nothing to put back */ }
         $pdo->prepare('DELETE FROM quotes WHERE id = ?')->execute([$qid]);
         $pdo->commit();
     } catch (Throwable $e) { if ($pdo->inTransaction()) $pdo->rollBack(); $fail('Could not delete order: ' . $e->getMessage()); }
