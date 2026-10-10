@@ -71,8 +71,17 @@ if ($ready) {
 }
 $waitingCount = count($lists['waiting']);
 // Overview shows "done" for the last 30 days only (the Done tab has them all).
+// Measured from when the remake FINISHED — rm_list()'s finished_at: the remake
+// order's dispatch date, or the decision date for a decline. It used to read
+// decided_at for both, i.e. the APPROVAL date, so a remake approved in August
+// and dispatched yesterday was missing from "In progress" (it's dispatched) AND
+// from "Done in the last 30 days" (approved too long ago) — it showed nowhere
+// on the Overview at all.
 $recentFrom = date('Y-m-d', strtotime('-30 days'));
-$recentDone = array_values(array_filter($lists['done'], static fn ($r) => substr((string) ($r['decided_at'] ?: $r['created_at']), 0, 10) >= $recentFrom));
+$recentDone = array_values(array_filter(
+    $lists['done'],
+    static fn ($r) => substr((string) ($r['finished_at'] ?: ($r['decided_at'] ?: $r['created_at'])), 0, 10) >= $recentFrom
+));
 
 // This month at a glance (approved remakes raised this month).
 $monthNow = ['n' => 0, 'blinds' => 0, 'cost' => 0.0];

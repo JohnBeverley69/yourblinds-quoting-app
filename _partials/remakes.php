@@ -41,6 +41,22 @@ function rm_ready(PDO $pdo): bool
     return $ok;
 }
 
+/**
+ * Is the wholesale delivery-note table there? rm_list() reads a remake order's
+ * dispatch date out of it, and the Remakes page must still work on an install
+ * that has remakes but has not run migrate_ar_delivery_notes.php.
+ */
+function rm_dn_ready(PDO $pdo): bool
+{
+    static $ok = null;
+    if ($ok !== null) return $ok;
+    try {
+        $pdo->query('SELECT dispatched_at FROM factory_ar_delivery_notes LIMIT 0');
+        $ok = true;
+    } catch (Throwable $e) { $ok = false; }
+    return $ok;
+}
+
 /** Who-pays choices => label. */
 function rm_charge_modes(): array
 {
@@ -628,8 +644,21 @@ function rm_list(PDO $pdo, int $factory, string $view = 'all', string $from = ''
     // longer exists" — while rm_waiting_count() does not join at all, so the
     // sidebar kept showing "Remakes 1" for ever. The badge could only be
     // cleared with SQL.
+    // When a remake FINISHED, as opposed to when it was decided. "Done" means
+    // declined, or approved and the remake order dispatched — and the dispatch
+    // artifact is the delivery note (os_mark_dispatched_dn guarantees one
+    // whichever path dispatched it), so its dispatched_at is the only recorded
+    // completion time. decided_at = the APPROVAL date, which is why a remake
+    // approved in August and sent yesterday fell out of the Overview's "Done in
+    // the last 30 days" while also being too late for "In progress".
+    // Falls back to decided_at for a decline, and to created_at for neither.
+    $finished = rm_dn_ready($pdo)
+        ? "COALESCE((SELECT dn.dispatched_at FROM factory_ar_delivery_notes dn
+                      WHERE dn.source_quote_id = r.remake_quote_id AND dn.status = 'dispatched'
+                   ORDER BY dn.dispatched_at DESC, dn.id DESC LIMIT 1), r.decided_at, r.created_at)"
+        : 'COALESCE(r.decided_at, r.created_at)';
     $st = $pdo->prepare("SELECT r.*, COALESCE(q.quote_number, CONCAT('#', r.source_quote_id, ' (order deleted)')) AS source_number, q.customer_reference AS source_ref,
-                                rq.quote_number AS remake_number, rq.fulfilment_stage AS remake_stage,
+                                rq.quote_number AS remake_number, rq.fulfilment_stage AS remake_stage, $finished AS finished_at,
                                 c.company_name AS account_name,
                                 (SELECT COALESCE(SUM(i.quantity),0) FROM factory_remake_items i WHERE i.remake_id = r.id) AS blinds
                            FROM factory_remakes r
