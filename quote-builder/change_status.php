@@ -132,7 +132,17 @@ try {
     // failing just means "skip the seed", not "500 the whole accept
     // action" — the trade user can still set the deposit manually
     // on the quote Edit page once the migrations are deployed.
-    if ($target === 'accepted' && ($quote['deposit_amount'] ?? null) === null) {
+    // Not on a direct order. There is no customer deposit to collect: the
+    // client is buying from the factory, and the figure this would seed is a
+    // percentage of their own BUYING price. The order screen already hides the
+    // deposit row for them (edit.php:2068 `$predDep > 0 && !$isDirectOrder`),
+    // but Order history doesn't — orders/index.php:642 renders "£X due" in
+    // amber for any order with a deposit and no deposit_paid_at — so placing a
+    // direct order produced a phantom receivable against an order with no
+    // customer and no payment panel, and fed the Accounts outstanding sum with
+    // it on pre-migration schemas.
+    if ($target === 'accepted' && ($quote['deposit_amount'] ?? null) === null
+        && !qb_is_direct_order($quote)) {
         try {
             // Try the full multi-mode lookup first.
             try {
