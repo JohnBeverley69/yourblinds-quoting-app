@@ -96,6 +96,20 @@ $activeNav = 'factory-orders';
 <div class="app-shell">
 <?php require __DIR__ . '/../_partials/sidebar.php'; ?>
 <main class="app-main">
+  <?php
+  // Reads the flash. Stage 5 (#922) pointed orders/index.php at this page with
+  // factory_console_redirect(), so a Console user never lands on the screen that
+  // used to show it: quote-builder/delete.php sets flash_success and redirects
+  // to /orders/index.php, which bounces here — and this page had no flash
+  // handling at all. The confirmation sat in the session and then appeared on
+  // whatever console page they opened next, so deleting a quote looked like it
+  // had done nothing and then "Quote BEV-2026-0031 deleted." turned up ten
+  // minutes later on Remakes. Same two lines as factory/calendar.php:83.
+  $flashOk  = (string) ($_SESSION['flash_success'] ?? ''); unset($_SESSION['flash_success']);
+  $flashErr = (string) ($_SESSION['flash_error']   ?? ''); unset($_SESSION['flash_error']);
+  ?>
+  <?php if ($flashOk  !== ''): ?><div class="alert alert-success" role="status"><?= e($flashOk) ?></div><?php endif; ?>
+  <?php if ($flashErr !== ''): ?><div class="alert alert-error"   role="alert"><?= e($flashErr) ?></div><?php endif; ?>
   <div class="page-header">
     <div>
       <h1 class="page-title">Orders</h1>
