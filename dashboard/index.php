@@ -467,14 +467,26 @@ if ($canSeeProfit) {
     if ($row) {
         $sell = (float) $row['sell_total'] - $overrideDisc;
         $cost = (float) $row['cost_basis'];
+        // One clamped figure drove three unclamped ones. 'margin' was
+        // max(0.0, $sell - $cost) while margin_pct and margin_per_job used the
+        // raw difference, and the panel renders all four together — so a
+        // loss-making period read "£0.00 gross profit · -6.7% margin · -£75 per
+        // job · £9,600 cost basis": three numbers that contradict each other and
+        // a cost basis that doesn't reconcile to the margin shown beside it.
+        //
+        // Clamped once, and the percentage and per-job figures derive from the
+        // same value, so the tile is internally consistent whatever the period
+        // did. (Whether a loss should show as a loss rather than £0.00 is a
+        // separate question for John — this only stops the four disagreeing.)
+        $margin = max(0.0, $sell - $cost);
         $marginData = [
-            'margin'         => max(0.0, $sell - $cost),
+            'margin'         => $margin,
             'cost_basis'     => $cost,
             'sell_total'     => $sell,
             'jobs'           => (int) $row['jobs'],
-            'margin_pct'     => $sell > 0 ? (($sell - $cost) / $sell) * 100 : null,
+            'margin_pct'     => $sell > 0 ? ($margin / $sell) * 100 : null,
             'margin_per_job' => (int) $row['jobs'] > 0
-                                ? ($sell - $cost) / (int) $row['jobs']
+                                ? $margin / (int) $row['jobs']
                                 : null,
         ];
     }
