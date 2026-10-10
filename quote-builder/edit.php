@@ -987,7 +987,21 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                 <?php
                     // Invoice the customer — available once the job is an order
                     // (ordered onward). Emails the invoice + advances to Invoiced.
+                    //
+                    // Never on a direct order. That order is priced at the
+                    // client's BUYING price (add_item.php:160 and
+                    // update_item.php:162 force both overrides to 0) with
+                    // vat_percent forced to 0 (new_order.php:88), and there is no
+                    // customer of ours to invoice — the factory bills the client.
+                    // Every other customer-money control here is already guarded
+                    // this way: the Payments panel (2128, 2266) and the deposit
+                    // row (2068). This one wasn't, so "🧾 Send invoice" emailed
+                    // the client's own retail customer an invoice for the
+                    // client's wholesale cost, ex VAT, as the amount due — and
+                    // moved the order to Invoiced. Same exposure as the
+                    // auto-receipt fixed in #956, by the manual button.
                     $canInvoice = ($isAdmin || !empty($_perms['can_create_orders']))
+                        && !$isDirectOrder
                         && in_array((string) $quote['status'], ['ordered', 'fitted', 'invoiced', 'paid'], true);
                 ?>
                 <?php if ($canInvoice): ?>
