@@ -506,7 +506,7 @@ return [
       <li><strong>Same system.</strong> Tables belong to one system. A fabric quoted on <em>Motorised</em> needs a Band B table on <em>Motorised</em>, not just on <em>Standard</em>.</li>
       <li><strong>The table must have prices in it.</strong> Empty grids get created in batches and are easy to leave blank — the price-tables list shows how many are filled.</li>
       </ul>
-      <p>Two other messages mean something different. <em>“Size … exceeds the largest cell in this price table”</em> means the blind is bigger than your grid goes — extend the table or re-import a fuller sheet. <em>“No price table set up for … ”</em> on a no-fabric product means that system has no grid at all.</p>
+      <p>Two other messages mean something different. <em>“No price for this size — … is outside this price table”</em> means the blind is bigger than your grid goes — extend the table or re-import a fuller sheet. <em>“No price table set up for … ”</em> on a no-fabric product means that system has no grid at all.</p>
       <p>Whatever you change, re-pick the fabric on the quote line so it prices again.</p>'],
 
     ['admin', 'Products & pricing', 'How do I add choices like control side or lining?', 'options extras control side lining bottom weight bracket colour choices required multiple per metre percent surcharge quantity',

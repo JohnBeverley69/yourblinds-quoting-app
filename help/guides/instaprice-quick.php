@@ -424,7 +424,7 @@ return [
                       <div class="fg q"><span class="cap">Qty</span><span class="ib"><span class="gph">Qty</span></span></div></div>
                       <div class="echo">Using 3200 &times; 1400 mm</div></div>
                     <div>
-                      <div class="pp err a-pop" style="--d:5.4s">Size 3200 &times; 1400 mm exceeds the largest cell in this price table.</div>
+                      <div class="pp err a-pop" style="--d:5.4s">No price for this size &mdash; 3200 &times; 1400 mm is outside this price table.</div>
                       <div class="fact"><span class="btnp off a-ring" style="--d:12.4s">Turn into full quote &rarr;</span><span class="btns">Reset</span></div>
                     </div>
                   </div>
@@ -531,7 +531,7 @@ return [
           <div class="oops"><b>What the panel says, and what to do about it:</b>
              <ul style="margin:.4rem 0 0;padding-left:1.15rem">
                <li><code>Still need: fabric, drop.</code> &mdash; nothing wrong; keep filling in.</li>
-               <li><code>Size 3200 &times; 1400 mm exceeds the largest cell in this price table.</code> &mdash; the band&rsquo;s grid stops short of that
+               <li><code>No price for this size &mdash; 3200 &times; 1400 mm is outside this price table.</code> &mdash; the band&rsquo;s grid stops short of that
                    size. Check the size and the unit; if they are right, the table needs extending under <b>Products</b>.</li>
                <li><code>No price table for &hellip;</code> &mdash; that band has <b>no grid at all</b> on that system yet.</li>
                <li><code>Could not get a price &mdash; try again.</code> &mdash; the connection blinked. Change something and it re-prices.</li>
@@ -574,7 +574,7 @@ return [
             ['10', 'The amber rates',                'The two amber rates are yours to play with. They start on the rates saved for this product and system. Type over them, and the sum below changes as you type. That is handy when someone is haggling, and you want to know what another five percent really costs you. It is a one-off. Nothing is saved back, and it resets when you change the product.', 10],
             ['11', 'More than one',                  'If they want more than one, type it in the Qty box. Leave it empty, and it counts as one. The big Sell price becomes the total for all of them. And a small grey line underneath shows the price of each one. Two times seventy seven pounds, each.', 11],
             ['12', 'Who sees what',                  'Two lines depend on who you are. If you are allowed to see costs, the eye also shows the Mark up box, and sometimes a green Trade discount line at the top. That green line is your own buying discount from your supplier. It is already inside the Price, so it is just for your information. People without cost access never see either of them, and have no eye.', 12],
-            ['13', 'When it won\'t price',            'If a size is bigger than the price table goes, InstaPrice will not guess. The panel turns red, and tells you why: the size exceeds the largest cell in this price table. The quote button goes grey until it is fixed. So check the size, and the unit, first. If they are right, the price table needs extending, under Products.', 13],
+            ['13', 'When it won\'t price',            'If a size is bigger than the price table goes, InstaPrice will not guess. The panel turns red, and tells you why: no price for this size, because it is outside the price table. The quote button goes grey until it is fixed. So check the size, and the unit, first. If they are right, the price table needs extending, under Products.', 13],
             ['14', 'Turn into full quote',           'When they say yes, click Turn into full quote. Be clear what that does. It makes a real draft quote, straight away, with its own quote number. It copies the product, fabric, options, size and quantity across. So press it to keep a price, not to see what happens. If you have no such button, you need the Create quotes permission.', 14],
             ['15', 'Where you land',                 'You land in the quote builder. An amber bar says the quote has no customer yet, and the customer form is open and empty, ready to fill in. One thing does not come across: any rate you typed over while haggling. The line uses the usual rates. To change one blind, open it, tap the small eye, and use Adjust price for this blind.', 15],
         ],
