@@ -47,7 +47,7 @@ if ($restrictToMine && $hasQuotes) {
     $created    = array_map('intval', (array) ($_SESSION['cm_created'] ?? []));
     $createdSql = $created ? ' OR c.id IN (' . implode(',', $created) . ')' : '';
     $permClause = ' AND (' . cm_mine_sql() . $createdSql . ')';
-    $permParams = [$myUserId, $myUserId];
+    $permParams = cm_mine_params($myUserId);
 }
 
 if ($q !== '') {

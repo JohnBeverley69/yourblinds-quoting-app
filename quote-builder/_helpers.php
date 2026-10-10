@@ -4,6 +4,7 @@ declare(strict_types=1);
 // Quote-builder helpers — loaded by every page in this module. Caller must
 // have already required bootstrap.php + auth/middleware.php.
 
+require_once __DIR__ . '/../_partials/customer_access.php';
 require_once __DIR__ . '/../_partials/payments_ledger.php';
 
 /**
@@ -1508,6 +1509,11 @@ function qb_create_quote_from_fields(PDO $pdo, int $clientId, array $f, int $app
                 $emptyToNull((string) $f['end_customer_postcode']),
             ]);
             $f['customer_id'] = (int) $pdo->lastInsertId();
+            // Same stamp as the other two creation paths, so the restricted
+            // user who typed this customer in can reach it again later —
+            // the quote builder's auto-created customers were previously
+            // unreachable even in the same session (customer_access.php).
+            cm_remember_created((int) $f['customer_id']);
         }
 
         // Snapshot the tenant's VAT rate at the time the quote is created.
