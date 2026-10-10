@@ -376,6 +376,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    // ---- Rename a rule --------------------------------------------------------
+    // The name IS the identity: other rules reference it inside their formulas,
+    // and worksheet fields print it as var:<Name>. bv_rename_variable() takes
+    // all of that with it, in one transaction, including the worksheets of any
+    // product set to "Same as this one".
+    if (($rnOld = trim((string) ($_POST['renamevar'] ?? ''))) !== '') {
+        $rnNew = trim((string) ($_POST['renameto'] ?? ''));
+        try {
+            $moved = bv_rename_variable($pdo, $productId, $rnOld, $rnNew);
+            $also = [];
+            if ($moved['rules']  > 0) $also[] = $moved['rules']  . ' other rule'      . ($moved['rules']  === 1 ? '' : 's');
+            if ($moved['fields'] > 0) $also[] = $moved['fields'] . ' worksheet field' . ($moved['fields'] === 1 ? '' : 's');
+            $_SESSION['flash_success'] = "Renamed “{$rnOld}” to “{$rnNew}”."
+                . ($also ? ' Updated ' . implode(' and ', $also) . ' that named it.' : '');
+        } catch (Throwable $e) {
+            $_SESSION['flash_error'] = 'Could not rename: ' . $e->getMessage();
+        }
+        header('Location: /factory/build-rules-v2.php?product_id=' . $productId); exit;
+    }
+
     // ---- Delete a rule --------------------------------------------------------
     if (($delName = trim((string) ($_POST['deletevar'] ?? ''))) !== '') {
         try {
@@ -805,6 +825,13 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
   .brv2 .rmbtn{ margin-left:auto; font:inherit; font-size:.7rem; font-weight:600; color:var(--faint);
       background:none; border:1px solid var(--line); border-radius:6px; padding:.12rem .5rem; cursor:pointer; }
   .brv2 .rmbtn:hover{ color:#c0392b; border-color:#e2a3a0; }
+  /* Rename sits with Remove at the right of the rule's heading. .rmbtn carries
+     margin-left:auto to get there; when Rename is in front of it, Rename takes
+     that job and the pair stays together. */
+  .brv2 .rnbtn{ margin-left:auto; font:inherit; font-size:.7rem; font-weight:600; color:var(--faint);
+      background:none; border:1px solid var(--line); border-radius:6px; padding:.12rem .5rem; cursor:pointer; }
+  .brv2 .rnbtn:hover{ color:#1f6feb; border-color:#9fc3f5; }
+  .brv2 .rnbtn + .rmbtn{ margin-left:.35rem; }
   .brv2 .calcedit-head{ display:flex; align-items:center; gap:.45rem; }
   .brv2 table{ width:100%; border-collapse:collapse; margin-top:.7rem; font-size:.9rem; }
   .brv2 th{ text-align:left; font-size:.68rem; letter-spacing:.05em; text-transform:uppercase; color:var(--faint);
@@ -951,6 +978,16 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
       edit them there and both follow. Systems are matched by name (e.g. “SlimLine” uses “SlimLine Vert”).</div>
   <?php endif; endif; ?>
   <script>
+  function rnVar(btn, name){
+    var to = prompt('Rename "'+name+'" to what?\n\nLetters, digits and underscores only. Every rule and worksheet field that names it is updated too.', name);
+    if(to === null) return;
+    to = to.trim();
+    if(to === '' || to === name) return;
+    var f = btn.form; if(!f) return;
+    var a = document.createElement('input'); a.type='hidden'; a.name='renamevar'; a.value=name;
+    var b = document.createElement('input'); b.type='hidden'; b.name='renameto';  b.value=to;
+    f.appendChild(a); f.appendChild(b); f.submit();
+  }
   function rmVar(btn, name){
     if(!confirm('Remove "'+name+'"? This deletes the rule from this product.')) return;
     var f = btn.form; if(!f) return;
@@ -983,6 +1020,7 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
             <span class="cut-def">= <span class="m"><?= $e2($c['base']) ?></span> <?= $def ?></span>
             <span class="dirtag <?= $tagc ?>"><?= $e2($tag) ?></span>
             <span class="code-name">(<?= $e2($c['name']) ?>)</span>
+            <button type="button" class="rnbtn" onclick="rnVar(this,'<?= $e2($c['name']) ?>')">Rename</button>
             <button type="button" class="rmbtn" onclick="rmVar(this,'<?= $e2($c['name']) ?>')">Remove</button>
           </div>
           <div class="scroll">
@@ -1024,7 +1062,7 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
         <div class="cut">
         <?php foreach ($calcs as $cc): ?>
           <div class="calcedit">
-            <div class="calcedit-head"><span class="cut-name"><?= $e2($cc['friendly']) ?></span> <span class="code-name">(<?= $e2($cc['name']) ?>)</span><button type="button" class="rmbtn" onclick="rmVar(this,'<?= $e2($cc['name']) ?>')">Remove</button></div>
+            <div class="calcedit-head"><span class="cut-name"><?= $e2($cc['friendly']) ?></span> <span class="code-name">(<?= $e2($cc['name']) ?>)</span><button type="button" class="rnbtn" onclick="rnVar(this,'<?= $e2($cc['name']) ?>')">Rename</button><button type="button" class="rmbtn" onclick="rmVar(this,'<?= $e2($cc['name']) ?>')">Remove</button></div>
             <?php foreach ($cc['rows'] as $ri => $r):
               $ctx = [];
               foreach ((array) ($r['cells'] ?? []) as $cv) { $cv = trim((string) $cv); if ($cv !== '') $ctx[] = $cv; }
