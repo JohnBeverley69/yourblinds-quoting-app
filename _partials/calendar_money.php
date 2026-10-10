@@ -34,12 +34,37 @@ if (!function_exists('calendar_money_for_quotes')) {
         $out = [];
 
         try {
+            // A direct order's `total` is the client's BUYING price, not anything
+            // their customer owes — and placing one does create a fitting, because
+            // qb_create_appointment_from_quote() only bails for a factory client or
+            // sale_type = 'trade', while a direct order is stamped 'retail'. So the
+            // card read "£240.00 · paid £0.00 · bal £240.00" on a job the customer
+            // is paying £900 for, and the fitter asked for the wrong amount at the
+            // door while the Dashboard counted the same order as £900.
+            //
+            // sold_for_gross is the matching figure: quotes.total is subtotal + VAT
+            // (_helpers.php:267), i.e. gross, and gross is what the fitter collects.
+            // /accounts sums sold_for_net because it totals net values; this card
+            // shows one job's door figure, so it uses gross.
+            //
+            // A direct order with no Sold for entered has no customer figure at
+            // all, so it is left out entirely — calendar_money_html() returns ''
+            // for a missing entry, which suppresses the money line rather than
+            // printing a misleading £0.00.
+            $dirSel = 'total';
+            $soldOk = false;
+            try { $pdo->query('SELECT sold_for_gross FROM quotes LIMIT 0'); $soldOk = true; }
+            catch (Throwable $e) { /* pre-migration: no direct orders */ }
+            if ($soldOk) {
+                $dirSel = "CASE WHEN COALESCE(direct_order, 0) = 1 THEN sold_for_gross ELSE total END";
+            }
             $qs = $pdo->prepare(
-                "SELECT id, total, deposit_amount, deposit_paid_at, status
+                "SELECT id, $dirSel AS total, deposit_amount, deposit_paid_at, status
                    FROM quotes WHERE client_id = ? AND id IN ($place)"
             );
             $qs->execute(array_merge([$clientId], $ids));
             foreach ($qs->fetchAll() as $r) {
+                if ($r['total'] === null) continue;   // direct order, no Sold for yet
                 $out[(int) $r['id']] = [
                     'total'    => (float) $r['total'],
                     // 'deposit' = display figure; 'deposit_extra' = what to ADD
