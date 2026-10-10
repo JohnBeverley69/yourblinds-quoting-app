@@ -142,28 +142,59 @@ function qb_client_vat_percent(PDO $pdo, int $clientId): float
 }
 
 /**
- * Why the factory's own paperwork blocks changing this order, or '' when it
- * doesn't. Shared by qb_delete_block_reason() and the reopen-to-draft guard in
- * change_status.php, so the two can't drift the way the tenant and factory
- * delete paths did (#946, #958).
+ * The factory-paperwork tests that lock an order, as
+ * slug => ['sql' => a one-parameter existence test, 'short' => the clause the
+ * factory's own message uses, 'long' => the sentence the tenant's uses]. ONE
+ * definition, read by qb_factory_paperwork_block() (the tenant's delete and the
+ * reopen-to-draft guard) and by del_order in factory/save-order.php, which kept
+ * its own copy of the same two tests. That drift between the tenant and factory
+ * delete paths had to be fixed twice already (#946, #958), so the tests now live
+ * in one place with nowhere left to drift apart.
  *
  * Both are things the tenant can neither see nor put right, and both have to be
- * unpicked by the factory — a credit note, or cancelling the delivery note.
+ * unpicked by the factory — voiding the invoice, or cancelling the delivery note.
+ *
+ * A VOIDED invoice is NOT paperwork. Voiding is how an invoice raised in error is
+ * unpicked — ar_void_invoice() releases its payments and voids the credit notes
+ * against it — but it deliberately leaves the factory_ar_invoice_orders link row
+ * in place, and both guards used to test that link table alone with no reference
+ * to the invoice's status. So "it has been invoiced" stayed true for ever: an
+ * order invoiced by mistake could never be deleted or reopened by anyone, by any
+ * route, even once the invoice was void. The delivery-note half was always
+ * status-aware and a delivery note can be cancelled from Wholesale, so the
+ * invoice test was the only one-way door.
+ */
+function qb_factory_paperwork_tests(): array
+{
+    return [
+        'invoiced' => [
+            'sql'   => 'SELECT 1 FROM factory_ar_invoice_orders io
+                          JOIN factory_ar_invoices i ON i.id = io.invoice_id
+                         WHERE io.quote_id = ? AND i.status <> \'void\' LIMIT 1',
+            'short' => 'it has been invoiced',
+            'long'  => 'The factory has invoiced this order, so it can’t be %s — ask them for a credit note.',
+        ],
+        'delivery_note' => [
+            'sql'   => 'SELECT 1 FROM factory_ar_delivery_notes WHERE source_quote_id = ? AND status <> \'cancelled\' LIMIT 1',
+            'short' => 'it has a delivery note',
+            'long'  => 'The factory has raised a delivery note for this order, so it can’t be %s — contact them to cancel it.',
+        ],
+    ];
+}
+
+/**
+ * Why the factory's own paperwork blocks changing this order, or '' when it
+ * doesn't — the tenant-facing wording of qb_factory_paperwork_tests().
  * Guarded per lookup for installs where the AR tables were never migrated.
  */
 function qb_factory_paperwork_block(PDO $pdo, int $quoteId, string $verb = 'deleted'): string
 {
     if ($quoteId <= 0) return '';
-    foreach ([
-        'SELECT 1 FROM factory_ar_invoice_orders WHERE quote_id = ? LIMIT 1'
-            => 'The factory has invoiced this order, so it can’t be ' . $verb . ' — ask them for a credit note.',
-        'SELECT 1 FROM factory_ar_delivery_notes WHERE source_quote_id = ? AND status <> \'cancelled\' LIMIT 1'
-            => 'The factory has raised a delivery note for this order, so it can’t be ' . $verb . ' — contact them to cancel it.',
-    ] as $sql => $why) {
+    foreach (qb_factory_paperwork_tests() as $t) {
         try {
-            $st = $pdo->prepare($sql);
+            $st = $pdo->prepare($t['sql']);
             $st->execute([$quoteId]);
-            if ($st->fetchColumn()) return $why;
+            if ($st->fetchColumn()) return sprintf($t['long'], $verb);
         } catch (Throwable $e) { /* table not migrated on this install */ }
     }
     return '';

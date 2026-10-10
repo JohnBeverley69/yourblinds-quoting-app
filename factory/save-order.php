@@ -114,12 +114,18 @@ if (isset($_POST['del_order'])) {
     // Never delete an order that has paperwork or money behind it: a dispatched
     // order was deleted in the go-live test and left a delivery note that could
     // never be invoiced. Those need a credit note / cancellation, not a delete.
-    foreach ([
-        'SELECT 1 FROM factory_ar_delivery_notes WHERE source_quote_id = ? AND status <> \'cancelled\' LIMIT 1'
-            => 'it has a delivery note',
-        'SELECT 1 FROM factory_ar_invoice_orders WHERE quote_id = ? LIMIT 1' => 'it has been invoiced',
-        'SELECT 1 FROM payments WHERE quote_id = ? LIMIT 1'                  => 'payments are recorded against it',
-    ] as $sql => $why) {
+    //
+    // The invoice and delivery-note tests come from qb_factory_paperwork_tests()
+    // rather than a copy kept here, so this and the tenant's own delete guard
+    // can't drift again (#946, #958 were the same drift twice). Voiding an
+    // invoice now releases the order — see that helper.
+    $tests = [];
+    foreach (qb_factory_paperwork_tests() as $t) { $tests[$t['sql']] = $t['short']; }
+    // Retail deposits taken against the order. Not part of the shared tests: the
+    // tenant's own guard has no business refusing on money it took itself, and
+    // `payments` has no voided_at — a retail payment is deleted, not voided.
+    $tests['SELECT 1 FROM payments WHERE quote_id = ? LIMIT 1'] = 'payments are recorded against it';
+    foreach ($tests as $sql => $why) {
         try {
             $chk = $pdo->prepare($sql);
             $chk->execute([$qid]);
