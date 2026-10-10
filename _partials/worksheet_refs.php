@@ -198,3 +198,140 @@ if (!function_exists('ws_orphan_report')) {
         return $out;
     }
 }
+
+if (!function_exists('bv_replace_identifier')) {
+    /**
+     * Rewrite one identifier in a build-rule formula, leaving quoted strings
+     * alone. BESTFIT("vogue_split_cord", Width, 1) and
+     * Trucks & " x " & Truck_Size & "mm" both carry text that must not be
+     * touched, so the formula is split on double-quoted runs and only the code
+     * between them is rewritten.
+     *
+     * Word boundaries treat "_" as part of a word, so renaming Trucks leaves
+     * Truck_Size and Truck_Spec alone, which is what you want.
+     */
+    function bv_replace_identifier(string $formula, string $old, string $new): string
+    {
+        if ($old === '' || $new === '' || $old === $new) return $formula;
+        // The formula language writes a quote inside a string by doubling it
+        // ("" — see _partials/formula_engine.php); there are no backslash
+        // escapes at all. So splitting on the quote character alternates
+        // reliably: even pieces are code, odd pieces are string text. A ""
+        // escape lands as an empty even piece, which rewrites to nothing.
+        $segs = explode('"', $formula);
+        $pat  = '/\b' . preg_quote($old, '/') . '\b/u';
+        foreach ($segs as $i => $seg) {
+            if ($i % 2 === 0) $segs[$i] = (string) preg_replace($pat, $new, $seg);
+        }
+        return implode('"', $segs);
+    }
+}
+
+if (!function_exists('bv_rename_variable')) {
+    /**
+     * Rename a build variable and take everything that names it along.
+     *
+     * A build variable is identified by its NAME everywhere — build-rules-v2
+     * addresses rows as (product_id, name), other rules reference it inside
+     * their formulas as a bare identifier, and worksheet fields print it as
+     * var:<Name>. Nothing is an id, so a rename done in one place alone leaves
+     * the rest pointing at a name that no longer exists, and the only symptom
+     * is a ticket printing a caption with no value.
+     *
+     * So this rewrites, in one transaction:
+     *   1. the variable's own row
+     *   2. every OTHER rule on the same product whose formula names it
+     *      (Vanes = Trucks + 1, Metres = ROUNDUP((Drop + 95) * Vanes / 1000))
+     *   3. var:<Old> on every worksheet template of every product that uses
+     *      these rules — including any product set to "Same as <this one>"
+     *
+     * Returns ['rules' => n, 'fields' => n]. Throws if the new name is not a
+     * legal variable name, or is already taken on this product.
+     */
+    function bv_rename_variable(PDO $pdo, int $productId, string $old, string $new): array
+    {
+        $old = trim($old);
+        $new = trim($new);
+        // Names are code, not labels — the same rule build-rules-v2 applies when
+        // a rule is created.
+        if ($new === '' || $new !== preg_replace('/[^A-Za-z0-9_]/', '', str_replace(' ', '_', $new))) {
+            throw new RuntimeException('A rule name can only use letters, digits and underscores.');
+        }
+        if (mb_strlen($new) > 64) throw new RuntimeException('That name is too long (64 characters max).');
+        if ($old === '' || $old === $new) return ['rules' => 0, 'fields' => 0];
+
+        $builtin = array_map('mb_strtolower', bv_builtin_vars());
+        if (in_array(mb_strtolower($new), $builtin, true)) {
+            throw new RuntimeException('"' . $new . '" is one of the engine\'s own inputs (Width, Drop, Quantity…) — pick another name.');
+        }
+
+        $own = !$pdo->inTransaction();
+        if ($own) $pdo->beginTransaction();
+        try {
+            $all = $pdo->prepare('SELECT id, name, rows_json FROM build_variables WHERE product_id = ?');
+            $all->execute([$productId]);
+            $rows  = $all->fetchAll(PDO::FETCH_ASSOC);
+            $found = false;
+            foreach ($rows as $r) {
+                if ((string) $r['name'] === $old) { $found = true; }
+                elseif (mb_strtolower((string) $r['name']) === mb_strtolower($new)) {
+                    throw new RuntimeException('This product already has a rule called "' . $r['name'] . '".');
+                }
+            }
+            if (!$found) throw new RuntimeException('There is no rule called "' . $old . '" on this product.');
+
+            $pdo->prepare('UPDATE build_variables SET name = ? WHERE product_id = ? AND name = ?')
+                ->execute([$new, $productId, $old]);
+
+            $touchedRules = 0;
+            $updRows = $pdo->prepare('UPDATE build_variables SET rows_json = ? WHERE id = ?');
+            foreach ($rows as $r) {
+                if ((string) $r['name'] === $old) continue;          // its own formula can't name itself
+                $rj = json_decode((string) $r['rows_json'], true);
+                if (!is_array($rj)) continue;
+                $dirty = false;
+                foreach ($rj as &$row) {
+                    $res = (string) ($row['result'] ?? '');
+                    $new2 = bv_replace_identifier($res, $old, $new);
+                    if ($new2 !== $res) { $row['result'] = $new2; $dirty = true; }
+                }
+                unset($row);
+                if ($dirty) {
+                    $updRows->execute([json_encode($rj, JSON_UNESCAPED_UNICODE), (int) $r['id']]);
+                    $touchedRules++;
+                }
+            }
+
+            $touchedFields = 0;
+            $updTpl = $pdo->prepare('UPDATE worksheet_templates SET layout_json = ? WHERE id = ?');
+            foreach (ws_rules_audience($pdo, $productId) as $pid) {
+                $ts = $pdo->prepare('SELECT id, layout_json FROM worksheet_templates WHERE product_id = ?');
+                $ts->execute([$pid]);
+                foreach ($ts->fetchAll(PDO::FETCH_ASSOC) as $t) {
+                    $lay = json_decode((string) $t['layout_json'], true);
+                    if (!is_array($lay)) continue;
+                    $hits = 0;
+                    $walk = function (&$node) use (&$walk, $old, $new, &$hits): void {
+                        if (isset($node['source']) && is_string($node['source']) && $node['source'] === 'var:' . $old) {
+                            $node['source'] = 'var:' . $new;
+                            $hits++;
+                        }
+                        foreach ($node as &$child) { if (is_array($child)) $walk($child); }
+                        unset($child);
+                    };
+                    $walk($lay);
+                    if ($hits > 0) {
+                        $updTpl->execute([json_encode($lay, JSON_UNESCAPED_UNICODE), (int) $t['id']]);
+                        $touchedFields += $hits;
+                    }
+                }
+            }
+
+            if ($own) $pdo->commit();
+            return ['rules' => $touchedRules, 'fields' => $touchedFields];
+        } catch (Throwable $e) {
+            if ($own && $pdo->inTransaction()) $pdo->rollBack();
+            throw $e;
+        }
+    }
+}
