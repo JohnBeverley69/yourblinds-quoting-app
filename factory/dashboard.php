@@ -165,7 +165,7 @@ $activeNav = 'factory-dashboard';
     <?php endforeach; ?>
   </div>
   <?php if ($byStage['notplaced'] > 0): ?>
-    <p class="fd-notplaced"><a href="/factory/orders.php?stage=notplaced"><?= (int) $byStage['notplaced'] ?> of our own trade quote<?= $byStage['notplaced'] === 1 ? '' : 's' ?></a> not placed yet.</p>
+    <p class="fd-notplaced"><a href="/factory/orders.php?stage=notplaced"><?= (int) $byStage['notplaced'] ?> of our own quote<?= $byStage['notplaced'] === 1 ? '' : 's' ?></a> not placed yet.</p>
   <?php endif; ?>
 
   <div class="fd-grid">
