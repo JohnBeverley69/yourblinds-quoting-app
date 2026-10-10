@@ -335,3 +335,36 @@ if (!function_exists('bv_rename_variable')) {
         }
     }
 }
+
+if (!function_exists('ws_order_field_options')) {
+    /**
+     * Which option group feeds each option-derived order: field, as the field
+     * key => the group names it will accept, lower-cased, best first.
+     *
+     * factory/worksheet-print.php fills these from the order's own option
+     * groups, so a field whose group the product hasn't got can only ever print
+     * blank. factory/worksheets.php therefore offers a field only when the
+     * product has one of its groups — it used to decide that by testing whether
+     * the product's NAME contained "Vertical", so renaming a product silently
+     * emptied ten fields out of its palette.
+     *
+     * One definition for both: the aliases the print path accepts are exactly
+     * the aliases the editor offers on.
+     */
+    function ws_order_field_options(): array
+    {
+        return [
+            'hd_colour'     => ['hd colour', 'headrail colour', 'head rail colour'],
+            'control'       => ['control options', 'control'],
+            'chain'         => ['chain', 'chain type'],
+            'draw'          => ['draw options', 'wand options', 'draw'],
+            'wand_length'   => ['wand options'],
+            'fit_height'    => ['fit height'],
+            'bracket'       => ['brackets', 'bracket', 'fix', 'fixing', 'fitting', 'fit type'],
+            'recess_exact'  => ['exact or recess', 'recess or exact', 'recess'],
+            'welded'        => ['fabric finish', 'welded', 'weld', 'joint'],
+            'bottom_weight' => ['bottom weight option', 'bottom weight', 'weight'],
+            'weight_colour' => ['colour', 'weight colour', 'bottom weight colour'],
+        ];
+    }
+}
