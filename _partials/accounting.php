@@ -151,7 +151,7 @@ function pc_get(string $name, ?string $default = null): ?string
 function pc_set(string $name, ?string $value): void
 {
     if (!pc_table_exists()) {
-        throw new RuntimeException('platform_config table missing — run migrate_platform_config.php.');
+        throw new RuntimeException('platform_config table missing — run /setup/migrations/migrate_platform_config.php.');
     }
     db()->prepare(
         'INSERT INTO platform_config (name, value) VALUES (?, ?)
@@ -269,7 +269,7 @@ function ac_connection_plain(int $clientId, string $provider): ?array
 function ac_save_connection(int $clientId, string $provider, array $fields): void
 {
     if (!ac_table_exists()) {
-        throw new RuntimeException('accounting_connections table missing — run migrate_accounting_connections.php.');
+        throw new RuntimeException('accounting_connections table missing — run /setup/migrations/migrate_accounting_connections.php.');
     }
     $col = [
         'environment', 'realm_id', 'company_name', 'access_token', 'refresh_token',

@@ -68,7 +68,7 @@ try {
     db()->prepare('UPDATE quotes SET wt_amount = ? WHERE id = ? AND client_id = ?')
         ->execute([$wt, $quoteId, $clientId]);
 } catch (Throwable $e) {
-    qb_flash_redirect($backUrl, 'error', 'Could not save — has migrate_wt_charge.php been run? ' . $e->getMessage());
+    qb_flash_redirect($backUrl, 'error', 'Could not save — has /setup/migrations/migrate_wt_charge.php been run? ' . $e->getMessage());
 }
 
 qb_recompute_totals($quoteId);

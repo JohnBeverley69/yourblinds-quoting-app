@@ -63,7 +63,7 @@ try {
             ->execute([$override, $quoteId, $clientId]);
     }
 } catch (Throwable $e) {
-    qb_flash_redirect($backUrl, 'error', 'Could not save — has migrate_quote_price_override.php been run? ' . $e->getMessage());
+    qb_flash_redirect($backUrl, 'error', 'Could not save — has /setup/migrations/migrate_quote_price_override.php been run? ' . $e->getMessage());
 }
 
 qb_recompute_totals($quoteId);
