@@ -12,6 +12,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require_once __DIR__ . '/../quote-builder/_helpers.php';   // qb_user_can_access_quote
 require_once __DIR__ . '/../_partials/remakes.php';
 require_once __DIR__ . '/../_partials/remake_form.php';
 
@@ -35,6 +36,15 @@ $src = null;
 if (rm_ready($pdo)) {
     $src = rm_source_order($pdo, $factory, $qid);
     if ($src && (int) $src['client_id'] !== $clientId && (int) ($src['account_client_id'] ?? 0) !== $clientId) $src = null;
+    // Same per-quote check the screen that links here uses. Tenancy alone was
+    // weaker than quote-builder/edit.php:70, which runs
+    // qb_user_can_access_quote() — admin, can_view_all_customer_jobs,
+    // can_create_quotes, or (on a direct order) can_create_orders, else an
+    // appointment on that exact quote. A user with only "Can create orders"
+    // gets "Quote not found." from the order screen but could open this page
+    // for any placed order in the tenant, read every blind on someone else's
+    // job and raise a remake on it.
+    if ($src && !qb_user_can_access_quote($src, $user, $perms)) $src = null;
 }
 $lines = $src ? rm_order_lines($pdo, $factory, $qid) : [];
 $error = '';
