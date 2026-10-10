@@ -324,12 +324,13 @@ require __DIR__ . '/../_partials/factory_head.php';
             if ($delBlock !== ''): ?>
                 <p class="fe-del-why">This order can’t be deleted — <?= e($delBlock) ?>.</p>
                 <?php if (is_super_admin()):
-                    $fdPre = fod_force_delete_preview($pdo, $qid);
+                    $fdPre = fod_force_delete_preview($pdo, $qid, $MASTER);
                     $fdBits = [];
                     foreach ($fdPre['invoices'] as $i)       $fdBits[] = 'invoice ' . $i['inv_number'];
                     foreach ($fdPre['delivery_notes'] as $n) $fdBits[] = 'delivery note ' . $n['dn_number'];
                     if ($fdPre['credit_notes'] > 0)  $fdBits[] = $fdPre['credit_notes'] . ' credit note' . ($fdPre['credit_notes'] === 1 ? '' : 's');
                     if ($fdPre['payments']['n'] > 0) $fdBits[] = $fdPre['payments']['n'] . ' deposit' . ($fdPre['payments']['n'] === 1 ? '' : 's');
+                    if ($fdPre['remakes'] > 0)       $fdBits[] = $fdPre['remakes'] . ' remake record' . ($fdPre['remakes'] === 1 ? '' : 's');
                 ?>
                 <details class="fe-force">
                     <summary>Force delete (super-admin)</summary>

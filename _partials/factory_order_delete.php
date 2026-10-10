@@ -96,6 +96,81 @@ function fod_floor_progress_reason(PDO $pdo, int $quoteId): string
 }
 
 /**
+ * Remake rows that an order's destruction leaves meaningless. Returns their ids.
+ * Read-only — fod_purge_remakes_for_order() does the deleting.
+ *
+ *   - remake_quote_id = this order  → this order IS the remake. Destroying it
+ *     destroys the remake, so the record goes with it.
+ *   - source_quote_id = this order, with no surviving remake order → the fault
+ *     was reported against an order that no longer exists and nothing was ever
+ *     made for it, so there is nothing left to track.
+ *
+ * A remake whose SOURCE is going but whose remake order is still live is left
+ * alone: that order is still being made, and rm_list() already shows its source
+ * as "(order deleted)".
+ */
+function fod_orphan_remakes_for_order(PDO $pdo, int $factory, int $quoteId): array
+{
+    if ($quoteId <= 0) return [];
+    // $factory 0 = don't scope (the preview may be built before one is known);
+    // the quote id alone already pins these rows to one order.
+    $where = $factory > 0 ? 'r.factory_client_id = ? AND ' : '';
+    $args  = $factory > 0 ? [$factory] : [];
+    array_push($args, $quoteId, $quoteId, $quoteId);
+    try {
+        $s = $pdo->prepare(
+            "SELECT r.id FROM factory_remakes r
+               LEFT JOIN quotes rq ON rq.id = r.remake_quote_id
+              WHERE {$where}(r.remake_quote_id = ?
+                     OR (r.source_quote_id = ? AND (r.remake_quote_id IS NULL OR r.remake_quote_id = ? OR rq.id IS NULL)))"
+        );
+        $s->execute($args);
+        return array_map('intval', $s->fetchAll(PDO::FETCH_COLUMN));
+    } catch (Throwable $e) { return []; /* remakes not migrated */ }
+}
+
+/**
+ * Delete the given remake rows, their ticked blinds and their fault photos.
+ * Returns how many went.
+ *
+ * Why a force delete does this at all: fod_delete_order()'s $resetRemake puts a
+ * remake back to 'requested' when its order is deleted, which is right for an
+ * ordinary delete — the remake is still wanted, it just has no order behind it
+ * any more. A FORCE delete means the opposite: make this and its traces go away.
+ * Without this, force-deleting a finished, dispatched remake order resurrected
+ * its remake into Waiting for approval, complete with a sidebar badge, pointing
+ * at an order that no longer existed.
+ */
+function fod_delete_remakes(PDO $pdo, array $remakeIds): int
+{
+    $remakeIds = array_values(array_filter(array_map('intval', $remakeIds)));
+    if (!$remakeIds) return 0;
+    $ph = implode(',', array_fill(0, count($remakeIds), '?'));
+    // Take the photos off disk first: once the rows are gone there is nothing
+    // left pointing at the files, and they'd sit in uploads/remakes for ever.
+    try {
+        $p = $pdo->prepare("SELECT photo_path FROM factory_remakes WHERE id IN ($ph) AND photo_path IS NOT NULL AND photo_path <> ''");
+        $p->execute($remakeIds);
+        require_once __DIR__ . '/remakes.php';
+        foreach ($p->fetchAll(PDO::FETCH_COLUMN) as $path) {
+            if (function_exists('rm_discard_photo')) rm_discard_photo((string) $path);
+        }
+    } catch (Throwable $e) { /* best-effort */ }
+    $n = 0;
+    foreach ([
+        "DELETE FROM factory_remake_items WHERE remake_id IN ($ph)",
+        "DELETE FROM factory_remakes WHERE id IN ($ph)",
+    ] as $sql) {
+        try {
+            $st = $pdo->prepare($sql);
+            $st->execute($remakeIds);
+            if (strpos($sql, 'FROM factory_remakes ') !== false) $n = $st->rowCount();
+        } catch (Throwable $e) { /* not migrated */ }
+    }
+    return $n;
+}
+
+/**
  * What a FORCE delete would destroy, for the confirmation screen and for the
  * message afterwards. Read-only.
  *
@@ -112,10 +187,10 @@ function fod_floor_progress_reason(PDO $pdo, int $quoteId): string
  * invoices are anticipated. Deleting one would silently take another order's
  * billing with it, so it is refused and explained instead.
  */
-function fod_force_delete_preview(PDO $pdo, int $quoteId): array
+function fod_force_delete_preview(PDO $pdo, int $quoteId, int $factory = 0): array
 {
     $out = ['invoices' => [], 'delivery_notes' => [], 'payments' => ['n' => 0, 'total' => 0.0],
-            'credit_notes' => 0, 'shared' => ''];
+            'credit_notes' => 0, 'remakes' => 0, 'shared' => ''];
     if ($quoteId <= 0) return $out;
 
     try {
@@ -156,6 +231,8 @@ function fod_force_delete_preview(PDO $pdo, int $quoteId): array
         $out['payments'] = ['n' => (int) $row[0], 'total' => (float) $row[1]];
     } catch (Throwable $e) { /* not migrated */ }
 
+    $out['remakes'] = count(fod_orphan_remakes_for_order($pdo, $factory, $quoteId));
+
     return $out;
 }
 
@@ -188,7 +265,7 @@ function fod_force_delete_preview(PDO $pdo, int $quoteId): array
  */
 function fod_force_delete_order(PDO $pdo, int $quoteId, int $factory): array
 {
-    $pre = fod_force_delete_preview($pdo, $quoteId);
+    $pre = fod_force_delete_preview($pdo, $quoteId, $factory);
     if ($pre['shared'] !== '') {
         throw new RuntimeException('This order can’t be force-deleted — ' . $pre['shared']);
     }
@@ -238,8 +315,17 @@ function fod_force_delete_order(PDO $pdo, int $quoteId, int $factory): array
         $why = fod_delete_block_reason($pdo, $quoteId);
         if ($why !== '') throw new RuntimeException('Could not clear the paperwork — ' . $why . '.');
 
-        $res = fod_delete_order($pdo, $quoteId, $factory);
+        // The remakes this order's destruction leaves meaningless go BEFORE the
+        // order, and fod_delete_order() is told not to reset anything: its
+        // $resetRemake would put a remake back to 'requested', which is right for
+        // an ordinary delete but the opposite of what a force delete means. Left
+        // on, force-deleting a finished remake order resurrected its remake into
+        // Waiting for approval — sidebar badge and all — against an order that no
+        // longer existed.
+        $remakes = fod_delete_remakes($pdo, fod_orphan_remakes_for_order($pdo, $factory, $quoteId));
+        $res = fod_delete_order($pdo, $quoteId, $factory, false);
         if ($own) $pdo->commit();
+        $pre['remakes'] = $remakes;
         return ['destroyed' => $pre, 'released' => round($released, 2), 'supplier_sends' => $res['supplier_sends']];
     } catch (Throwable $e) {
         if ($own && $pdo->inTransaction()) $pdo->rollBack();

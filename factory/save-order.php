@@ -166,14 +166,15 @@ if (isset($_POST['force_del_order'])) {
     // No order-level audit table exists (catalogue_audit is the product
     // catalogue's), so the one durable record of a force delete is the log.
     error_log(sprintf(
-        'force_del_order: order %d (%s) by user %d — %d invoice(s), %d delivery note(s), %d credit note(s), %d deposit(s), £%.2f released',
+        'force_del_order: order %d (%s) by user %d — %d invoice(s), %d delivery note(s), %d credit note(s), %d deposit(s), %d remake(s), £%.2f released',
         $qid, $expected, (int) (current_user()['user_id'] ?? 0), count($d['invoices']), count($d['delivery_notes']),
-        (int) $d['credit_notes'], (int) $d['payments']['n'], $res['released']
+        (int) $d['credit_notes'], (int) $d['payments']['n'], (int) ($d['remakes'] ?? 0), $res['released']
     ));
     $bits = [];
     foreach ($d['invoices'] as $i)       $bits[] = 'invoice ' . $i['inv_number'];
     foreach ($d['delivery_notes'] as $n) $bits[] = 'delivery note ' . $n['dn_number'];
     if ($d['credit_notes'] > 0)  $bits[] = $d['credit_notes'] . ' credit note' . ($d['credit_notes'] === 1 ? '' : 's');
+    if (($d['remakes'] ?? 0) > 0) $bits[] = $d['remakes'] . ' remake record' . ($d['remakes'] === 1 ? '' : 's');
     if ($d['payments']['n'] > 0) $bits[] = $d['payments']['n'] . ' deposit' . ($d['payments']['n'] === 1 ? '' : 's')
                                          . ' (£' . number_format($d['payments']['total'], 2) . ')';
     $_SESSION['flash_success'] = 'Order ' . $expected . ' force-deleted'
