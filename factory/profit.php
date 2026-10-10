@@ -55,9 +55,13 @@ $realDate = static function (string $s): bool {
     return (bool) preg_match('/^(\d{4})-(\d{2})-(\d{2})$/', $s, $m)
         && checkdate((int) $m[2], (int) $m[3], (int) $m[1]);
 };
-
-// A From–To with neither date given would be "all time" by the back door — show today.
-if ($period === 'custom' && $fromIn === '' && $toIn === '') $period = 'today';
+// A From–To with no FROM would be "all time" by the back door. This used to
+// test for both bounds being blank, so ?period=custom&to=... with no from left
+// $since null (it is only assigned when $fromIn !== ''), $dateSql carried no
+// lower bound, and the query walked every placed factory-owned line ever
+// written — presented as the chosen range. Both inputs are optional, so
+// pressing Show with only a To date is an ordinary thing to do.
+if ($period === 'custom' && $fromIn === '') $period = 'today';
 
 if ($period === 'custom') {
     // A bad bound is ignored rather than silently changing the window to
