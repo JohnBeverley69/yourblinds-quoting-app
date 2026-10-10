@@ -50,6 +50,22 @@ if ((int) $ic->fetchColumn() === 0) {
     qb_flash_redirect($back, 'error', 'Add at least one blind before the customer signs.');
 }
 
+require_once __DIR__ . '/../_partials/quote_expiry.php';
+
+// Expiry is checked BEFORE the status is touched. This used to flip a draft to
+// 'sent' first and only then bail out, and the mutation was not rolled back —
+// so a refused signing left the quote in a different state than it started in.
+//
+// The ordering wasn't arbitrary: quote_is_expired() returns false for anything
+// that isn't already 'sent' (quote_expiry.php:34), so on a draft it can't see
+// the problem. But the flip keeps the old sent_at via COALESCE, so a quote sent
+// 60 days ago and later reopened as a draft becomes 'sent' with that 60-day-old
+// date and is immediately expired. Testing the WOULD-BE state answers the same
+// question without writing anything.
+if (quote_is_expired(['status' => 'sent'] + $quote)) {
+    qb_flash_redirect($back, 'error', 'This quote has expired — renew it before the customer signs.');
+}
+
 if ($status === 'draft') {
     $pdo->prepare(
         "UPDATE quotes SET status = 'sent', sent_at = COALESCE(sent_at, NOW())
@@ -57,12 +73,6 @@ if ($status === 'draft') {
     )->execute([$quoteId, $clientId]);
     require_once __DIR__ . '/../_partials/order_stage.php';
     recompute_order_stage($pdo, $quoteId);
-}
-
-require_once __DIR__ . '/../_partials/quote_expiry.php';
-$fresh = qb_load_quote_or_404($quoteId, $clientId);
-if (quote_is_expired($fresh)) {
-    qb_flash_redirect($back, 'error', 'This quote has expired — renew it before the customer signs.');
 }
 
 header('Location: /quote-history/public.php?token=' . urlencode((string) $quote['public_token']) . '&in_person=1');
