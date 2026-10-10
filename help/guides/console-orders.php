@@ -35,15 +35,15 @@ declare(strict_types=1);
 $S = [
     ['1', 'Why there is a Factory Console', 'When a trade account places an order on their own portal, it is stored as their order, not ours. So the old sales screens, which only listed the factory\'s own jobs, could never show it. The Factory Console fixes that. It finds every order with our blinds on it, whoever placed it, and puts them all in one place for the office.', 1],
     ['2', 'Signing in', 'The console is for the office staff of the factory. When you sign in, you land straight on the console Dashboard, and the menu says Factory Console under the logo. If you open one of the old screens, like the sales dashboard, the Pipeline or the old orders list, it simply takes you to the console version instead.', 2],
-    ['3', 'The Work menu', 'The menu has its own sections. Work comes first. Dashboard is your home page. Orders is the one list of everything placed with us. Remakes is where faults and remakes are handled, and Calendar is the office\'s shared calendar. When something needs you, the menu says so. For example, Remakes, two to approve, or Calendar, three due.', 3],
+    ['3', 'The Work menu', 'The menu has its own sections. Work comes first. Dashboard is your home page. Orders is the one list of everything placed with us. Quotes is that same list, filtered to our own quotes that have not been placed as orders yet. Remakes is where faults and remakes are handled, and Calendar is the office\'s shared calendar. When something needs you, the menu says so. For example, Remakes, two to approve, or Calendar, three due.', 3],
     ['4', 'Production and Accounts', 'Under Production are the factory screens you already know: Incoming orders, the Floor, and Dispatch. Under Accounts are Invoices, Bank, Statements and Commissions. Trade accounts and The Numbers are there too, but only for the super admin. Setup and Platform sit at the bottom, for the people allowed to use them.', 4],
     ['5', 'The four stage tiles', 'The top row of the Dashboard counts orders by stage. New means an order has come in, but has not been received on the floor yet. Received means it is in, but not started. In production means it is being made. Ready to dispatch means everything is made and in. Click a tile to open it. New opens Incoming orders, and Ready to dispatch opens Dispatch.', 5],
-    ['6', 'Quotes not placed yet', 'Just under those tiles, you may see a line saying how many of our own trade quotes are not placed yet. These are quotes the office has keyed in, which have not been turned into orders. Click the line, and you see them in the Orders list, under Not placed.', 6],
+    ['6', 'Quotes not placed yet', 'Just under those tiles, you may see a line saying how many of our own quotes are not placed yet. These are quotes the office has keyed in, which have not been turned into orders. Click the line, and you see them in the Orders list, under Quotes.', 6],
     ['7', 'The second row', 'The second row is the rest of the day at a glance. Calendar shows how many reminders and callbacks are due now. Remakes shows how many are in progress, and how many are waiting for approval. Blinds to make counts the blinds on orders that are not ready yet. And Out today counts the delivery notes dispatched today.', 7],
     ['8', 'This week so far', 'Two more tiles look at the week so far. Orders this week counts the orders placed since Monday. Invoiced this week is the net value of the invoices raised since Monday. Underneath it, owed is everything still unpaid on our invoices. Click it to open Invoices.', 8],
     ['9', 'Latest orders and busiest accounts', 'Below the tiles are two panels. Latest orders shows the eight newest orders, with the account, the number of blinds, and the stage. Click an order number to open it, or See all for the whole list. Busiest accounts shows who has ordered the most over the last thirty days, by value.', 9],
     ['10', 'One Orders list', 'Orders, in the Work menu, is the heart of the console. It is one list of every order placed with us, whoever placed it. From their portal, as a direct order, or keyed in here by the office. To key one in yourself, use the New order button at the top right.', 10],
-    ['11', 'The stage chips', 'Across the top is a row of chips, each with a count. Open is everything not dispatched yet, and that is where the list starts. Then come Not placed, New, Received, In production, Ready and Dispatched. All shows every order. Click a chip to filter the list.', 11],
+    ['11', 'The stage chips', 'Across the top is a row of chips, each with a count. Open is everything not dispatched yet, and that is where the list starts. Then come Quotes, New, Received, In production, Ready and Dispatched. All shows every order. Click a chip to filter the list.', 11],
     ['12', 'Finding an order', 'To find one order, use the account picker and the search box. Choose an account, and you see only their orders. Or type in the search box. An order number, the account, their reference, the name for the labels, or an invoice number all work. Then click Search.', 12],
     ['13', 'Reading a row', 'Each row shows the order number, the account, their reference, the date, how many of our blinds are on it, and its value. The stage is the coloured pill. Once an order is invoiced, its invoice number sits beside the stage. And a purple REMAKE badge marks an order that is a remake of an earlier one.', 13],
     ['14', 'Opening an order', 'Click the order number to open it. An order an account placed opens in the factory\'s Edit order screen. Our own orders, and quotes not placed yet, open in the quote builder. Beside the stage of every placed order is a Remake link. That is the quickest way to raise a remake, and the Remakes guide explains the rest.', 14],
@@ -61,7 +61,7 @@ $ptr = '<span class="gd-ptr"><svg viewBox="0 0 16 22" aria-hidden="true"><path d
 
 // ── Stage pills, as fc_stage_meta() colours them ──────────────────────
 $PILL = [
-    'notplaced'     => ['Not placed',    '#475569', '#e2e8f0'],
+    'notplaced'     => ['Quotes',        '#475569', '#e2e8f0'],
     'new'           => ['New',           '#b91c1c', '#fee2e2'],
     'confirmed'     => ['Received',      '#5b6b7f', '#e6ebf1'],
     'in_production' => ['In production', '#b5730f', '#f7ecd6'],
@@ -78,7 +78,7 @@ $rmb = '<span class="rmb">REMAKE</span>';
  */
 $menu = static function (array $ring = [], string $rem = 'Remakes', string $cal = 'Calendar') : string {
     $sec = [
-        'Work'       => [$cal, 'Dashboard', 'Orders', $rem],   // A to Z, as the real menu
+        'Work'       => [$cal, 'Dashboard', 'Orders', 'Quotes', $rem],   // A to Z, as the real menu
         'Production' => ['Dispatch', 'Floor', 'Incoming orders'],
         'Accounts'   => ['Bank', 'Commissions', 'Invoices', 'Statements', 'The Numbers', 'Trade accounts'],
         'Setup'      => [],
@@ -121,7 +121,7 @@ $row = static function (array $r, string $cls = '', string $style = '') use ($pi
 $thead = '<div class="orow th"><span>Order</span><span>Account</span><span class="hs">Their ref</span><span class="hs">Date</span><span class="n">Blinds</span><span class="n hs">Value</span><span>Stage</span></div>';
 
 /** The stage chips; $active = key, or [key => delay] to move the active chip through them. */
-$CHIPS = ['open' => ['Open', 31], 'notplaced' => ['Not placed', 1], 'new' => ['New', 7], 'confirmed' => ['Received', 5],
+$CHIPS = ['open' => ['Open', 31], 'notplaced' => ['Quotes', 1], 'new' => ['New', 7], 'confirmed' => ['Received', 5],
           'in_production' => ['In production', 12], 'ready' => ['Ready', 6], 'dispatched' => ['Dispatched', 148], 'all' => ['All', 179]];
 $chips = static function ($active = 'open', array $sel = []) use ($CHIPS): string {
     $h = '<div class="fchips">';
@@ -269,11 +269,11 @@ return [
               <div class="side">
                 <div class="logo">Your<b>Blinds</b></div><small>FACTORY CONSOLE</small>
                 <div class="navh">Work</div>
-                <a class="on">Dashboard</a><a>Orders</a><a>Remakes</a><a>Calendar</a>
+                <a>Calendar</a><a class="on">Dashboard</a><a>Orders</a><a>Quotes</a><a>Remakes</a>
                 <div class="navh">Production</div>
-                <a>Incoming orders</a><a>Floor</a><a>Dispatch</a>
+                <a>Dispatch</a><a>Floor</a><a>Incoming orders</a>
                 <div class="navh">Accounts</div>
-                <a>Invoices</a><a>Bank</a><a>Statements</a>
+                <a>Bank</a><a>Invoices</a><a>Statements</a>
               </div>
               <div class="stage" id="gdStage" data-step="0">
 
@@ -333,12 +333,14 @@ return [
                         '§Work'     => ['a-ring', $d(3, 'Work comes')],
                         'Dashboard' => ['a-sel', $d(3, 'Dashboard is')],
                         'Orders'    => ['a-sel', $d(3, 'Orders is')],
+                        'Quotes'    => ['a-sel', $d(3, 'Quotes is')],
                         'Remakes (2 to approve)'  => ['a-sel', $d(3, 'Remakes is')],
                         'Calendar (3 due)' => ['a-sel', $d(3, 'and Calendar')],
                     ], 'Remakes (2 to approve)', 'Calendar (3 due)') . '
                     <div class="mnote">
                       <span class="chip a-pop" style="' . $d(3, 'Dashboard is') . '"><b>Dashboard</b> &mdash; your home page</span>
                       <span class="chip a-pop" style="' . $d(3, 'Orders is') . '"><b>Orders</b> &mdash; everything placed with us</span>
+                      <span class="chip a-pop" style="' . $d(3, 'Quotes is') . '"><b>Quotes</b> &mdash; our own, not placed yet</span>
                       <span class="chip a-pop" style="' . $d(3, 'Remakes is') . '"><b>Remakes</b> &mdash; faults and remakes</span>
                       <span class="chip a-pop" style="' . $d(3, 'and Calendar') . '"><b>Calendar</b> &mdash; the office&rsquo;s shared calendar</span>
                       <span class="chip ok a-pop" style="' . $d(3, 'When something') . '">The label tells you when something needs you</span>
@@ -394,7 +396,7 @@ return [
                     ' . $tile('New', '3', 'Not received on the floor yet', '#b91c1c') . $tile('Received', '5', 'In, not started', '#5b6b7f')
                       . $tile('In production', '12', 'Being made', '#b5730f') . $tile('Ready to dispatch', '6', 'Everything made and in', '#245ea3') . '
                   </div>
-                  <p class="npl a-rise" style="' . $d(6, 'you may see') . '"><b class="a-ring" style="' . $d(6, 'Click the line') . '">1 of our own trade quote</b> not placed yet.</p>
+                  <p class="npl a-rise" style="' . $d(6, 'you may see') . '"><b class="a-ring" style="' . $d(6, 'Click the line') . '">1 of our own quote</b> not placed yet.</p>
                   <div class="a-rise" style="' . $d(6, 'you see them') . '">
                     ' . $chips('notplaced') . '
                     <div class="otab">' . $thead . $row($ROWS[4]) . '</div>
@@ -452,7 +454,7 @@ return [
                 <div class="sc" data-scene="10" data-len="' . $len(10) . '">
                   <div class="dh a-fade" style="--d:.2s">
                     <div><div class="pt">Orders</div>
-                      <div class="phint a-fade" style="' . $d(10, 'It is one list') . '">Every order placed with us, whoever placed it: from their portal, as a direct order, or keyed in here. Our own trade quotes that aren&rsquo;t placed yet show as <b>Not placed</b>.</div></div>
+                      <div class="phint a-fade" style="' . $d(10, 'It is one list') . '">Every order placed with us, whoever placed it: from their portal, as a direct order, or keyed in here. Our own quotes that aren&rsquo;t placed yet show as <b>Quotes</b>.</div></div>
                     <span class="btnp a-ring" style="' . $d(10, 'use the New order') . '">+ New order</span></div>
                   <div class="chips" style="margin:0 0 .6rem">
                     <span class="chip a-pop" style="' . $d(10, 'From their portal') . '">from their portal</span>
@@ -467,7 +469,7 @@ return [
                   <div class="sct a-fade" style="--d:.2s">The stage chips</div>
                   <p class="scs a-fade" style="--d:.6s">Each chip shows its own count. The list starts on <b>Open</b>.</p>
                   ' . $chips('open', [
-                        'notplaced'     => $at(11, 'Not placed'),
+                        'notplaced'     => $at(11, 'Quotes'),
                         'new'           => $at(11, 'New, Received'),
                         'confirmed'     => $at(11, 'Received, In'),
                         'in_production' => $at(11, 'In production'),
@@ -519,7 +521,7 @@ return [
                     . $row($ROWS[4]) . '</div>
                   <div class="two">
                     <div class="card a-rise" style="' . $d(14, 'An order an account') . '"><h4>An account&rsquo;s order</h4>opens in the factory&rsquo;s <b>Edit order</b> screen</div>
-                    <div class="card a-rise" style="' . $d(14, 'Our own orders') . '"><h4>Our own orders &middot; Not placed</h4>open in the <b>quote builder</b></div>
+                    <div class="card a-rise" style="' . $d(14, 'Our own orders') . '"><h4>Our own orders &middot; Quotes</h4>open in the <b>quote builder</b></div>
                   </div>
                   <span class="chip a-pop" style="' . $d(14, 'the Remakes guide') . ';margin-top:.7rem;border-color:#7c3aed">&#8635; Remake &mdash; see &ldquo;Remakes&rdquo;</span>
                   <div class="a-move" style="--fx:70%;--fy:90%;--tx:6%;--ty:4.3rem;' . $d(14, 'Click the order', -.8) . ';--md:1s">' . $ptr . '</div>
@@ -533,16 +535,16 @@ return [
              Nothing on it says &ldquo;factory&rdquo; except its lines &mdash; the blinds belong to the factory. The factory&rsquo;s own
              screens (Incoming orders, Dispatch, Invoices) always found orders that way, but the retail-shaped screens (Dashboard, Pipeline,
              the Orders list) only listed the factory&rsquo;s own jobs, so they could never see an account&rsquo;s order. The console reads
-             orders the factory way: <b>every placed order with at least one of our blinds on it, from any account</b>, plus our own trade
+             orders the factory way: <b>every placed order with at least one of our blinds on it, from any account</b>, plus our own
              quotes that are not placed yet.</p>
 
           <p><b>Who gets it.</b> The office staff signed in to the factory account. When you sign in you land on
              <b>Work &rarr; Dashboard</b>, and the menu reads <b>Factory Console</b> under the logo. Open one of the old screens and it takes
              you to the console one instead: the sales dashboard &rarr; <b>Dashboard</b>; the orders and quotes lists and the Pipeline &rarr;
-             <b>Orders</b> (quotes land on <b>Not placed</b>); the old calendar &rarr; the office <b>Calendar</b>. Nobody else is affected.</p>
+             <b>Orders</b> (quotes land on <b>Quotes</b>); the old calendar &rarr; the office <b>Calendar</b>. Nobody else is affected.</p>
 
           <ul class="steps">
-            <li><b>Work</b> &mdash; <b>Dashboard</b>, <b>Orders</b>, <b>Remakes</b> (reads <b>Remakes (2 to approve)</b> when accounts are
+            <li><b>Work</b> &mdash; <b>Dashboard</b>, <b>Orders</b>, <b>Quotes</b> (our own, not placed yet), <b>Remakes</b> (reads <b>Remakes (2 to approve)</b> when accounts are
                 waiting), <b>Calendar</b> (reads <b>Calendar (3 due)</b> when reminders, callbacks or remakes are due).</li>
             <li><b>Production</b> &mdash; <b>Incoming orders</b>, <b>Floor</b>, <b>Dispatch</b>.</li>
             <li><b>Accounts</b> &mdash; <b>Trade accounts</b> (super-admin only), <b>Invoices</b>, <b>Bank</b>, <b>Statements</b>,
@@ -556,8 +558,8 @@ return [
             <li><b>New</b> &mdash; <em>Not received on the floor yet</em> (opens <b>Incoming orders</b>). <b>Received</b> &mdash; <em>In, not
                 started</em>. <b>In production</b> &mdash; <em>Being made</em>. <b>Ready to dispatch</b> &mdash; <em>Everything made and in</em>
                 (opens <b>Dispatch</b>). Received and In production open the Orders list on that chip.</li>
-            <li>If any of our own trade quotes are not placed yet, a line under the tiles says so &mdash; e.g. <em>2 of our own trade quotes
-                not placed yet.</em> &mdash; and opens Orders on <b>Not placed</b>.</li>
+            <li>If any of our own quotes are not placed yet, a line under the tiles says so &mdash; e.g. <em>2 of our own quotes
+                not placed yet.</em> &mdash; and opens Orders on <b>Quotes</b>.</li>
             <li><b>Calendar</b> &mdash; how many are <b>due now</b> (reminders, callbacks, remakes), or <em>Nothing due</em>. Opens the office
                 Calendar.</li>
             <li><b>Remakes</b> &mdash; remakes in progress, with <b>n waiting for approval</b> underneath (or <em>In progress &middot; none
@@ -573,7 +575,7 @@ return [
           <p><b>The Orders list</b> (<b>Work &rarr; Orders</b>). <em>Every order placed with us, whoever placed it: from their portal, as a
              direct order, or keyed in here.</em> <b>+ New order</b> (top right) keys one in.</p>
           <ul class="steps">
-            <li><b>Chips</b>, each with a count: <b>Open</b> (everything not dispatched &mdash; where the list starts), <b>Not placed</b>,
+            <li><b>Chips</b>, each with a count: <b>Open</b> (everything not dispatched &mdash; where the list starts), <b>Quotes</b>,
                 <b>New</b>, <b>Received</b>, <b>In production</b>, <b>Ready</b>, <b>Dispatched</b>, <b>All</b>.</li>
             <li><b>All accounts</b> picker &mdash; choose one to see only theirs (our own sales show as <b>One-off sale</b>).</li>
             <li><b>Search</b> &mdash; <em>order number, account, their reference, label name or invoice</em>. Nothing found says
@@ -587,7 +589,7 @@ return [
           </ul>
 
           <p><b>Where an order opens.</b> An order an account placed opens in the factory&rsquo;s <b>Edit order</b> screen. Our own orders
-             (one-off sales) and anything <b>Not placed</b> open in the <b>quote builder</b>.</p>
+             (one-off sales) and anything on the <b>Quotes</b> chip open in the <b>quote builder</b>.</p>
 
           <div class="heads"><span class="hi">&#9432;</span><div><b>Nothing here changes an order.</b> The Dashboard and the Orders list
              only read &mdash; stages move on from the floor, dispatch and delivery notes, exactly as before.</div></div>',
