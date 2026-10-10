@@ -2945,6 +2945,7 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
             fabricSearch.placeholder = 'Type to search ' + optLabel.toLowerCase() + 's (or click for recent)';
 
             renderExtras();
+            applyDefaultFabric();
         } catch (err) {
             // With no signal, say why and what fixes it.
             var noSig = window.ybOffline && !ybOffline.online;
@@ -3058,6 +3059,24 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
         // for this fabric. Same as a system change.
         renderExtras();
         schedulePreview();
+    }
+
+    // Fill in the product's default fabric (Fabrics → "Make default"), for
+    // the current system and band, when nothing is picked yet. Returns true
+    // when it filled one. No default = the box stays empty, as before.
+    function applyDefaultFabric() {
+        if (!requiresOption || fabricId.value) return false;
+        var defs = (productData && productData.defaultFabrics) || [];
+        var sid  = systemSel && systemSel.value ? Number(systemSel.value) : null;
+        var band = bandSel && bandSel.value ? bandSel.value.toLowerCase() : '';
+        var fits = defs.filter(function (d) {
+            return (d.system_id === null || sid === null || d.system_id === sid)
+                && (!band || String(d.band).toLowerCase() === band);
+        });
+        if (!fits.length) return false;
+        var pick = fits.filter(function (d) { return d.explicit; })[0] || fits[0];
+        pickFabric(pick.id, pick.label, pick.band);
+        return true;
     }
 
     function clearFabric() {
@@ -4574,6 +4593,7 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
             clearFabric();
             closeFabricResults();
         }
+        applyDefaultFabric();
         schedulePreview();
     });
     if (bandSel) {
@@ -4583,9 +4603,12 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
             // typeahead narrowed to the chosen band so the matching
             // fabrics show straight away.
             if (fabricId.value) clearFabric();
+            // The band's default fabric, if it has one — then there's nothing
+            // to search for, so leave the list closed.
+            var filled = applyDefaultFabric();
             renderExtras();
             schedulePreview();
-            if (productSel.value) {
+            if (productSel.value && !filled) {
                 fabricSearch.focus();
                 searchFabrics('');
             }

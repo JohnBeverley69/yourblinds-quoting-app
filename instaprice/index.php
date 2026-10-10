@@ -534,6 +534,7 @@ $activeNav = 'instaprice';
             fabricSearch.disabled = false;
             fabricSearch.placeholder = 'Type to search ' + optLabel.toLowerCase() + 's…';
             renderExtras();
+            applyDefaultFabric();
         } catch (err) {
             setIdle(systemSel, 'Failed to load');
             fabricSearch.placeholder = 'Failed to load';
@@ -616,6 +617,22 @@ $activeNav = 'instaprice';
         schedulePreview();
     }
     function clearFabric() { fabricId.value = ''; fabricSearch.value = ''; currentFabricBand = ''; }
+    // Fill in the product's default fabric (Fabrics → "Make default") for the
+    // current system + band when nothing is picked. True when it filled one.
+    function applyDefaultFabric() {
+        if (!requiresOption || fabricId.value) return false;
+        var defs = (productData && productData.defaultFabrics) || [];
+        var sid  = systemSel.value ? Number(systemSel.value) : null;
+        var band = bandSel.value ? bandSel.value.toLowerCase() : '';
+        var fits = defs.filter(function (d) {
+            return (d.system_id === null || sid === null || d.system_id === sid)
+                && (!band || String(d.band).toLowerCase() === band);
+        });
+        if (!fits.length) return false;
+        var pick = fits.filter(function (d) { return d.explicit; })[0] || fits[0];
+        pickFabric(pick.id, pick.label, pick.band);
+        return true;
+    }
     function closeFabricResults() { fabricResults.hidden = true; fabricResults.innerHTML = ''; }
     function scheduleFabricSearch() {
         clearTimeout(fabricSearchTimer);
@@ -1176,12 +1193,14 @@ $activeNav = 'instaprice';
         populateBands(bandsForCurrentSystem());
         renderExtras();
         if (fabricId.value) { clearFabric(); closeFabricResults(); }
+        applyDefaultFabric();
         schedulePreview();
     });
     bandSel.addEventListener('change', function () {
         if (fabricId.value) clearFabric();
+        var filled = applyDefaultFabric();   // the band's default — nothing to search
         renderExtras();
-        if (productSel.value) { fabricSearch.focus(); searchFabrics(''); }
+        if (productSel.value && !filled) { fabricSearch.focus(); searchFabrics(''); }
     });
     // What to search when the box is merely REOPENED (focus / click) rather than
     // typed into. pickFabric() writes the chosen fabric's LABEL into this same
