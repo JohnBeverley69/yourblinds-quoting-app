@@ -63,11 +63,19 @@ function fc_orders(PDO $pdo, int $factoryId): array
     $hasStage   = $has('SELECT fulfilment_stage FROM quotes LIMIT 0');
     $hasArchive = $has('SELECT archived_at FROM quotes LIMIT 0');
     $hasAcct    = $has('SELECT account_client_id FROM quotes LIMIT 0');
-    $hasSale    = $has('SELECT sale_type FROM quotes LIMIT 0');
+    // The factory's own UNPLACED quotes used to be narrowed to trade ones
+    // ($tradeOwn: sale_type = 'trade' OR an account), which contradicted the
+    // placed branch below — that has no sale-type restriction, so a PLACED
+    // retail order of the factory's own does appear, and line 157 even labels it
+    // "One-off sale". Only the draft was hidden.
+    //
+    // So a factory office user who used "+ New" → Retail landed in the quote
+    // builder on a real quote and could then never find it again: absent from
+    // Console Orders at every stage, uncounted on the dashboard, and
+    // /orders/index.php and /orders/pipeline.php both redirect to the Console.
+    // Checked live on BEV-2026-0002 before the fix — invisible on all five.
+    // $hasSale went with $tradeOwn; sale_type is no longer read here.
 
-    $tradeOwn = $hasSale
-        ? ($hasAcct ? "(q.sale_type = 'trade' OR q.account_client_id IS NOT NULL)" : "q.sale_type = 'trade'")
-        : ($hasAcct ? 'q.account_client_id IS NOT NULL' : '0');
 
     // The 400-row cap below is ordered so it can only ever drop FINISHED
     // orders. It used to be a plain created_at DESC cap, and both consumers
@@ -100,7 +108,7 @@ function fc_orders(PDO $pdo, int $factoryId): array
              WHERE ((q.status IN ($inPlaced)
                      AND EXISTS (SELECT 1 FROM quote_items qi JOIN products p ON p.id = qi.product_id
                                   WHERE qi.quote_id = q.id AND $owner = ?))
-                 OR (q.client_id = ? AND q.status IN ('draft','sent','accepted') AND $tradeOwn))
+                 OR (q.client_id = ? AND q.status IN ('draft','sent','accepted') ))
                " . ($hasArchive ? 'AND q.archived_at IS NULL' : '') . "
           ORDER BY " . ($hasStage ? "CASE WHEN COALESCE(q.fulfilment_stage, '') = 'dispatched' THEN 1 ELSE 0 END, " : '') . "q.created_at DESC, q.id DESC
              LIMIT 400";
