@@ -69,8 +69,16 @@ if ($ready) {
     )->fetchAll(PDO::FETCH_ASSOC);
 
     // Demand tally: open requests grouped by supplier name (case-insensitive).
+    // MIN(supplier_name) rather than the bare column: grouping by
+    // LOWER(supplier_name) while selecting it made the displayed capitalisation
+    // arbitrary, and the statement is only legal because this server's sql_mode
+    // leaves ONLY_FULL_GROUP_BY off. That mode is on by default in MySQL 5.7+
+    // and 8 and db.php never issues a SET sql_mode, so a server or Cloudways
+    // default change would make this ERROR 1055 at execute time — and nothing
+    // catches it here, unlike the ready-check at :19 and the hasEmail probe at
+    // :55, so the whole screen would 500. Verified the page loads today.
     $tally = $pdo->query(
-        'SELECT supplier_name, COUNT(*) AS n
+        'SELECT MIN(supplier_name) AS supplier_name, COUNT(*) AS n
            FROM supplier_requests WHERE status = "open"
        GROUP BY LOWER(supplier_name)
        ORDER BY n DESC, supplier_name LIMIT 12'
