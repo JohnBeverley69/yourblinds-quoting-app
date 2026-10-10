@@ -56,6 +56,17 @@ if (!in_array((string) $quote['status'], ['ordered', 'fitted', 'invoiced', 'paid
     qb_flash_redirect($backUrl, 'error', 'You can invoice once the job is ordered — move it to Ordered first.');
 }
 
+// Not a direct order. It is priced at the client's BUYING price with VAT
+// forced to 0, and the customer it would be emailed to is the client's own
+// retail customer, whose address save_details.php:56 collects for the fitting.
+// Sending it disclosed the client's wholesale cost to their customer, demanded
+// the wrong amount, and advanced the order to Invoiced. The button is gone
+// (edit.php:990), and this covers a direct POST at the handler.
+if (qb_is_direct_order($quote)) {
+    qb_flash_redirect($backUrl, 'error',
+        'This is a direct order — it is billed to you by the factory, so there is no customer invoice to send from here.');
+}
+
 // Duplicate-send guard: an 'invoiced'/'paid' job has already had its invoice
 // emailed, so a further send must be a deliberate resend (?resend=1 from the
 // "Resend invoice" button + its confirm) — otherwise a stray click would send
