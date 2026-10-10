@@ -650,7 +650,7 @@ return [
                 that runs all the way round.</li>
             <li><b>Price per unit (&pound;) &mdash; &times; quantity</b> (Edit page) &mdash; for brackets, fixings and the like. The salesperson
                 types how many; the line adds price &times; quantity. It adds a <em>Quantity</em> box to the quote &mdash; give it your own
-                name under <b>Ask for a number on this choice</b> &rarr; <b>What to call this field</b> (e.g. <em>Number of brackets</em>).</li>
+                name under <b>Ask for a number on this choice</b> &rarr; <b>What to call this field</b> (e.g. <em>Number of brackets</em>). The quantity is required once the choice is picked &mdash; leave it blank and Save pops up <em>You need to choose a quantity</em>.</li>
             <li><b>Width-based price table (optional)</b> (Edit page) &mdash; <b>Option A &mdash; paste rows</b>: one row per line, <b>width then
                 price</b>, separated by space, comma or tab, in mm (<code>800</code>) or metres (<code>0.800</code>). <b>Option B &mdash; upload
                 Excel</b>: vertical or horizontal, auto-detected; a file overrides the box. The engine uses the smallest row &ge; the blind&rsquo;s

@@ -771,6 +771,7 @@ $activeNav = 'instaprice';
                 var val = (pv !== undefined && pv !== null) ? String(pv) : '';
                 return '<div style="margin-top:0.25rem">'
                      + '<input type="number" min="0" step="1" data-cuv-for="' + c.id + '"'
+                     + (c.needs_qty ? ' data-needs-qty="' + escapeAttr(c.label) + '"' : '')
                      + ' value="' + escapeAttr(val) + '"'
                      + ' placeholder="' + escapeAttr(c.length_input_label) + '"'
                      + ' style="max-width:12rem">'
@@ -914,7 +915,16 @@ $activeNav = 'instaprice';
         lastBase = null; lastTradePct = 0; lastTradeAmt = 0;
         priceBox.className = 'ip-price ' + (isError ? 'is-error' : 'is-idle');
         priceBox.textContent = msg;
-        if (toQuoteBtn) toQuoteBtn.disabled = true;
+        // Left clickable while a quantity is missing, so pressing it pops up
+        // what's needed (the click handler stops before anything is sent).
+        if (toQuoteBtn) toQuoteBtn.disabled = !missingQtyInput();
+    }
+
+    // A ticked per-quantity add-on (brackets, clips…) whose quantity is blank.
+    function missingQtyInput() {
+        return Array.prototype.find.call(extrasBox.querySelectorAll('input[data-needs-qty]'), function (q) {
+            return q.offsetParent !== null && !(parseFloat(q.value) > 0);
+        }) || null;
     }
 
     // ----- Roller multi-blind (shared fascia) — mirrors the quote builder ---
@@ -1296,6 +1306,14 @@ $activeNav = 'instaprice';
     });
 
     if (toQuoteBtn) toQuoteBtn.addEventListener('click', function () {
+        // A ticked per-quantity add-on with no quantity — say so (the price
+        // panel also shows it, and the button stays greyed until it's filled).
+        var noQty = missingQtyInput();
+        if (noQty) {
+            alert('You need to choose a quantity for “' + noQty.getAttribute('data-needs-qty') + '”.');
+            noQty.focus();
+            return;
+        }
         if (toQuoteBtn.disabled) return;
         var form = document.getElementById('ip-quote-form');
         document.getElementById('q-product').value = productSel.value;
