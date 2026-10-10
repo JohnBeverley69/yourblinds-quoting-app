@@ -46,6 +46,11 @@ $FOC_WHEN = [
     'dispatched'    => 'Sent out',
     'invoiced'      => 'Invoiced to the customer',
     'paid'          => 'Paid / closed',
+    // 'remake' is the one row whose rule isn't guessable from its label, and it was
+    // the only row left with a blank note. incoming-orders.php:425 gives a remake
+    // this colour instead of New / In production / Ready, but leaves dispatched,
+    // invoiced and paid alone.
+    'remake'        => 'A remake, until it goes out — shown instead of New, In production or Ready',
 ];
 
 $factoryTitle = 'Settings';
