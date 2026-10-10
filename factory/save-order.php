@@ -128,11 +128,39 @@ if (isset($_POST['del_order'])) {
         if ($hit) { $fail('This order can\'t be deleted — ' . $why . '.'); }
     }
     try {
+        // Note any supplier send BEFORE its log row goes, so the office can be
+        // told. Deleting the order cancels nothing at the supplier, and once the
+        // supplier_orders row is gone there is no record left that a send ever
+        // happened — so saying nothing would quietly lose a live order with a
+        // third party.
+        $supplierSends = [];
+        try {
+            $ss = $pdo->prepare('SELECT DISTINCT supplier_name FROM supplier_orders WHERE quote_id = ?');
+            $ss->execute([$qid]);
+            $supplierSends = array_values(array_filter(array_map('strval', $ss->fetchAll(PDO::FETCH_COLUMN))));
+        } catch (Throwable $e) { /* table absent */ }
         $pdo->beginTransaction();
-        // The factory's own job rows for the order go with it (they were left orphaned).
-        foreach (['factory_blind_jobs', 'factory_jobs'] as $t) {
-            try { $pdo->prepare("DELETE FROM `$t` WHERE quote_id = ?")->execute([$qid]); } catch (Throwable $e) { /* not migrated */ }
-        }
+        // The factory's own job rows for the order go with it. bj_clear_order()
+        // rather than a raw DELETE on factory_blind_jobs: factory_blind_streams
+        // is keyed on blind_job_id, so deleting the jobs first orphans every
+        // stream row for the order — invisible, because floor.php and scan.php
+        // reach streams through jobs. The helper deletes the streams first and
+        // is already the thing set-status.php uses for the same job.
+        if (bj_tables_ready($pdo)) bj_clear_order($pdo, $qid);
+        try { $pdo->prepare('DELETE FROM factory_jobs WHERE quote_id = ?')->execute([$qid]); }
+        catch (Throwable $e) { /* not migrated */ }
+        // Scan-log rows key on quote_item_id, which is about to go, leaving them
+        // permanently unmatchable in the log.
+        try {
+            $pdo->prepare('DELETE FROM factory_scan_log WHERE quote_item_id IN (SELECT id FROM quote_items WHERE quote_id = ?)')
+                ->execute([$qid]);
+        } catch (Throwable $e) { /* scan log not migrated */ }
+        // The supplier send-log has no FK to quotes, so its rows outlive the
+        // order pointing at nothing. Not scoped by client_id on purpose: a
+        // factory send is stamped with the FACTORY's client_id, which is the
+        // bug #976 fixed on the tenant-side delete paths.
+        try { $pdo->prepare('DELETE FROM supplier_orders WHERE quote_id = ?')->execute([$qid]); }
+        catch (Throwable $e) { /* table absent */ }
         $pdo->prepare('DELETE FROM quote_item_extras WHERE quote_item_id IN (SELECT id FROM quote_items WHERE quote_id = ?)')->execute([$qid]);
         $pdo->prepare('DELETE FROM quote_items WHERE quote_id = ?')->execute([$qid]);
         // Remove the order's calendar appointments (e.g. the pending fitting) so
@@ -165,7 +193,11 @@ if (isset($_POST['del_order'])) {
         $pdo->prepare('DELETE FROM quotes WHERE id = ?')->execute([$qid]);
         $pdo->commit();
     } catch (Throwable $e) { if ($pdo->inTransaction()) $pdo->rollBack(); $fail('Could not delete order: ' . $e->getMessage()); }
-    $_SESSION['flash_success'] = 'Order deleted.';
+    $_SESSION['flash_success'] = 'Order deleted.'
+        . ($supplierSends
+            ? ' Note: it had already been ordered from ' . implode(', ', $supplierSends)
+              . ' — deleting it here does not cancel that, so cancel it with them directly.'
+            : '');
     header('Location: /factory/incoming-orders.php'); exit;
 }
 
