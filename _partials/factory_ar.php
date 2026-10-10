@@ -1098,6 +1098,48 @@ function ar_invoice_edit_block_reason(PDO $pdo, array $inv): string
 }
 
 /**
+ * Tell the delivery note how much carriage has been billed by hand on an
+ * invoice, so the charge can't be parked on a later order as well.
+ *
+ * dc_recalc_delivery() works out whether a delivery's charge has already been
+ * billed purely from carriage_net on the notes of invoiced orders
+ * (_partials/delivery_charges.php: $billed). ar_invoice_add_line() inserted the
+ * carriage line and recomputed the invoice, but never touched carriage_net — so
+ * $billed stayed 0, dc_recalc took its "park the whole charge on the first note
+ * not yet invoiced" branch, and dc_order_carriage() put the same rule charge on
+ * the next order's invoice too. £32 billed for one delivery.
+ *
+ * Writes the SUM of the invoice's manual carriage lines rather than adding the
+ * one just inserted, so it is idempotent and also correct after a line is
+ * removed. Put on the note of the invoice's first order: the charge belongs to
+ * the delivery, not to an order, and $billed only sums.
+ */
+function ar_sync_manual_carriage(PDO $pdo, int $factory, int $invId): void
+{
+    try {
+        $s = $pdo->prepare(
+            "SELECT COALESCE(SUM(line_net), 0) FROM factory_ar_invoice_lines
+              WHERE invoice_id = ? AND line_type = 'carriage' AND source_quote_id IS NULL"
+        );
+        $s->execute([$invId]);
+        $manual = round((float) $s->fetchColumn(), 2);
+
+        $n = $pdo->prepare(
+            "SELECT dn.id FROM factory_ar_delivery_notes dn
+               JOIN factory_ar_invoice_orders io ON io.quote_id = dn.source_quote_id
+              WHERE io.invoice_id = ? AND dn.factory_client_id = ? AND dn.status <> 'cancelled'
+           ORDER BY dn.id LIMIT 1"
+        );
+        $n->execute([$invId, $factory]);
+        $dnId = (int) ($n->fetchColumn() ?: 0);
+        if ($dnId <= 0) return;   // no delivery note for it — nothing to mark
+
+        $pdo->prepare('UPDATE factory_ar_delivery_notes SET carriage_net = ? WHERE id = ?')
+            ->execute([$manual, $dnId]);
+    } catch (Throwable $e) { /* delivery charges not migrated — nothing to keep in step */ }
+}
+
+/**
  * Add a carriage or adjustment line (net, ex VAT; an adjustment may be negative)
  * to an editable invoice and recompute its totals. Throws RuntimeException when
  * the invoice can't be edited or the input is bad.
@@ -1134,6 +1176,9 @@ function ar_invoice_add_line(PDO $pdo, int $factory, int $invId, string $type, s
              VALUES (?, NULL, NULL, ?, ?, NULL, NULL, 1, ?, ?, NULL, NULL, NULL, ?)"
         )->execute([$invId, $type, $description, $amount, $amount, (int) $so->fetchColumn()]);
 
+        // Keep the delivery note's carriage_net in step, so dc_recalc_delivery()
+        // sees this charge as billed and cannot park it on a later order too.
+        if ($type === 'carriage') ar_sync_manual_carriage($pdo, $factory, $invId);
         ar_invoice_recalc_totals($pdo, $invId);
         if ($ownTxn) $pdo->commit();
     } catch (Throwable $e) {
@@ -1167,6 +1212,8 @@ function ar_invoice_remove_line(PDO $pdo, int $factory, int $invId, int $lineId)
             throw new RuntimeException('Only manually added carriage and adjustment lines can be removed.');
         }
         $pdo->prepare('DELETE FROM factory_ar_invoice_lines WHERE id = ? AND invoice_id = ?')->execute([$lineId, $invId]);
+        // Removing a carriage line releases the charge again, so re-sync too.
+        if ((string) $line['line_type'] === 'carriage') ar_sync_manual_carriage($pdo, $factory, $invId);
         ar_invoice_recalc_totals($pdo, $invId);
         if ($ownTxn) $pdo->commit();
     } catch (Throwable $e) {
