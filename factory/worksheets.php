@@ -677,7 +677,7 @@ require __DIR__ . '/../_partials/factory_head.php';
 
 <?php if ($orphans): ?>
     <div class="ws-flash err">
-        <strong><?= count($orphans) ?> field<?= count($orphans) === 1 ? '' : 's' ?> on this worksheet print nothing.</strong>
+        <strong><?= count($orphans) ?> field<?= count($orphans) === 1 ? '' : 's' ?> on this worksheet print<?= count($orphans) === 1 ? 's' : '' ?> nothing.</strong>
         <?= count($orphans) === 1 ? 'It asks' : 'They ask' ?> for something <?= e($productName) ?> doesn&rsquo;t have,
         so the ticket shows the caption with no value beside it:
         <ul style="margin:.35rem 0 0 1.1rem">
