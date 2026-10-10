@@ -257,6 +257,11 @@ function os_auto_invoice_on_dispatch(PDO $pdo, int $quoteId, ?int $factory = nul
         $q->execute([$quoteId]);
         $r   = $q->fetch(PDO::FETCH_ASSOC) ?: [];
         $acc = (int) ($r['account_client_id'] ?? 0) ?: (int) ($r['client_id'] ?? 0);
+        // The factory's own one-off sale resolves to the factory itself — there
+        // is no account to bill, so there is nothing to auto-invoice. Returning
+        // rather than letting ar_create_invoice() refuse keeps a routine
+        // dispatch out of the error log.
+        if ($acc === $factory) return;
 
         // true = email it to the account once created; it is only marked 'sent'
         // if the email actually went (else it stays 'raised' to send from Wholesale).

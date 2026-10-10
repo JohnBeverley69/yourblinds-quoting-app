@@ -715,6 +715,17 @@ function ar_create_delivery_note(PDO $pdo, int $factory, int $quoteId, int $acco
  */
 function ar_create_invoice(PDO $pdo, int $factory, int $quoteId, int $accountId, int $userId, bool $send = false): array
 {
+    // The factory cannot invoice itself. On its own retail / one-off sale
+    // (client_id = the factory, no account_client_id — the "One-off sale" rows
+    // on the Console) os_auto_invoice_on_dispatch resolves the billing account
+    // as account_client_id ?: client_id, which is the factory, and nothing here
+    // checked. That wrote a factory_ar_invoices row against the factory itself
+    // and emailed it to the factory's own address, and the Console's "owed"
+    // tile rose by its value permanently: Wholesale and the statement run both
+    // filter the factory out, so no screen offered a way to pay or void it.
+    if ($accountId === $factory) {
+        throw new RuntimeException('That order is the factory’s own, so there is no account to invoice.');
+    }
     $built = ar_invoice_lines_from_order($pdo, $factory, $quoteId);
     if (!$built['lines'])     throw new RuntimeException('This order has no Beverley-owned lines to invoice.');
     if ($built['uncaptured']) throw new RuntimeException('This order predates wholesale-price capture — re-save its lines in the quote before invoicing (a priced option has no wholesale price).');
