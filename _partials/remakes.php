@@ -365,7 +365,26 @@ function rm_create_remake_order(PDO $pdo, int $factory, array $r, float $charge,
 
     $items = [];
     foreach (rm_items_for($pdo, $factory, [$r])[(int) $r['id']] ?? [] as $it) $items[$it['source_item_id']] = $it['quantity'];
-    if (!$items) throw new RuntimeException('None of the blinds on this remake are on the order any more.');
+    if (!$items) throw new RuntimeException('No blinds are recorded on this remake.');
+
+    // Which of those blinds are still ON the order — resolved here, before the
+    // INSERT, because the test above can't tell. rm_items_for() reads
+    // factory_remake_items straight out of the table and returns a row for
+    // every stored blind, even labelling a vanished one "Blind (no longer on
+    // the order)" (:254), so $items is always populated and the old guard here
+    // could never fire. The surviving lines used to be worked out only after
+    // the order row had been written.
+    //
+    // Delete the remade blind from the order before approving (allowed while it
+    // isn't dispatched or invoiced) and approval produced a remake order with a
+    // subtotal and ZERO quote_items: absent from Incoming orders, Factory
+    // Console → Orders and the dispatch tray, impossible to act on — while the
+    // flash said it was waiting in Incoming orders.
+    $lines = [];
+    foreach (rm_order_lines($pdo, $factory, $srcId) as $l) if (isset($items[$l['id']])) $lines[$l['id']] = $l;
+    if (!$lines) {
+        throw new RuntimeException('None of the blinds on this remake are on the order any more, so it can’t be approved. Raise a fresh remake against the blinds that are still there.');
+    }
 
     // Number: <original>-R1, -R2 …
     $n = $pdo->prepare('SELECT COUNT(*) FROM quotes WHERE remake_of_quote_id = ?');
@@ -419,9 +438,11 @@ function rm_create_remake_order(PDO $pdo, int $factory, array $r, float $charge,
     $pdo->prepare($sql)->execute(array_values($row));
     $newId = (int) $pdo->lastInsertId();
 
-    // Lines — copied with their options; priced at the charge, spread by trade value.
-    $lines = [];
-    foreach (rm_order_lines($pdo, $factory, $srcId) as $l) if (isset($items[$l['id']])) $lines[$l['id']] = $l;
+    // Lines — copied with their options; priced at the charge, spread by trade
+    // value. $lines was resolved above, before the INSERT, so a remake with
+    // nothing left on the order is refused instead of creating an order no
+    // screen can act on. rm_order_lines() runs ar_invoice_lines_from_order
+    // underneath, so it is deliberately not called a second time here.
     $weights = [];
     foreach ($lines as $iid => $l) $weights[$iid] = max(0.01, $l['unit_trade'] * $items[$iid]);
     $wTotal = array_sum($weights) ?: 1.0;
