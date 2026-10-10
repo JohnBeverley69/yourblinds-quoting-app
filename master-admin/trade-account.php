@@ -1160,13 +1160,34 @@ $activeNav = 'trade-accounts';
                                     $sy = ($d['system_name'] ?? '') !== '' ? (string) $d['system_name'] : 'All';
                                     $isExtra = $tdHasExtra && !empty($d['extra_id']);
                                     $orphan  = false;
+                                    $orphanKind = '';   // 'option' or 'system' — the badge wording differs
                                     if ($isExtra) {
-                                        if (($d['extra_name'] ?? null) === null) $orphan = true;
-                                        elseif (!empty($d['choice_id']) && ($d['choice_label'] ?? null) === null) $orphan = true;
+                                        if (($d['extra_name'] ?? null) === null) { $orphan = true; $orphanKind = 'option'; }
+                                        elseif (!empty($d['choice_id']) && ($d['choice_label'] ?? null) === null) { $orphan = true; $orphanKind = 'option'; }
                                         $appliesTo = 'Option: ' . (string) ($d['extra_name'] ?? ('#' . (int) $d['extra_id']));
                                         if (!empty($d['choice_id'])) $appliesTo .= ' → ' . (string) ($d['choice_label'] ?? ('#' . (int) $d['choice_id']));
                                     } else {
-                                        $appliesTo = 'Price · ' . $sy . ' · ' . $bg;
+                                        // A Price discount scoped to a SYSTEM whose row has gone
+                                        // reads as the widest possible scope unless we say
+                                        // otherwise: system_name comes back NULL from the LEFT
+                                        // JOIN and $sy falls back to the literal 'All', which is
+                                        // exactly what a genuine all-systems discount shows. So
+                                        // "12.00 · Vertical Blinds · Price · All · All" could mean
+                                        // 12% off every vertical system, or 12% off a system that
+                                        // was deleted and re-added under a new id — in which case
+                                        // the engine matches nothing and every quote prices at 0%
+                                        // off. The orphan check existed but only ran for
+                                        // Components discounts, inside the $isExtra branch.
+                                        //
+                                        // system_id set with no system_name is the orphan; no
+                                        // system_id at all is a real "All systems" row.
+                                        if ($tdHasSys && !empty($d['system_id']) && ($d['system_name'] ?? null) === null) {
+                                            $orphan     = true;
+                                            $orphanKind = 'system';
+                                            $appliesTo = 'Price · system no longer exists (#' . (int) $d['system_id'] . ') — gives 0%, re-add it · ' . $bg;
+                                        } else {
+                                            $appliesTo = 'Price · ' . $sy . ' · ' . $bg;
+                                        }
                                     }
                                 ?>
                                     <tr<?= $orphan ? ' style="background:#fef2f2"' : '' ?>>
@@ -1174,7 +1195,13 @@ $activeNav = 'trade-accounts';
                                         <td><?= e((string) $pn) ?></td>
                                         <td>
                                             <?php if ($orphan): ?>
-                                                <span title="The option or choice this discount targeted no longer exists (deleted, or re-created with a new id). It applies no discount — delete it and re-add against the current option." style="display:inline-block;padding:0.05rem 0.45rem;font-size:0.68rem;font-weight:700;border-radius:999px;background:#fee2e2;color:#b91c1c">⚠ option no longer exists — re-add</span>
+                                                <?php
+                                                // Wording follows which target vanished. A system
+                                                // orphan used to get the option wording, because
+                                                // only Components discounts were ever detected.
+                                                $oWhat = $orphanKind === 'system' ? 'system' : 'option';
+                                                ?>
+                                                <span title="The <?= e($oWhat) ?> this discount targeted no longer exists (deleted, or re-created with a new id). It applies no discount — delete it and re-add against the current <?= e($oWhat) ?>." style="display:inline-block;padding:0.05rem 0.45rem;font-size:0.68rem;font-weight:700;border-radius:999px;background:#fee2e2;color:#b91c1c">⚠ <?= e($oWhat) ?> no longer exists — re-add</span>
                                                 <br><span style="color:var(--text-faint);font-size:0.8125rem"><?= e($appliesTo) ?></span>
                                             <?php else: ?>
                                                 <?= e($appliesTo) ?>
