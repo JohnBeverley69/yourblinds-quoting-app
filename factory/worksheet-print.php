@@ -20,6 +20,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/build_eval.php';
+require_once __DIR__ . '/../_partials/worksheet_refs.php';   // ws_order_field_options()
 require __DIR__ . '/../_partials/qr.php';
 require __DIR__ . '/../_partials/blind_jobs.php';   // bj_streams_ordered — a label's part-specific QR
 require __DIR__ . '/../_partials/roller_box.php';   // roller_box_default() — the editable boxed-label grid
@@ -323,8 +324,12 @@ foreach ($lines as $ln) {
         $optSel['multiple blinds in one fascia'] = 'Yes';
     }
     $masterPid = (int) ($ln['master_product_id'] ?? $ln['product_id']);
-    $pick = static function (array $byName, array $names): string {
-        foreach ($names as $n) { if (isset($byName[$n])) return $byName[$n]; }
+    // Which option group feeds which order: field is one list, shared with
+    // factory/worksheets.php so the palette offers a field on exactly the
+    // groups filled in here — see _partials/worksheet_refs.php.
+    $optAliases = ws_order_field_options();
+    $pick = static function (array $byName, string $field) use ($optAliases): string {
+        foreach ($optAliases[$field] ?? [] as $n) { if (isset($byName[$n])) return $byName[$n]; }
         return '';
     };
 
@@ -338,7 +343,7 @@ foreach ($lines as $ln) {
         'line_no'      => $ln['line_no'] . '/' . $totalLines,
         'system'       => (string) ($ln['system_name_snapshot'] ?? ''),
         'colour'       => (string) ($ln['fabric_colour_snapshot'] ?? ''),
-        'hd_colour'    => $pick($byName, ['hd colour', 'headrail colour', 'head rail colour']),
+        'hd_colour'    => $pick($byName, 'hd_colour'),
         'fabric'       => (string) ($ln['fabric_name_snapshot'] ?? ''),
         'location'     => (string) ($ln['room_name'] ?? ''),
         'size'         => (int) $ln['width_mm'] . ' x ' . (int) $ln['drop_mm'],
@@ -346,16 +351,16 @@ foreach ($lines as $ln) {
         'drop'         => (string) (int) $ln['drop_mm'],
         'qty'          => (string) (int) $ln['quantity'],
         'notes'        => (string) ($ln['notes'] ?? ''),
-        'control'      => $pick($byName, ['control options', 'control']),
-        'chain'        => $pick($byName, ['chain', 'chain type']),
-        'draw'         => $pick($byName, ['draw options', 'wand options', 'draw']),
+        'control'      => $pick($byName, 'control'),
+        'chain'        => $pick($byName, 'chain'),
+        'draw'         => $pick($byName, 'draw'),
         'wand_length'  => $wandLen,
         'fit_height'   => $fitHeight > 0 ? $numTidy($fitHeight) : '',
-        'bracket'      => $pick($byName, ['brackets', 'bracket', 'fix', 'fixing', 'fitting', 'fit type']),
-        'recess_exact' => $pick($byName, ['exact or recess', 'recess or exact', 'recess']),
-        'welded'       => $pick($byName, ['fabric finish', 'welded', 'weld', 'joint']),
-        'bottom_weight' => $pick($byName, ['bottom weight option', 'bottom weight', 'weight']),
-        'weight_colour' => $pick($byName, ['colour', 'weight colour', 'bottom weight colour']),
+        'bracket'      => $pick($byName, 'bracket'),
+        'recess_exact' => $pick($byName, 'recess_exact'),
+        'welded'       => $pick($byName, 'welded'),
+        'bottom_weight' => $pick($byName, 'bottom_weight'),
+        'weight_colour' => $pick($byName, 'weight_colour'),
     ];
 
     // Generic per-product option values (opt:<group name>) — every option group

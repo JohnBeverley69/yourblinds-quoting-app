@@ -408,18 +408,35 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
 $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE;
 
-// Field sources + samples for JS. The order-detail list is trimmed per product:
-// the vertical-specific fields (draw, wand, welded, weights, headrail colour…)
-// only make sense on the vertical blind. Every other product gets the generic
-// order/line fields (size, fabric, location, notes…) and reaches its own
-// options through the "Product options" group instead.
-$verticalOnlyFields = ['hd_colour', 'control', 'chain', 'draw', 'wand_length', 'fit_height', 'bracket', 'welded', 'bottom_weight', 'weight_colour'];
-$isVertical = stripos($productName, 'Vertical') !== false;
+// Field sources + samples for JS. The order-detail list is trimmed per product.
+//
+// These ten order: fields are filled from the order's own option groups by
+// factory/worksheet-print.php, so a product without the matching group can only
+// ever print them blank — there is no point offering them. The test used to be
+// whether the product's NAME contained "Vertical", which meant renaming a
+// product silently emptied ten fields out of its palette, and any non-vertical
+// product that genuinely had the options could never reach them.
+//
+// Now it is simply: has this product got a group that feeds the field? The
+// alias list is the same one the print path picks with
+// (ws_order_field_options()), so the editor offers a field on exactly the
+// groups that fill it.
+$optionDerived = ws_order_field_options();
+$gatedFields   = ['hd_colour', 'control', 'chain', 'draw', 'wand_length', 'fit_height', 'bracket', 'welded', 'bottom_weight', 'weight_colour'];
+$haveGroups    = [];
+foreach ($productOptions as $po) {
+    $lab = mb_strtolower(trim((string) ($po['label'] ?? '')));
+    if ($lab !== '') $haveGroups[$lab] = true;
+}
 $jsOrderFields = [];
 $jsSamples     = [];
 foreach ($ORDER_FIELDS as $key => [$label, $sample]) {
     $jsSamples['order:' . $key] = $sample;   // keep every sample so an already-placed field still previews
-    if (!$isVertical && in_array($key, $verticalOnlyFields, true)) continue;
+    if (in_array($key, $gatedFields, true)) {
+        $feeds = false;
+        foreach ($optionDerived[$key] ?? [] as $alias) { if (isset($haveGroups[$alias])) { $feeds = true; break; } }
+        if (!$feeds) continue;
+    }
     $jsOrderFields[] = ['key' => $key, 'label' => $label];
 }
 // Sample values for the live preview, from the product's OWN build rules run at
