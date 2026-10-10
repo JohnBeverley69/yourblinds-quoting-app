@@ -20,6 +20,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/_partials/build_eval.php';   // bv_builtin_vars()
+require_once __DIR__ . '/_partials/worksheet_refs.php';   // what a worksheet field can resolve to
 if (PHP_SAPI !== 'cli') {
     require_once __DIR__ . '/auth/middleware.php';
     requireSuperAdmin();
@@ -234,54 +235,46 @@ foreach ($bvByProd as $pid => $vars) {
         }
     }
     if (!$seenCellMiss && !$seenTblMiss && !$seenVarMiss) $okc("{$pname}: rules, options, tables and variables all resolve");
-
-    // 4. Worksheet var: fields backed by a build variable.
-    if ($hasWsTpl) {
-        $wt = $pdo->prepare('SELECT layout_json FROM worksheet_templates WHERE product_id = ?');
-        $wt->execute([$pid]);
-        $seenWs = [];
-        foreach ($wt->fetchAll(PDO::FETCH_COLUMN) as $lj) {
-            $lay = json_decode((string) $lj, true);
-            if (!is_array($lay)) continue;
-            $stack = [$lay];
-            while ($stack) {
-                $node = array_pop($stack);
-                if (!is_array($node)) continue;
-                if (isset($node['source']) && is_string($node['source']) && stripos($node['source'], 'var:') === 0) {
-                    $srcRaw = (string) $node['source'];
-                    $vnRaw  = trim(substr($srcRaw, 4));
-                    $vnLow  = strtolower($vnRaw);
-                    if ($vnRaw === '') { /* nothing named */ }
-                    // The runtime matches the prefix with a case-SENSITIVE
-                    // strncmp, so "Var:" / "VAR:" never matches at all and the
-                    // field falls through to print nothing.
-                    elseif (strncmp($srcRaw, 'var:', 4) !== 0) {
-                        if (!isset($seenWs['!p' . $vnLow])) { $seenWs['!p' . $vnLow] = 1;
-                            $bad("{$pname}: worksheet field source '{$srcRaw}' — the prefix must be lower-case 'var:' (renders blank)");
-                        }
-                    }
-                    // No such variable under any casing: genuinely missing.
-                    elseif (!isset($validVars[$vnLow])) {
-                        if (!isset($seenWs[$vnLow])) { $seenWs[$vnLow] = 1;
-                            $bad("{$pname}: worksheet prints var:'{$vnRaw}' — no build variable of that name (renders blank)");
-                        }
-                    }
-                    // The variable exists but is spelled with different capitals.
-                    // The runtime looks it up with array_key_exists() on the name
-                    // as written, so this prints blank even though the variable is
-                    // right there. Lowercasing both sides is what hid it.
-                    elseif (!isset($validVarsExact[$vnRaw])) {
-                        if (!isset($seenWs['!c' . $vnLow])) { $seenWs['!c' . $vnLow] = 1;
-                            $bad("{$pname}: worksheet prints var:'{$vnRaw}' but the build variable is spelled differently — the lookup is case-sensitive, so it renders blank");
-                        }
-                    }
-                }
-                foreach ($node as $child) { if (is_array($child)) $stack[] = $child; }
-            }
-        }
-    }
 }
 
+// ---- Worksheet fields resolve ------------------------------------------------
+// Its own pass rather than part of the build-rules loop above, because that loop
+// only visits products that HAVE build variables — so a product set to "Same as
+// <other>" was never visited and its worksheet went unchecked entirely. This one
+// visits every product with a saved template, and asks ws_orphan_sources() the
+// same question the worksheet editor asks, out of the same helper, so the editor
+// and this check can never disagree.
+$hdr('WORKSHEET FIELDS (var: / opt: must resolve, or the ticket prints a bare caption)');
+if ($hasWsTpl) {
+    $wsAny = false;
+    foreach ($pdo->query(
+        'SELECT t.id, t.name AS tpl, t.product_id, t.layout_json, p.name AS pname, p.client_id
+           FROM worksheet_templates t JOIN products p ON p.id = t.product_id
+       ORDER BY p.name, t.id'
+    ) as $t) {
+        $pname = (string) ($t['pname'] ?? '?');
+        $tname = (string) ($t['tpl'] ?? '');
+        $lay   = json_decode((string) $t['layout_json'], true);
+        if (!is_array($lay)) { $bad("{$pname} ({$tname}): the saved layout is not readable JSON"); $wsAny = true; continue; }
+        $vars = ws_valid_var_names($pdo, (int) $t['product_id']);
+        $opts = ws_valid_opt_keys($pdo, (int) $t['product_id'], (int) $t['client_id']);
+        foreach (ws_orphan_sources($lay, $vars, $opts) as $src => $cap) {
+            $isVar = strncmp($src, 'var:', 4) === 0;
+            $name  = trim(substr($src, 4));
+            // "Spelled differently" and "not there at all" look identical on the
+            // ticket — a bare caption — but need different fixes, so say which.
+            $near = ($isVar && isset($vars['lower'][mb_strtolower($name)]))
+                  ? ' — it is spelled "' . $vars['lower'][mb_strtolower($name)] . '", and the lookup is case-sensitive'
+                  : ' — no ' . ($isVar ? 'build variable' : 'option group') . ' of that name on this product';
+            $bad("{$pname} ({$tname}): prints {$src}" . ($cap !== '' ? " captioned \"{$cap}\"" : '')
+               . $near . ', so the ticket shows the caption with nothing beside it');
+            $wsAny = true;
+        }
+    }
+    if (!$wsAny) $okc('every worksheet field resolves to a real build variable or option group');
+} else {
+    $okc('no worksheet_templates table — nothing to check');
+}
 // ---- Global: inert allowance tables -------------------------------------------
 $hdr('INERT ALLOWANCE / CHART TABLES (referenced by no formula)');
 $anyInert = false;
