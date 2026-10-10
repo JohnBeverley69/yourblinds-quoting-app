@@ -40,6 +40,16 @@ try {
 } catch (Throwable $e) {
     qb_flash_redirect($back, 'error', 'Could not save the price — run migrate_direct_orders.php. (' . $e->getMessage() . ')');
 }
-qb_flash_redirect($back, 'success', trim((string) ($_POST['sold_for'] ?? '')) === ''
-    ? 'Sold for price cleared.'
-    : 'Sold for price saved — this order now counts in your sales and profit figures.');
+// The message has to describe what was actually STORED, not what was typed.
+// qb_save_sold_for() (_helpers.php:147) treats anything non-numeric or <= 0 the
+// same as blank and NULLs all four sold_for_* columns, so typing 0 — a free
+// replacement, or a slip while clearing the field — cleared the price while the
+// page said "this order now counts in your sales and profit figures". It
+// doesn't: the Dashboard keeps it out of revenue and profit and still lists it
+// under "Direct orders — no selling price", which filters on
+// sold_for_net IS NULL.
+$sfRaw   = trim(str_replace([',', '£'], '', (string) ($_POST['sold_for'] ?? '')));
+$sfKept  = $sfRaw !== '' && is_numeric($sfRaw) && (float) $sfRaw > 0;
+qb_flash_redirect($back, 'success', $sfKept
+    ? 'Sold for price saved — this order now counts in your sales and profit figures.'
+    : 'Sold for price cleared — this order won’t count towards sales or profit until you enter what you sold it for.');
