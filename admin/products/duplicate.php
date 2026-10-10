@@ -86,7 +86,7 @@ try {
     //   band_label        — per-product label for the band/range field
     $optionalCols = [];
     foreach (['cost_price', 'requires_option', 'width_only',
-              'price_per_slat', 'show_colour_field', 'band_label'] as $col) {
+              'price_per_slat', 'show_colour_field', 'band_label', 'band_start_first'] as $col) {
         try {
             $pdo->query("SELECT $col FROM products LIMIT 1");
             $optionalCols[] = $col;

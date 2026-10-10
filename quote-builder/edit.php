@@ -3096,11 +3096,13 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
         bandSel.disabled  = bands.length === 0;
         // Selection: keep the prior pick if it's still valid; else if the
         // system maps to exactly ONE band, auto-select it (a system with a
-        // single price list shouldn't need a manual pick); otherwise
-        // default to "All bands".
+        // single price list shouldn't need a manual pick), or the product is
+        // set to start on its first band (e.g. String on a wood venetian —
+        // the top of the Price tables order); otherwise "All bands".
+        var startFirst = !!(productData && productData.product && productData.product.band_start_first);
         if (prev && bands.indexOf(prev) !== -1) {
             bandSel.value = prev;
-        } else if (bands.length === 1) {
+        } else if (bands.length === 1 || (startFirst && bands.length)) {
             bandSel.value = bands[0];
         } else {
             bandSel.value = '';

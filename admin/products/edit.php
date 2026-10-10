@@ -85,6 +85,18 @@ if ($hasBandLabel) {
     } catch (Throwable $e) { /* keep '' */ }
 }
 
+// band_start_first is an optional column (migrate_band_start_first.php):
+// 1 = the band box in the quote builder / InstaPrice opens on the system's
+// FIRST band (the top of its price-table order) instead of "All bands".
+$hasBandStartFirst = false;
+$bandStartFirstValue = 0;
+try {
+    $bsfStmt = db()->prepare('SELECT band_start_first FROM products WHERE id = ? AND client_id = ?');
+    $bsfStmt->execute([$id, $clientId]);
+    $hasBandStartFirst = true;
+    $bandStartFirstValue = (int) $bsfStmt->fetchColumn();
+} catch (Throwable $e) { /* column not migrated yet */ }
+
 // supplier_name is an optional column (migrate_suppliers.php) — the supplier
 // this product is ordered from. Drives the Settings suppliers list and (later)
 // the split-by-supplier order email. Detected + loaded separately, same as
@@ -512,6 +524,8 @@ $f = [
     'supplier_name'     => $supplierValue,
     // Per-product label for the band step ('' = "Band"). Optional column.
     'band_label'        => $bandLabelValue,
+    // 1 = band box opens on the first band, not "All bands". Optional column.
+    'band_start_first'  => $bandStartFirstValue,
     // 1 = needs a fabric (normal); 0 = no-fabric product. Optional column.
     'requires_option'   => $requiresOptionValue,
     // 'own' = the grid is our selling price; 'supplier' = it's their list and
@@ -557,6 +571,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $f['option_label']      = trim((string) ($_POST['option_label'] ?? '')) ?: 'Fabric';
     $f['supplier_name']     = trim((string) ($_POST['supplier_name'] ?? ''));
     $f['band_label']        = trim((string) ($_POST['band_label'] ?? ''));
+    $f['band_start_first']  = !empty($_POST['band_start_first']) ? 1 : 0;
     // Checkbox is "this product has no fabrics" → requires_option = 0.
     $f['requires_option']   = !empty($_POST['no_fabric']) ? 0 : 1;
     // Radio: whose price list the grids hold. Anything unexpected → 'own',
@@ -650,6 +665,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($hasBandLabel) {
                 $cols[] = 'band_label = ?';
                 $vals[] = $f['band_label'] !== '' ? $f['band_label'] : null;
+            }
+            if ($hasBandStartFirst) {
+                $cols[] = 'band_start_first = ?';
+                $vals[] = $f['band_start_first'];
             }
             if ($hasSupplierCol) {
                 $cols[] = 'supplier_name = ?';
@@ -1200,6 +1219,17 @@ $activeNav = 'products';
                                 Leave blank for the default <em>Band</em>. For a wood
                                 venetian, e.g. <em>Tape / String</em>.
                             </small>
+                            <?php if ($hasBandStartFirst): ?>
+                                <label style="display:flex;gap:0.5rem;align-items:center;margin-top:0.6rem;font-weight:normal">
+                                    <input type="checkbox" name="band_start_first" value="1"
+                                           <?= !empty($f['band_start_first']) ? 'checked' : '' ?>>
+                                    Start on the first band instead of <em>All bands</em>
+                                </label>
+                                <small class="ui-hint" style="color:var(--text-faint);font-size:0.8125rem">
+                                    The first band is the top one in each system&rsquo;s
+                                    Price tables order &mdash; drag that list to change it.
+                                </small>
+                            <?php endif; ?>
                         </div>
                     </div>
                 <?php endif; ?>

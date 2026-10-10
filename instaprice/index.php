@@ -557,8 +557,11 @@ $activeNav = 'instaprice';
         bands.forEach(function (b) { opts += '<option value="' + escapeAttr(b) + '">' + escapeHtml(b) + '</option>'; });
         bandSel.innerHTML = opts;
         bandSel.disabled = bands.length === 0;
+        // A product set to "start on the first band" opens on the top of its
+        // Price tables order (e.g. String) instead of "All bands".
+        var startFirst = !!(productData && productData.product && productData.product.band_start_first);
         if (prev && bands.indexOf(prev) !== -1) bandSel.value = prev;
-        else if (bands.length === 1) bandSel.value = bands[0];
+        else if (bands.length === 1 || (startFirst && bands.length)) bandSel.value = bands[0];
         else bandSel.value = '';
     }
 

@@ -56,7 +56,7 @@ function seed_client_from_template(PDO $pdo, int $sourceClientId, int $newClient
     // predating its migration doesn't have yet.
     $flagCols = [];
     foreach (['requires_option', 'width_only', 'price_per_slat', 'price_per_sqm',
-              'min_area_m2', 'show_colour_field', 'band_label'] as $col) {
+              'min_area_m2', 'show_colour_field', 'band_label', 'band_start_first'] as $col) {
         try {
             $pdo->query("SELECT $col FROM products LIMIT 1");
             $flagCols[] = $col;

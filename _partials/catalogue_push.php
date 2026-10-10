@@ -88,7 +88,7 @@ function push_catalogue_to_client(
     // not a cost. Without it a tenant's mirror of a product that carries one
     // quotes less than the master for the same blind.
     foreach (['requires_option', 'width_only', 'price_per_slat', 'price_per_sqm',
-              'min_area_m2', 'show_colour_field', 'band_label', 'line_charge'] as $col) {
+              'min_area_m2', 'show_colour_field', 'band_label', 'band_start_first', 'line_charge'] as $col) {
         try {
             $pdo->query("SELECT $col FROM products LIMIT 1");
             $flagCols[] = $col;
@@ -1340,9 +1340,13 @@ function pp_sync_price_tables(
 
     $seenTableIds = [];
     $hasTableSrc  = pp_has_src_col($pdo, 'price_tables', 'source_table_id');
+    // The band order (drag-sorted on the Price tables page) is what the band
+    // box lists in, so the tenant's tables need the master's order too.
+    $hasPtSort    = pp_has_src_col($pdo, 'price_tables', 'sort_order');
 
     $src = $pdo->prepare(
-        'SELECT id, system_id, band_code, name, notes, active
+        'SELECT id, system_id, band_code, name, notes, active'
+        . ($hasPtSort ? ', sort_order' : '') . '
            FROM price_tables
           WHERE client_id = ? AND product_id = ?
           ORDER BY id'
@@ -1431,12 +1435,14 @@ function pp_sync_price_tables(
             $params = [
                 $targetClientId, $targetProductId,
                 $tgtSystemId,
-                strtoupper((string) $pt['band_code']),
+                // Exactly as the master has it — "String", not "STRING".
+                (string) $pt['band_code'],
                 $pt['name']  !== null ? (string) $pt['name']  : null,
                 $pt['notes'] !== null ? (string) $pt['notes'] : null,
                 (int) ($pt['active'] ?? 1),
             ];
             if ($hasTableSrc) { $cols[] = 'source_table_id'; $params[] = $srcTableId; }
+            if ($hasPtSort)   { $cols[] = 'sort_order';      $params[] = (int) $pt['sort_order']; }
             $pdo->prepare(
                 'INSERT INTO price_tables (' . implode(',', $cols) . ') VALUES ('
                 . implode(',', array_fill(0, count($cols), '?')) . ')'
@@ -1450,12 +1456,13 @@ function pp_sync_price_tables(
             $sets   = ['system_id = ?', 'band_code = ?', 'name = ?', 'notes = ?', 'active = ?'];
             $params = [
                 $tgtSystemId,
-                strtoupper((string) $pt['band_code']),
+                (string) $pt['band_code'],
                 $pt['name']  !== null ? (string) $pt['name']  : null,
                 $pt['notes'] !== null ? (string) $pt['notes'] : null,
                 (int) ($pt['active'] ?? 1),
             ];
             if ($hasTableSrc) { $sets[] = 'source_table_id = ?'; $params[] = $srcTableId; }
+            if ($hasPtSort)   { $sets[] = 'sort_order = ?';      $params[] = (int) $pt['sort_order']; }
             $params[] = $tgtPtId;
             $pdo->prepare(
                 'UPDATE price_tables SET ' . implode(', ', $sets) . ' WHERE id = ?'

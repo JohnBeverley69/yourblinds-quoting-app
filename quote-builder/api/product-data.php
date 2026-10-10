@@ -47,6 +47,7 @@ $pdo = db();
 // endpoint works on schemas where either migration hasn't run.
 $product = false;
 foreach ([
+    'id, name, option_label, band_label, band_start_first, requires_option, width_only, price_per_slat, price_per_sqm, min_area_m2',
     'id, name, option_label, band_label, requires_option, width_only, price_per_slat, price_per_sqm, min_area_m2',
     'id, name, option_label, band_label, requires_option, width_only, price_per_slat',
     'id, name, option_label, band_label, requires_option, width_only',
@@ -120,14 +121,25 @@ $bandSort = "CASE band_code WHEN 'AAA' THEN 1 WHEN 'AA' THEN 2 "
 // up under the 35mm system, which has no gloss price table.
 $bands         = [];
 $bandsBySystem = [];
+// The Price tables page is drag-sortable per system (sort_order), and that
+// order is the one the salesperson should see — "String" first because it
+// sells most, not whatever A→Z gives. The band rank breaks ties (and is all
+// there is on a schema without the column).
+$bandOrder = "MIN(sort_order), $bandSort";
+try {
+    $pdo->query('SELECT sort_order FROM price_tables LIMIT 1');
+} catch (Throwable $e) {
+    $bandOrder = $bandSort;
+}
 try {
     // Flat list — every band defined on the product across all systems.
     // Used only when no system is picked or the product has no systems.
     $flatSt = $pdo->prepare(
-        "SELECT DISTINCT band_code FROM price_tables
+        "SELECT band_code FROM price_tables
           WHERE product_id = ? AND client_id = ? AND active = 1
             AND band_code IS NOT NULL AND band_code != ''
-       ORDER BY $bandSort"
+       GROUP BY band_code
+       ORDER BY $bandOrder"
     );
     $flatSt->execute([$productId, $clientId]);
     $bands = array_map('strval', $flatSt->fetchAll(PDO::FETCH_COLUMN));
@@ -136,11 +148,12 @@ try {
     // system, and only that system.
     if ($systems) {
         $bsSt = $pdo->prepare(
-            "SELECT DISTINCT band_code FROM price_tables
+            "SELECT band_code FROM price_tables
               WHERE product_id = ? AND client_id = ? AND active = 1
                 AND system_id = ?
                 AND band_code IS NOT NULL AND band_code != ''
-           ORDER BY $bandSort"
+           GROUP BY band_code
+           ORDER BY $bandOrder"
         );
         foreach ($systems as $s) {
             $sid = (int) $s['id'];
@@ -438,6 +451,8 @@ echo json_encode([
         'option_label' => (string) ($product['option_label'] ?? ''),
         // Per-product label for the band step; '' = front-ends use "Band".
         'band_label'   => (string) ($product['band_label'] ?? ''),
+        // true = the band box opens on the system's first band, not "All bands".
+        'band_start_first' => !empty($product['band_start_first']),
         // requires_option = false marks a no-fabric product (headrail/
         // track/spares): the front-ends hide the Band + Fabric pickers
         // and price on system × size alone. Absent column ⇒ true (the
