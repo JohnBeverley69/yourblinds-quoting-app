@@ -36,16 +36,26 @@ if ($block !== '') {
     exit;
 }
 
-// The trade account page asks for the name to be typed, so a stray click can't do it.
-if ($fromTA) {
-    $st = $pdo->prepare('SELECT company_name FROM clients WHERE id = ? LIMIT 1');
-    $st->execute([$targetId]);
-    $name = (string) ($st->fetchColumn() ?: '');
-    if (mb_strtolower(trim((string) ($_POST['confirm_name'] ?? ''))) !== mb_strtolower(trim($name))) {
-        $_SESSION['flash_error'] = 'Nothing deleted — type the account name exactly as shown to confirm.';
-        header('Location: ' . $back . '#delete-account');
-        exit;
-    }
+// Type the name, from wherever the delete was asked for. This used to be
+// `if ($fromTA)`, so only the trade-account page's Danger zone asked — and
+// Platform → Clients posted here without return=trade-account, giving a
+// one-click path to the same operation.
+//
+// That operation is no longer what its old confirm text said. Since #942,
+// cl_delete_client() destroys the factory's invoices and invoice lines, credit
+// notes, payments and allocations, delivery notes and lines, the
+// statement-email log, bank payer aliases, office-calendar callbacks, remakes,
+// floor jobs/streams/scan log, and every order the factory raised for the
+// account (_partials/client_delete.php:82-121). An account with £6k
+// outstanding went in one transaction behind a modal that only mentioned
+// catalogue and quote data.
+$st = $pdo->prepare('SELECT company_name FROM clients WHERE id = ? LIMIT 1');
+$st->execute([$targetId]);
+$name = (string) ($st->fetchColumn() ?: '');
+if (mb_strtolower(trim((string) ($_POST['confirm_name'] ?? ''))) !== mb_strtolower(trim($name))) {
+    $_SESSION['flash_error'] = 'Nothing deleted — type the account name exactly as shown to confirm.';
+    header('Location: /master-admin/trade-account.php?id=' . $targetId . '#delete-account');
+    exit;
 }
 
 $res = cl_delete_client($pdo, $targetId);

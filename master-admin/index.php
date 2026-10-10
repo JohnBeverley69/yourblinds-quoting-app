@@ -308,12 +308,21 @@ $activeNav = 'master-admin';
                                             (protected)
                                         </span>
                                     <?php else: ?>
-                                        <form method="post" action="/master-admin/delete-client.php"
-                                              data-confirm="Delete <?= e((string) $r['company_name']) ?>? This is permanent. ALL of the client's data is removed: users, customers, quotes, products, fabrics, systems, options, choices, price tables and rows. No undo.">
-                                            <?= csrf_field() ?>
-                                            <input type="hidden" name="client_id" value="<?= (int) $r['id'] ?>">
-                                            <button type="submit">Delete</button>
-                                        </form>
+                                        <?php
+                                        // Links to the account's own Danger zone rather than
+                                        // posting the delete from here. There used to be a
+                                        // one-click form with a data-confirm listing "users,
+                                        // customers, quotes, products, fabrics, systems,
+                                        // options, choices, price tables and rows" — written
+                                        // before #942, which added invoices, credit notes,
+                                        // payments, delivery notes, remakes, floor jobs and
+                                        // every order the factory raised for the account to
+                                        // what cl_delete_client() destroys. The modal
+                                        // understated it badly, and this screen skipped the
+                                        // name-typing step the trade-account page asks for.
+                                        // One delete path now, with the gate on it.
+                                        ?>
+                                        <a href="/master-admin/trade-account.php?id=<?= (int) $r['id'] ?>#delete-account">Delete&hellip;</a>
                                     <?php endif; ?>
                                 </td>
                             </tr>
