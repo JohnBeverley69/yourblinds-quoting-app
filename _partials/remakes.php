@@ -96,15 +96,44 @@ function rm_order_lines(PDO $pdo, int $factory, int $quoteId): array
 {
     $lines = ar_order_lines_for_doc($pdo, $factory, $quoteId);
     if (!$lines) return [];
-    $unitBy = [];
+
+    // Is this order itself a remake? If so its lines' sell_price / line_total
+    // are the spread remake CHARGE that rm_create_remake_order wrote (often
+    // 0.00 on a free one), not the blinds' trade value — so billing figures
+    // are the wrong source and a remake of a remake came out at £0. The raise
+    // form then offered "Full trade price of these blinds: £0.00", cost was
+    // stored as 0, and the Remakes report under-stated both "Trade value
+    // remade" and "Cost to us" by the whole second remake.
+    //
+    // The trade figures ARE on the line: $itemSkip only drops sell_price,
+    // line_total and subtotal_per_blind, so trade_price_per_blind and
+    // base_price are inherited from the original intact. Use those directly
+    // rather than walking back to the source order, which has no per-line link
+    // to walk (the copy keeps no source_quote_item_id).
+    $isRemake = false;
     try {
-        foreach (ar_invoice_lines_from_order($pdo, $factory, $quoteId, false)['lines'] as $l) {
-            if (($l['line_type'] ?? '') === 'blind' && $l['source_quote_item_id']) {
-                $q = max(1, (int) $l['quantity']);
-                $unitBy[(int) $l['source_quote_item_id']] = round((float) $l['line_net'] / $q, 2);
-            }
+        $rq = $pdo->prepare('SELECT remake_of_quote_id FROM quotes WHERE id = ? LIMIT 1');
+        $rq->execute([$quoteId]);
+        $isRemake = (int) ($rq->fetchColumn() ?: 0) > 0;
+    } catch (Throwable $e) { /* column absent — no remakes exist */ }
+
+    $unitBy = [];
+    if ($isRemake) {
+        foreach ($lines as $l) {
+            $unit = (float) ($l['trade_price_per_blind'] ?? 0);
+            if ($unit <= 0) $unit = (float) ($l['base_price'] ?? 0);
+            $unitBy[(int) $l['id']] = round($unit, 2);
         }
-    } catch (Throwable $e) { /* cost unknown — 0 */ }
+    } else {
+        try {
+            foreach (ar_invoice_lines_from_order($pdo, $factory, $quoteId, false)['lines'] as $l) {
+                if (($l['line_type'] ?? '') === 'blind' && $l['source_quote_item_id']) {
+                    $q = max(1, (int) $l['quantity']);
+                    $unitBy[(int) $l['source_quote_item_id']] = round((float) $l['line_net'] / $q, 2);
+                }
+            }
+        } catch (Throwable $e) { /* cost unknown — 0 */ }
+    }
     $out = [];
     foreach ($lines as $l) {
         $fab = trim(implode(' / ', array_filter([(string) $l['fabric_name_snapshot'], (string) $l['fabric_colour_snapshot']],
