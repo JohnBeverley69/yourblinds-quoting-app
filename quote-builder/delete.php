@@ -50,9 +50,19 @@ try {
 
 // supplier_orders has no FK to quotes, so its send-log rows would otherwise
 // be left behind pointing at a now-deleted quote. Clean them up explicitly.
+//
+// Keyed on quote_id ONLY. When the factory orders the bought-in lines of a
+// tenant's order, the row is stamped with the FACTORY's client_id, not the
+// tenant's (factory_boughtin.php:185 passes 'client_id' => $factoryId into
+// supplier_send_group()), so filtering on the signed-in tenant missed exactly
+// the rows this exists to clear — the factory's send survived pointing at a
+// deleted quote, still matched by factory_boughtin.php:37 and
+// order-suppliers.php:155. Safe because qb_load_quote_or_404() above has
+// already proved this quote belongs to this tenant, and quote_id is globally
+// unique — the same reasoning the appointments cleanup below states.
 try {
-    db()->prepare('DELETE FROM supplier_orders WHERE quote_id = ? AND client_id = ?')
-        ->execute([$quoteId, $clientId]);
+    db()->prepare('DELETE FROM supplier_orders WHERE quote_id = ?')
+        ->execute([$quoteId]);
 } catch (Throwable $e) { /* table absent — nothing to clean */ }
 
 // Remove the order's calendar appointments (e.g. the pending fitting seeded on
