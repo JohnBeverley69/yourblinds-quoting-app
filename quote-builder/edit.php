@@ -3839,7 +3839,10 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
             round_up:   '1',
             unit:       measureUnit,
             // Factory quote raised FOR a trade account → price the preview with
-            // their buying discount (server honours it for super-admins only).
+            // their buying discount, so the panel matches the saved line.
+            // quote_id so the endpoint reads the account off the stored quote itself
+            // rather than trusting this value — preview and save then agree.
+            quote_id:   '<?= (int) $quote['id'] ?>',
             account_id: '<?= (int) ($quote['account_client_id'] ?? 0) ?>',
             direct_order: '<?= $isDirectOrder ? '1' : '' ?>'
         });
@@ -4104,6 +4107,9 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
         var params = new URLSearchParams({
             product_id: productSel.value, system_id: systemSel.value || '0', option_id: fabricId.value,
             drop: dropIn.value, quantity: '1', round_up: '1', unit: measureUnit,
+            // quote_id so the endpoint reads the account off the stored quote itself
+            // rather than trusting this value — preview and save then agree.
+            quote_id:   '<?= (int) $quote['id'] ?>',
             account_id: '<?= (int) ($quote['account_client_id'] ?? 0) ?>',
             direct_order: '<?= $isDirectOrder ? '1' : '' ?>'
         });

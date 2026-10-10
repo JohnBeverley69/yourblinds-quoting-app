@@ -42,10 +42,35 @@ header('Cache-Control: no-store');
 [$clientId, $ipPublic] = instaprice_api_client();
 $user = current_user();   // null in public mode
 
-// When a super-admin is previewing a line on a factory quote raised FOR a trade
-// account, price with the account's buying discount so the live preview matches
-// what gets saved. Super-admin only (read-only price probe otherwise); 0 = normal.
-$forAccountId = is_super_admin() ? (int) ($_GET['account_id'] ?? 0) : 0;
+// The account this quote is raised FOR, so the live preview prices the line the
+// same way the save will. It is read from the stored quote, not taken from the
+// request: the builder sends quote_id and the account comes out of the same
+// column add_item.php / update_item.php use ($quote['account_client_id']).
+//
+// It used to be `is_super_admin() ? (int) $_GET['account_id'] : 0` while the
+// SAVE path applied the account unconditionally, so for anyone who isn't a
+// super-admin the two disagreed. The engine's paths differ materially, not
+// cosmetically — $forAccountId > 0 resolves the discount with
+// pe_account_trade_discount_for_master() and takes it off at step 8 — so a
+// factory office login with Can-create-orders saw one price in the panel and
+// a different one on the saved line, with nothing on screen explaining it.
+//
+// Scoped to the caller's own client_id, so this can only ever surface their own
+// tenant's buying deal — which the save path applies for them regardless.
+$forAccountId = 0;
+$previewQuoteId = (int) ($_GET['quote_id'] ?? 0);
+if ($previewQuoteId > 0 && is_array($user)) {
+    try {
+        $pqs = db()->prepare('SELECT account_client_id FROM quotes WHERE id = ? AND client_id = ? LIMIT 1');
+        $pqs->execute([$previewQuoteId, $clientId]);
+        $forAccountId = (int) ($pqs->fetchColumn() ?: 0);
+    } catch (Throwable $e) { /* account_client_id not migrated — price as normal */ }
+}
+// No saved quote to read from (a brand-new line before the quote exists): a
+// super-admin may still name the account directly, as before.
+if ($forAccountId === 0 && is_super_admin()) {
+    $forAccountId = (int) ($_GET['account_id'] ?? 0);
+}
 
 // Cost-viewers only: the per-line markup/discount override IS the trade
 // margin, and the cost / trade-discount figures are for them alone.
