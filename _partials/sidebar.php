@@ -289,6 +289,9 @@ if ($isFactoryConsole) {
             'items' => [
                 'factory-dashboard' => ['/factory/dashboard.php', 'Dashboard', true],
                 'factory-orders'    => ['/factory/orders.php',    'Orders',    true],
+                // Straight to the Quotes stage of the same list — our own trade and
+                // retail quotes that haven't been placed as orders yet.
+                'factory-quotes'    => ['/factory/orders.php?stage=notplaced', 'Quotes', true],
                 'remakes'           => ['/factory/remakes.php',   $_ybRemakesLabel, true],
                 'office-calendar'   => ['/factory/calendar.php',  $_ybCalLabel,     true],
             ],

@@ -25,7 +25,7 @@ require_once __DIR__ . '/order_stage.php';
 function fc_stage_meta(): array
 {
     return [
-        'notplaced'     => ['Not placed',     '#475569', '#e2e8f0'],
+        'notplaced'     => ['Quotes',         '#475569', '#e2e8f0'],
         'new'           => ['New',            '#b91c1c', '#fee2e2'],
         'confirmed'     => ['Received',       '#5b6b7f', '#e6ebf1'],
         'in_production' => ['In production',  '#b5730f', '#f7ecd6'],
