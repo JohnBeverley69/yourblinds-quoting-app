@@ -24,6 +24,13 @@ require __DIR__ . '/../auth/middleware.php';
 
 requireFactory();
 
+// Office-only links on this otherwise floor-visible page. f027a54 kept
+// Worksheets open to the floor on purpose but tightened build-rules.php and
+// roller-label-editor.php to requireFactoryOffice(), leaving two links here
+// that 403 — including the "add them in Build rules" hint, which fires exactly
+// when the product is in the state the hint is telling you to go and fix.
+$wsOffice = !function_exists('factory_user_is_office') || factory_user_is_office();
+
 $pdo    = db();
 $MASTER = current_factory_id();
 
@@ -641,9 +648,9 @@ require __DIR__ . '/../_partials/factory_head.php';
                 <option value="a4-diecut">A4 die-cut sheet</option>
                 <option value="roll-102x76">Roll of labels</option>
             </select></label>
-        <?php if (!$buildVars): ?><span class="ws-hint">Tip: this product has no build variables yet — add them in <a href="/factory/build-rules.php?product_id=<?= $productId ?>">Build rules</a> and they'll appear as field sources here.</span><?php endif; ?>
+        <?php if (!$buildVars): ?><span class="ws-hint">Tip: this product has no build variables yet — <?php if ($wsOffice): ?>add them in <a href="/factory/build-rules.php?product_id=<?= $productId ?>">Build rules</a> and they&rsquo;ll appear<?php else: ?>the office can add them in Build rules and they&rsquo;ll appear<?php endif; ?> as field sources here.</span><?php endif; ?>
         <?php if (stripos($productName, 'roller') !== false): ?>
-            <a href="/factory/roller-label-editor.php?product_id=<?= (int) $productId ?>" style="font-weight:600; color:#1f3b5b; margin-left:auto;" title="The roller label's printed grid (the boxes + cut row) is bespoke — edit its layout here. Size / font / QR stay on this page.">Edit box layout &rarr;</a>
+            <?php if ($wsOffice): ?><a href="/factory/roller-label-editor.php?product_id=<?= (int) $productId ?>" style="font-weight:600; color:#1f3b5b; margin-left:auto;" title="The roller label's printed grid (the boxes + cut row) is bespoke — edit its layout here. Size / font / QR stay on this page.">Edit box layout &rarr;</a><?php endif; ?>
         <?php endif; ?>
     </div>
 

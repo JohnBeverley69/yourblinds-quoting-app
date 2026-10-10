@@ -13,6 +13,17 @@ $orderAreas  = $orderAreas  ?? [];
 $orderTotals = $orderTotals ?? [];
 $areaNames   = $areaNames   ?? [];
 
+// Whether to link the order header through to /factory/order-areas.php, which
+// is requireFactoryOffice(). The Floor itself is requireFactory(), so bench and
+// area logins live here — and f027a54 tightened order-areas.php from
+// requireFactory to requireFactoryOffice without gating these links, so the
+// "N still to make" badge an area login taps all day landed them on a bare
+// "Factory office only" 403 with no way back but the Back button.
+// order-areas.php's own docblock is about giving a bench the whole picture,
+// which is the part that got lost. Non-office logins now see the same badge as
+// plain text rather than a door that won't open.
+$flOffice = !function_exists('factory_user_is_office') || factory_user_is_office();
+
 // Rows arrive grouped by order (the query orders by due, then q.id, line, unit),
 // so a header can simply be emitted whenever the order changes. Everything that
 // describes the ORDER rather than the blind lives on that header now: it used to
@@ -44,13 +55,13 @@ foreach ($rows as $r):
             </span>
             <?php if ($ordTotal > 0): ?>
                 <?php if ($ordDone >= $ordTotal): ?>
-                    <a class="fl-ord ready" href="/factory/order-areas.php?order=<?= $qidRow ?>" title="Every blind on this order is made — it can be dispatched">&#10003; ready to dispatch</a>
+                    <?php if ($flOffice): ?><a class="fl-ord ready" href="/factory/order-areas.php?order=<?= $qidRow ?>" title="Every blind on this order is made — it can be dispatched">&#10003; ready to dispatch</a><?php else: ?><span class="fl-ord ready" title="Every blind on this order is made — it can be dispatched">&#10003; ready to dispatch</span><?php endif; ?>
                 <?php else: ?>
-                    <a class="fl-ord wait" href="/factory/order-areas.php?order=<?= $qidRow ?>" title="This order can't dispatch until all its blinds are made"><?= $ordTotal - $ordDone ?> still to make</a>
+                    <?php if ($flOffice): ?><a class="fl-ord wait" href="/factory/order-areas.php?order=<?= $qidRow ?>" title="This order can't dispatch until all its blinds are made"><?= $ordTotal - $ordDone ?> still to make</a><?php else: ?><span class="fl-ord wait" title="This order can't dispatch until all its blinds are made"><?= $ordTotal - $ordDone ?> still to make</span><?php endif; ?>
                 <?php endif; ?>
             <?php endif; ?>
             <?php if (count($oa) > 1): ?>
-                <a class="fl-others" href="/factory/order-areas.php?order=<?= $qidRow ?>" title="See the whole order across every area">
+                <a class="fl-others"<?php if ($flOffice): ?> href="/factory/order-areas.php?order=<?= $qidRow ?>" title="See the whole order across every area"<?php endif; ?>>
                     <?php foreach ($oa as $aid => $ag):
                         $nm  = $aid === 0 ? 'Unassigned' : ($areaNames[$aid] ?? ('Area ' . $aid));
                         $cls = $ag['done'] >= $ag['total'] ? 'done' : ($ag['done'] > 0 ? 'part' : '');
