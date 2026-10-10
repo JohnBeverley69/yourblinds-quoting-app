@@ -6,6 +6,7 @@ require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/_helpers.php';
 require __DIR__ . '/../_partials/units.php';
 require __DIR__ . '/../_partials/pricing_basis.php';
+require_once __DIR__ . '/../accounts/_helpers.php';   // acct_user_can_touch_quote (the payment handler's own rule)
 require __DIR__ . '/../_partials/cost_reveal.php';
 
 requireLogin();
@@ -2357,7 +2358,22 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                 </table>
             <?php endif; ?>
 
-            <?php if ($quoteIsOrder && $outstandingHere > 0.0049): ?>
+            <?php
+            // The handler is stricter than this page was. accounts/payment_save.php
+            // calls acct_user_can_touch_quote(), which needs admin,
+            // can_view_all_customer_jobs, or an appointment on THIS quote assigned
+            // to this user (accounts/_helpers.php:52) on top of "can see money".
+            // The card only tested $paymentsLoaded, so a salesperson with
+            // can_create_quotes + Can-see-money but not View-all was shown
+            // "💷 Record a new payment" with the outstanding pre-filled, typed
+            // £500, and got "You don't have permission to record payments for that
+            // order." with nothing saved — while the deposit row beside it let them
+            // mark the same £500 paid, because that uses a different rule.
+            $canRecordPayment = function_exists('acct_user_can_touch_quote')
+                ? acct_user_can_touch_quote(db(), $clientId, $user, (int) $quote['id'])
+                : true;
+            ?>
+            <?php if ($quoteIsOrder && $outstandingHere > 0.0049 && $canRecordPayment): ?>
                 <div class="record-payment-card">
                     <h3 class="record-payment-card__title">
                         💷 Record a new payment
