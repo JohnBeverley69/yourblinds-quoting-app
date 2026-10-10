@@ -226,9 +226,13 @@ function ar_placed_orders(PDO $pdo, int $factoryId, ?int $accountId = null, ?str
     // because its line_total is the account's own RETAIL price (≈2× wholesale).
     // A Beverley-raised order bills line_total, reconciled below (in PHP) to the
     // order's stored net so an agreed price_override is honoured.
+    // opt_trade is NET of any per-option buying discount, matching what
+    // ar_invoice_lines_from_order() now bills — this expression's own comment says
+    // it is "on the same basis", and trade_amount alone is the pre-discount
+    // figure (pricing_engine.php:577 snapshots it before the discount).
     // The CASE carries no placeholders, so the bind order above is unchanged.
     $optJoin =
-        "LEFT JOIN (SELECT e.quote_item_id, SUM(e.trade_amount) AS opt_trade
+        "LEFT JOIN (SELECT e.quote_item_id, SUM(e.trade_amount - COALESCE(e.promo_discount_amount, 0)) AS opt_trade
                       FROM quote_item_extras e
                       JOIN quote_items qi2 ON qi2.id = e.quote_item_id
                       JOIN quotes q2       ON q2.id = qi2.quote_id
@@ -335,6 +339,12 @@ function ar_order_lines_for_doc(PDO $pdo, int $factoryId, int $quoteId): array
     // length) — without it the note printed "+ Fit Height" with no height. Widen
     // the SELECT progressively so a pre-migration schema still gets its options.
     foreach ([
+        // promo_discount_amount first: it is the per-OPTION buying discount the
+        // engine took off (trade_discounts.extra_id / trade_promotions), and
+        // migrate_wholesale_capture.php records it as being "for the wholesale
+        // invoice". Nothing read it, so the invoice billed trade_amount, which
+        // pricing_engine.php:577 snapshots BEFORE that discount is applied.
+        'quote_item_id, extra_name_snapshot, choice_label_snapshot, user_value, amount_applied, trade_amount, promo_discount_amount',
         'quote_item_id, extra_name_snapshot, choice_label_snapshot, user_value, amount_applied, trade_amount',
         'quote_item_id, extra_name_snapshot, choice_label_snapshot, amount_applied, trade_amount',
     ] as $exCols) {
@@ -436,13 +446,28 @@ function ar_invoice_lines_from_order(PDO $pdo, int $factoryId, int $quoteId, boo
 
     foreach ($src as $ln) {
         $qty    = max(1, (int) $ln['quantity']);
-        $optNet = 0.0;
+        // Options kept as three figures, so the invoice can show the per-option
+        // buying discount as a discount rather than silently billing the
+        // undiscounted price:
+        //   $optList = what the option lists at   (trade_amount, pre-discount)
+        //   $optDisc = the discount taken off it  (promo_discount_amount)
+        //   $optNet  = what the account actually pays
+        // trade_amount is snapshotted by pricing_engine.php:577 BEFORE the
+        // per-option discount is applied, and promo_discount_amount holds the £
+        // off. Only $optList was summed, so a 20%-off £150 option priced the
+        // ORDER at £120 and billed the INVOICE £150.
+        $optList = 0.0;
+        $optDisc = 0.0;
         foreach ($ln['extras_rows'] ?? [] as $ex) {
             $ta      = $ex['trade_amount'];
             $applied = (float) ($ex['amount_applied'] ?? 0);
             if ($ta === null) { if ($applied > 0) $uncaptured = true; continue; }
-            $optNet += (float) $ta;
+            $optList += (float) $ta;
+            $optDisc += round((float) ($ex['promo_discount_amount'] ?? 0), 2);
         }
+        $optList = round($optList, 2);
+        $optDisc = round($optDisc, 2);
+        $optNet  = round($optList - $optDisc, 2);
         // Bill the account our SELL price — the same figure the quote shows.
         // sell_price is per blind, incl. options and any per-account discount;
         // trade_price_per_blind is the sell BEFORE their account discount and
@@ -476,13 +501,31 @@ function ar_invoice_lines_from_order(PDO $pdo, int $factoryId, int $quoteId, boo
             $discAmt  = round((float) ($ln['trade_discount_amount'] ?? 0), 2);
             $unitNet  = round(((float) $tradeUnit - $discAmt) + $optNet, 2);
             $lineNet  = round($unitNet * $qty + $lineCharge, 2);
-            // List = trade before their buying discount, plus options (options are
-            // never discounted), so List − Discount = Net reads correctly on the PDF.
-            $listUnit = round((float) $tradeUnit + $optNet, 2);
+            // List = trade before their buying discount, plus options at their
+            // own LIST price, so List − Discount = Net still reads correctly on
+            // the PDF once an option carries its own discount.
+            $listUnit = round((float) $tradeUnit + $optList, 2);
+            // The line's discount is both parts: the blind's buying discount and
+            // any per-option discount. The PDF prints the £ with the percentage
+            // as a muted sub-line (ar_pdf.php:211), so a combined £ beside the
+            // blind's own % would not reconcile — the two-figures-disagree
+            // problem #1004 fixed elsewhere. When an option discount is in play
+            // the percentage is therefore the effective rate off this List,
+            // which does reconcile; with no option discount nothing changes and
+            // the blind's own percentage is passed through untouched.
+            $lineDiscAmt = round($discAmt + $optDisc, 2);
+            $lineDiscPct = $optDisc > 0.004 && $listUnit > 0.004
+                ? round($lineDiscAmt / $listUnit * 100, 2)
+                : $ln['trade_discount_percent'];
         } else {
             $unitNet  = round((float) $ln['sell_price'], 2);
             $lineNet  = round((float) $ln['line_total'], 2);
             $listUnit = round((float) ($ln['trade_price_per_blind'] ?? $ln['sell_price']), 2);
+            // Beverley-raised order: it bills the stored line_total, which the
+            // engine already built, so the option discount is inside it. Nothing
+            // to recombine — pass the blind's own figures straight through.
+            $lineDiscAmt = $ln['trade_discount_amount'];
+            $lineDiscPct = $ln['trade_discount_percent'];
         }
 
         $desc = trim((string) $ln['product_name_snapshot']);
@@ -504,8 +547,8 @@ function ar_invoice_lines_from_order(PDO $pdo, int $factoryId, int $quoteId, boo
             'unit_net'             => $unitNet,
             'line_net'             => $lineNet,
             'list_trade_unit'      => $listUnit,
-            'discount_percent'     => $ln['trade_discount_percent'],
-            'discount_amount'      => $ln['trade_discount_amount'],
+            'discount_percent'     => $lineDiscPct,
+            'discount_amount'      => $lineDiscAmt,
             'sort_order'           => $so++,
         ];
     }
