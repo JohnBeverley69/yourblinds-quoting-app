@@ -104,12 +104,18 @@ $blocked = [];
 // history list and Delete and it goes, blinds on the factory floor and all.
 // One ticked row must not be able to do what its own Delete button refuses.
 $ruleBlocked = [];
+// Also the set of posted ids that genuinely belong to this tenant. $ids comes
+// from the form, and only the quotes DELETE is scoped by client_id — so the
+// child cleanups need a verified id list of their own, or they'd be reaching
+// into rows for quotes they aren't allowed to touch.
+$ownedIds = [];
 $chk = $pdo->prepare(
     "SELECT id, quote_number, status, direct_order, remake_of_quote_id
        FROM quotes WHERE id IN ($ph) AND client_id = ?"
 );
 $chk->execute(array_merge($ids, [$clientId]));
 foreach ($chk->fetchAll(PDO::FETCH_ASSOC) as $row) {
+    $ownedIds[] = (int) $row['id'];
     $why = qb_delete_block_reason($pdo, $row);
     if ($why !== '') {
         $blocked[(int) $row['id']] = (string) $row['quote_number'];
@@ -132,8 +138,12 @@ try {
     // payments table missing — skip the check, proceed with all.
 }
 
-$deletable = array_values(array_diff(
-    array_map('intval', $ids), array_keys($blocked)
+// Deletable = posted, owned by this tenant, and not blocked. Intersecting with
+// $ownedIds is what lets the child cleanups below drop their own client_id
+// filter — see the supplier_orders note there for why they have to.
+$deletable = array_values(array_intersect(
+    array_diff(array_map('intval', $ids), array_keys($blocked)),
+    $ownedIds
 ));
 
 $deleted = 0;
@@ -151,10 +161,20 @@ if ($deletable) {
     try {
         // supplier_orders has no FK to quotes — clean its send-log rows so they
         // don't outlive the deleted quotes.
+        //
+        // Keyed on quote_id ONLY, deliberately. When the factory orders the
+        // bought-in lines of a tenant's order, the log row is stamped with the
+        // FACTORY's client_id, not the tenant's (factory_boughtin.php:185 passes
+        // 'client_id' => $factoryId into supplier_send_group()). Filtering on the
+        // signed-in tenant therefore missed exactly the rows this cleanup exists
+        // for: the factory's send stayed behind pointing at a deleted quote, and
+        // is still matched by factory_boughtin.php:37 and order-suppliers.php:155.
+        // Safe without the filter because $deletable is now intersected with
+        // $ownedIds, so every id here is one this tenant owns.
         try {
             $pdo->prepare(
-                "DELETE FROM supplier_orders WHERE quote_id IN ($delPh) AND client_id = ?"
-            )->execute(array_merge($deletable, [$clientId]));
+                "DELETE FROM supplier_orders WHERE quote_id IN ($delPh)"
+            )->execute($deletable);
         } catch (Throwable $e) { /* table absent — nothing to clean */ }
         // Remove the deleted orders' calendar appointments (e.g. pending fittings) so
         // they don't linger as phantoms. Scoped to the tenant: $deletable is the
