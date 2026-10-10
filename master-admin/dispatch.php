@@ -599,13 +599,22 @@ $money     = static fn ($n) => '£' . number_format((float) $n, 2);
             var base = JSON.parse(row.dataset.base || '{}');
             var net = +(base[method] || 0);
             var paying = method in base;   // a non-remake order already out today on this method
+            // Count why nothing is chargeable, so the note can say which: an empty
+            // tick list, remakes (never charged), or orders already out on a note.
+            var ticked = 0, remakes = 0, noted = 0;
             document.querySelectorAll('.dt-tick.go[data-acc="' + acc + '"]').forEach(function (t) {
-              if (!t.checked || t.dataset.counts !== '1' || t.dataset.remake === '1') return;   // remakes: no delivery charge
+              if (!t.checked) return;
+              ticked++;
+              if (t.dataset.remake === '1') { remakes++; return; }   // remakes: no delivery charge
+              if (t.dataset.counts !== '1') { noted++; return; }     // already on a dated note
               net += +t.dataset.net; paying = true;
             });
             row.querySelector('.dt-custom').hidden = mode !== 'custom';
             var r = rules[method], charge = 0, why = '';
-            if (!paying) why = 'remakes only — no delivery charge';
+            if (!paying && ticked === 0) why = 'nothing ticked';
+            else if (!paying && remakes === ticked) why = 'remakes only — no delivery charge';
+            else if (!paying && noted === ticked) why = 'already out on a note — no new charge';
+            else if (!paying) why = 'remakes and already-noted orders only — no new charge';
             else if (row.dataset.nocharge === '1') why = 'no delivery charge on this account';
             else if (method === 'collect') why = 'collected — free';
             else if (!r || r.charge <= 0) why = 'no charge set for this method';
