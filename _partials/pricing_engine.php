@@ -499,6 +499,12 @@ function pe_apply_extra(
     if ($perUnit != 0.0 && $userValue !== null && (float) $userValue > 0) {
         $amount         += $perUnit * (float) $userValue;
         $modesApplied[]  = 'per_unit';
+    } elseif ($perUnit != 0.0) {
+        // Ticked but no quantity typed — it would otherwise go through at £0.
+        // Refused on every product so a priced add-on can never be given away
+        // by a blank box (the quote builder / InstaPrice also pop this up).
+        return ['error' => "Enter a quantity for '" . $choice['label'] . "' ("
+                          . $extra['name'] . ")."];
     }
 
     // 5. Width-based price table (the 4th mode).

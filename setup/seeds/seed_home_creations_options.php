@@ -51,6 +51,7 @@ $apply    = (($_GET['apply'] ?? '') === '1');
 const HC_EMBASSY_ID = 104;
 const HC_FOREST_ID  = 85;
 const HC_NS_NAME    = 'Bev Night Shade';
+const HC_NSP_NAME   = 'Bev Night Shade Plus';
 const HC_SUPPLIER   = 'Home Creations';
 const HC_MARKUP     = 1.30;   // supplier cost + 30% = our trade price
 
@@ -138,7 +139,7 @@ $ensureExtra = static function (int $productId, string $name, array $o) use ($pd
 $ensureChoice = static function (int $extraId, array $c) use ($pdo, $apply, $HAS, $findChoice, $sell, $log): int {
     $label   = $c['label'];
     $cost    = (float) ($c['cost'] ?? 0);
-    $price   = $cost > 0 ? $sell($cost) : 0.0;
+    $price   = isset($c['price']) ? (float) $c['price'] : ($cost > 0 ? $sell($cost) : 0.0);   // 'price' = sold at a set figure (e.g. at cost)
     $perUnit = !empty($c['per_unit']) && $HAS['per_unit'];
     $len     = $c['len'] ?? ($perUnit ? 'Qty' : null);
     $priceTxt = $cost > 0 ? sprintf(' £%.2f%s (cost £%.2f)', $price, $perUnit ? ' each' : '', $cost) : '';
@@ -275,9 +276,10 @@ $venetianOptions = static function (int $productId, bool $paintedEnds, bool $bat
         ['label' => 'Charging Cable - 5 metres', 'cost' => 6.20],
     ];
     if ($battery) $list[] = ['label' => 'Battery', 'cost' => 7.00];
-    $list[] = ['label' => 'Metal Toggle', 'cost' => 1.64];
+    // Toggles come as a set of 3 (£1.64 each) and are passed on at cost.
+    $list[] = ['label' => 'Metal Toggles (set of 3)', 'cost' => 4.92, 'price' => 4.92];
     $pp = $ensureChoices($parts, $list);
-    $tog = $ensureExtra($productId, 'Metal Toggle Colour', ['required' => true, 'parents' => array_filter([$pp['Metal Toggle']])]);
+    $tog = $ensureExtra($productId, 'Metal Toggle Colour', ['required' => true, 'parents' => array_filter([$pp['Metal Toggles (set of 3)']])]);
     $ensureChoices($tog, [
         ['label' => 'Matt Silver', 'default' => true],
         ['label' => 'Matt Black'], ['label' => 'Matt Gold'], ['label' => 'Pewter'], ['label' => 'Antique Brass'],
@@ -365,36 +367,9 @@ try {
         $venetianOptions($fw['id'], true, false, 'Forestwood Valance Clips (20 pcs)');
     }
 
-    // ---------------- Night Shade ----------------
-    $log("\n### " . HC_NS_NAME);
-    $f = $pdo->prepare('SELECT id FROM products WHERE client_id = ? AND name = ?');
-    $f->execute([$clientId, HC_NS_NAME]);
-    $nsId = (int) ($f->fetchColumn() ?: 0);
-    if ($nsId) {
-        $log("  = product exists (#$nsId) — options/fabrics topped up, active flag left alone");
-    } else {
-        $log('  + product (inactive until its price tables are imported)');
-        if ($apply) {
-            $ss = $pdo->prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 FROM products WHERE client_id = ?'); $ss->execute([$clientId]);
-            $cols = ['client_id' => $clientId, 'name' => HC_NS_NAME, 'option_label' => 'Fabric', 'sort_order' => (int) $ss->fetchColumn(), 'active' => 0];
-            if ($HAS['show_colour'])   $cols['show_colour_field'] = 1;
-            if ($HAS['supplier_name']) $cols['supplier_name'] = HC_SUPPLIER;
-            if ($HAS['price_source'])  $cols['price_source'] = 'supplier';
-            $pdo->prepare('INSERT INTO products (' . implode(',', array_keys($cols)) . ') VALUES ('
-                . implode(',', array_fill(0, count($cols), '?')) . ')')->execute(array_values($cols));
-            $nsId = (int) $pdo->lastInsertId();
-        }
-    }
-    if ($apply && $nsId) {
-        $q = $pdo->prepare("SELECT id FROM product_systems WHERE client_id = ? AND product_id = ? AND name = 'Night Shade 25mm'");
-        $q->execute([$clientId, $nsId]);
-        if (!$q->fetchColumn()) {
-            $pdo->prepare("INSERT INTO product_systems (client_id, product_id, name, sort_order, active, is_default) VALUES (?, ?, 'Night Shade 25mm', 0, 1, 1)")->execute([$clientId, $nsId]);
-        }
-    }
-    $log("  System: Night Shade 25mm");
-
-    // Fabrics: range_colour + Home Creations price group (band).
+    // ---------------- Night Shade + Night Shade Plus ----------------
+    // Same 101 fabrics on both (checked against the portal's own totals: 90
+    // range fabrics + 11 blackouts); Plus adds Fixing Type and a Black frame.
     $NS_FABRICS = [
         'A' => ['Celeste' => ['Anthracite','Cornflower','Duckegg','Flint','Nude','Sage','Silver','Tuscan Red'],
                 'Halo'    => ['Birch','Frost','Iron','Ivory','Linen','Marine','Meteor','Mushroom','Praline','Sea Mist','Soft Damson','Willow']],
@@ -404,46 +379,86 @@ try {
                 'Linen'       => ['Charcoal','Fawn','Light Grey','Oatmeal'],
                 'Luna'        => ['Bone','Charcoal','Cloud','Cool Blue','Dusky Rose','Graphite','Parchment','Pumice','Sage','Taupe','Walnut'],
                 'Mirage'      => ['Dark Anthracite','Mushroom','Navy','Slate'],
-                'Mode'        => ['Charcoal','Cream','Dark Olive','Grey','Navy','Truffle','White'],
+                'Mode'        => ['Charcoal','Cream','Dark Olive','Grey','Navy','Slate','Truffle','White'],
                 'Raffia'      => ['Flax','Pebble','Slate','Wheat'],
-                'Sheer'       => ['Grey']],
+                'Sheer'       => ['Black','Grey','White']],
         'C' => ['Fresco'      => ['Barley Beige','Moss Green','Soft Pewter'],
                 'Luna Pro FR' => ['Bone','Cloud','Graphite','Pumice'],
                 'Mirage'      => ['Marine','Midnight','Mocha','Shadow'],
-                'Mode'        => ['Forest','Granite','Ivory','Lake Blue'],
+                'Mode'        => ['Forest','Granite','Ivory','Lake Blue','Latte','Shale','Snow','Storm'],
                 'Raffia'      => ['Barley','Cotton','Flint','Stone']],
-        'Blackout' => ['Blackout' => ['Almost Black','Cloud Grey','Granite','Linen','Nautical Gray','Royal Blue']],
+        'Blackout' => ['Blackout' => ['Almost Black','Anthracite','Cloud Grey','Granite','Linen','Nautical Gray',
+                                      'Pebble','Petal','Pine','Royal Blue','Snow White']],
     ];
-    $nAdd = 0; $nHave = 0; $sort = 0;
-    $chk = $pdo->prepare('SELECT id FROM product_options WHERE client_id = ? AND product_id = ? AND band_code = ? AND name = ? AND colour = ?');
-    $ins = $pdo->prepare('INSERT INTO product_options (client_id, product_id, system_id, band_code, supplier_name, name, colour, code, sort_order, active) VALUES (?, ?, NULL, ?, ?, ?, ?, \'\', ?, 1)');
-    foreach ($NS_FABRICS as $band => $ranges) {
-        $n = 0;
-        foreach ($ranges as $range => $colours) {
-            foreach ($colours as $colour) {
-                $n++; $sort++;
-                if ($nsId) { $chk->execute([$clientId, $nsId, $band, $range, $colour]); if ($chk->fetchColumn()) { $nHave++; continue; } }
-                $nAdd++;
-                if ($apply && $nsId) $ins->execute([$clientId, $nsId, $band, HC_SUPPLIER, $range, $colour, $sort]);
+
+    $nightShade = static function (string $name, string $system, bool $plus)
+        use ($pdo, $clientId, $apply, $HAS, $NS_FABRICS, $ensureExtra, $ensureChoices, $log): void {
+        $log("\n### $name");
+        $f = $pdo->prepare('SELECT id FROM products WHERE client_id = ? AND name = ?');
+        $f->execute([$clientId, $name]);
+        $pid = (int) ($f->fetchColumn() ?: 0);
+        if ($pid) {
+            $log("  = product exists (#$pid) — options/fabrics topped up, active flag left alone");
+        } else {
+            $log('  + product (inactive until its price tables are imported)');
+            if ($apply) {
+                $ss = $pdo->prepare('SELECT COALESCE(MAX(sort_order), -1) + 1 FROM products WHERE client_id = ?'); $ss->execute([$clientId]);
+                $cols = ['client_id' => $clientId, 'name' => $name, 'option_label' => 'Fabric', 'sort_order' => (int) $ss->fetchColumn(), 'active' => 0];
+                if ($HAS['show_colour'])   $cols['show_colour_field'] = 1;
+                if ($HAS['supplier_name']) $cols['supplier_name'] = HC_SUPPLIER;
+                if ($HAS['price_source'])  $cols['price_source'] = 'supplier';
+                $pdo->prepare('INSERT INTO products (' . implode(',', array_keys($cols)) . ') VALUES ('
+                    . implode(',', array_fill(0, count($cols), '?')) . ')')->execute(array_values($cols));
+                $pid = (int) $pdo->lastInsertId();
             }
         }
-        $log("  Band $band: $n fabrics");
-    }
-    $log("  Fabrics: $nAdd to add, $nHave already there");
+        if ($apply && $pid) {
+            $q = $pdo->prepare('SELECT id FROM product_systems WHERE client_id = ? AND product_id = ? AND name = ?');
+            $q->execute([$clientId, $pid, $system]);
+            if (!$q->fetchColumn()) {
+                $pdo->prepare('INSERT INTO product_systems (client_id, product_id, name, sort_order, active, is_default) VALUES (?, ?, ?, 0, 1, 1)')
+                    ->execute([$clientId, $pid, $system]);
+            }
+        }
+        $log("  System: $system");
 
-    $nsx = $nsId ?: 0;
-    if ($nsx || !$apply) {
+        $nAdd = 0; $nHave = 0; $sort = 0;
+        $chk = $pdo->prepare('SELECT id FROM product_options WHERE client_id = ? AND product_id = ? AND band_code = ? AND name = ? AND colour = ?');
+        $ins = $pdo->prepare('INSERT INTO product_options (client_id, product_id, system_id, band_code, supplier_name, name, colour, code, sort_order, active) VALUES (?, ?, NULL, ?, ?, ?, ?, \'\', ?, 1)');
+        foreach ($NS_FABRICS as $band => $ranges) {
+            $n = 0;
+            foreach ($ranges as $range => $colours) {
+                foreach ($colours as $colour) {
+                    $n++; $sort++;
+                    if ($pid) { $chk->execute([$clientId, $pid, $band, $range, $colour]); if ($chk->fetchColumn()) { $nHave++; continue; } }
+                    $nAdd++;
+                    if ($apply && $pid) $ins->execute([$clientId, $pid, $band, HC_SUPPLIER, $range, $colour, $sort]);
+                }
+            }
+            $log("  Band $band: $n fabrics");
+        }
+        $log("  Fabrics: $nAdd to add, $nHave already there");
+
+        if (!$pid && $apply) return;
         $log('  Options');
-        $r = $ensureExtra($nsx, 'Blind or Recess', ['required' => true]);
+        $r = $ensureExtra($pid, 'Blind or Recess', ['required' => true]);
         $ensureChoices($r, [['label' => 'Recess', 'default' => true], ['label' => 'Blind Size']]);
-        $fc = $ensureExtra($nsx, 'Frame Colour', ['required' => true]);
-        $ensureChoices($fc, [['label' => 'White', 'default' => true], ['label' => 'Anthracite']]);
-        $ft = $ensureExtra($nsx, 'Foam Tape Rolls', ['multi' => true]);
+        if ($plus) {
+            $fx = $ensureExtra($pid, 'Fixing Type', ['required' => true]);
+            $ensureChoices($fx, [['label' => 'Recess Fixing', 'default' => true], ['label' => 'Face Fixing']]);
+        }
+        $fc = $ensureExtra($pid, 'Frame Colour', ['required' => true]);
+        $frames = [['label' => 'White', 'default' => true], ['label' => 'Anthracite']];
+        if ($plus) $frames[] = ['label' => 'Black'];
+        $ensureChoices($fc, $frames);
+        $ft = $ensureExtra($pid, 'Foam Tape Rolls', ['multi' => true]);
         $ensureChoices($ft, [
             ['label' => 'White Foam Tape (5m)', 'cost' => 2.00],
             ['label' => 'Black Foam Tape (5m)', 'cost' => 2.00],
         ]);
-    }
+    };
+    $nightShade(HC_NS_NAME, 'Night Shade 25mm', false);
+    $nightShade(HC_NSP_NAME, 'Night Shade Plus', true);
 
     if ($apply) $pdo->commit();
 } catch (Throwable $e) {
