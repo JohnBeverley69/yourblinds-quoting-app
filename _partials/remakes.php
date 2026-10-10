@@ -266,11 +266,11 @@ function rm_create(PDO $pdo, int $factory, int $quoteId, array $items, int $reas
 function rm_get(PDO $pdo, int $factory, int $id): ?array
 {
     if (!rm_ready($pdo)) return null;
-    $st = $pdo->prepare('SELECT r.*, q.quote_number AS source_number, q.customer_reference AS source_ref,
+    $st = $pdo->prepare('SELECT r.*, COALESCE(q.quote_number, CONCAT(\'#\', r.source_quote_id, \' (order deleted)\')) AS source_number, q.customer_reference AS source_ref,
                                 rq.quote_number AS remake_number, rq.fulfilment_stage AS remake_stage,
                                 c.company_name AS account_name
                            FROM factory_remakes r
-                           JOIN quotes q        ON q.id = r.source_quote_id
+                           LEFT JOIN quotes q   ON q.id = r.source_quote_id
                            LEFT JOIN quotes rq  ON rq.id = r.remake_quote_id
                            LEFT JOIN clients c  ON c.id = r.account_client_id
                           WHERE r.id = ? AND r.factory_client_id = ? LIMIT 1');
@@ -523,7 +523,14 @@ function rm_remake_orders(PDO $pdo, array $quoteIds): array
     $quoteIds = array_values(array_filter(array_map('intval', $quoteIds)));
     if (!$quoteIds || !rm_ready($pdo)) return [];
     $ph = implode(',', array_fill(0, count($quoteIds), '?'));
-    $st = $pdo->prepare("SELECT r.id, o.quote_number FROM quotes r JOIN quotes o ON o.id = r.remake_of_quote_id
+    // LEFT JOIN to the original, with the "is this a remake?" test resting on
+    // remake_of_quote_id IS NOT NULL alone — which is the actual question.
+    // It used to be an INNER JOIN to the original order, so the moment that row
+    // was deleted the remake stopped being recognised as one by every caller.
+    // The consequence that bites: dc_recalc_delivery() stops excluding it, so a
+    // FREE remake going out on its own is under the van threshold, picks up a
+    // £10 carriage charge, and the invoice reads "REMAKE — £0.00" plus delivery.
+    $st = $pdo->prepare("SELECT r.id, o.quote_number FROM quotes r LEFT JOIN quotes o ON o.id = r.remake_of_quote_id
                           WHERE r.id IN ($ph) AND r.remake_of_quote_id IS NOT NULL");
     $st->execute($quoteIds);
     $out = [];
@@ -573,12 +580,24 @@ function rm_list(PDO $pdo, int $factory, string $view = 'all', string $from = ''
     if ($view === 'done')    $where .= " AND (r.status = 'declined' OR (r.status = 'approved' AND rq.fulfilment_stage = 'dispatched'))";
     if ($from !== '') { $where .= ' AND r.created_at >= ?'; $args[] = $from; }
     if ($to !== '')   { $where .= ' AND r.created_at < DATE_ADD(?, INTERVAL 1 DAY)'; $args[] = $to; }
-    $st = $pdo->prepare("SELECT r.*, q.quote_number AS source_number, q.customer_reference AS source_ref,
+    // The source order is LEFT JOINed, and its number falls back to a visible
+    // "(order deleted)" marker. These used to be INNER JOINs, and
+    // quotes.remake_of_quote_id / factory_remakes.source_quote_id have no
+    // foreign key (migrate_remakes.php adds the column and an index only), so
+    // nothing stops the original order being deleted — factory/edit-order.php
+    // allows it while there is no delivery note, invoice or payment.
+    //
+    // With an INNER JOIN the remake then vanished from rm_list() and rm_get(),
+    // so every tab was empty and approve/decline both threw "That remake no
+    // longer exists" — while rm_waiting_count() does not join at all, so the
+    // sidebar kept showing "Remakes 1" for ever. The badge could only be
+    // cleared with SQL.
+    $st = $pdo->prepare("SELECT r.*, COALESCE(q.quote_number, CONCAT('#', r.source_quote_id, ' (order deleted)')) AS source_number, q.customer_reference AS source_ref,
                                 rq.quote_number AS remake_number, rq.fulfilment_stage AS remake_stage,
                                 c.company_name AS account_name,
                                 (SELECT COALESCE(SUM(i.quantity),0) FROM factory_remake_items i WHERE i.remake_id = r.id) AS blinds
                            FROM factory_remakes r
-                           JOIN quotes q       ON q.id = r.source_quote_id
+                           LEFT JOIN quotes q  ON q.id = r.source_quote_id
                            LEFT JOIN quotes rq ON rq.id = r.remake_quote_id
                            LEFT JOIN clients c ON c.id = r.account_client_id
                           WHERE $where
