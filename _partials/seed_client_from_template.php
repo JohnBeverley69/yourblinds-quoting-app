@@ -115,6 +115,20 @@ function seed_client_from_template(PDO $pdo, int $sourceClientId, int $newClient
         ]);
         $summary['fabrics']++;
     }
+    // Default fabrics (migrate_fabric_default.php), matched across by band +
+    // name + colour + supplier. Skipped on a schema without the column.
+    try {
+        $defSt = $pdo->prepare(
+            'UPDATE product_options n
+               JOIN product_options s
+                 ON s.product_id = ? AND s.is_default = 1
+                AND s.band_code = n.band_code AND s.name = n.name
+                AND s.colour <=> n.colour AND s.supplier_name <=> n.supplier_name
+                SET n.is_default = 1
+              WHERE n.product_id = ?'
+        );
+        foreach ($productMap as $srcPid => $newPid) $defSt->execute([(int) $srcPid, (int) $newPid]);
+    } catch (Throwable $e) { /* no is_default column */ }
 
     // -----------------------------------------------------------------------
     // 3. product_systems

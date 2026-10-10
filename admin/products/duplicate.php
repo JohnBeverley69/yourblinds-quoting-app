@@ -194,6 +194,20 @@ try {
             (int) $f['sort_order'], (int) $f['active'],
         ]);
     }
+    // The default fabric (migrate_fabric_default.php) — matched across by
+    // band + name + colour + supplier, which the copy above keeps. Skipped on
+    // a schema without the column.
+    try {
+        $pdo->prepare(
+            'UPDATE product_options n
+               JOIN product_options s
+                 ON s.product_id = ? AND s.is_default = 1
+                AND s.band_code = n.band_code AND s.name = n.name
+                AND s.colour <=> n.colour AND s.supplier_name <=> n.supplier_name
+                SET n.is_default = 1
+              WHERE n.product_id = ?'
+        )->execute([$sourceId, $newProductId]);
+    } catch (Throwable $e) { /* no is_default column */ }
 
     // ── 4. product_extras (options) — pass 1: parent_choice_id NULL ─
     //

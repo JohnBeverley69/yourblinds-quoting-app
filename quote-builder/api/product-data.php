@@ -168,6 +168,53 @@ try {
     $bandsBySystem = [];
 }
 
+// 2c. Default fabrics — what the fabric box fills in before anyone types
+//     (product_options.is_default, set via Fabrics → "Make default"). One per
+//     band at most; a band without its own takes the fabric of the SAME name
+//     and colour as a default elsewhere, so ticking Elegant White on String
+//     also covers Tape. Front-ends pick the entry matching system + band.
+//     Optional: most products have none, and that is fine.
+$defaultFabrics = [];
+try {
+    $sysCol = '';
+    try { $pdo->query('SELECT system_id FROM product_options LIMIT 0'); $sysCol = ', system_id'; }
+    catch (Throwable $e) { /* unscoped schema */ }
+    $fSt = $pdo->prepare(
+        "SELECT id, band_code, name, colour, is_default$sysCol
+           FROM product_options
+          WHERE product_id = ? AND client_id = ? AND active = 1"
+    );
+    $fSt->execute([$productId, $clientId]);
+    $all = $fSt->fetchAll();
+
+    $key = static fn ($r) => strtolower(trim((string) $r['name'])) . '|' . strtolower(trim((string) ($r['colour'] ?? '')));
+    $explicitKeys = [];
+    $bandsWithOwn = [];
+    foreach ($all as $r) {
+        if (!empty($r['is_default'])) {
+            $explicitKeys[$key($r)] = true;
+            $bandsWithOwn[strtolower((string) $r['band_code'])] = true;
+        }
+    }
+    if ($explicitKeys) {
+        foreach ($all as $r) {
+            $explicit = !empty($r['is_default']);
+            $inherits = !$explicit && isset($explicitKeys[$key($r)])
+                     && !isset($bandsWithOwn[strtolower((string) $r['band_code'])]);
+            if (!$explicit && !$inherits) continue;
+            $defaultFabrics[] = [
+                'id'        => (int) $r['id'],
+                'band'      => (string) $r['band_code'],
+                'system_id' => isset($r['system_id']) && $r['system_id'] !== null ? (int) $r['system_id'] : null,
+                'label'     => (string) $r['name'] . (($r['colour'] ?? '') !== '' ? ' / ' . $r['colour'] : ''),
+                'explicit'  => $explicit,
+            ];
+        }
+    }
+} catch (Throwable $e) {
+    $defaultFabrics = [];   // pre-migration schema — no defaults
+}
+
 // 3. Extras + their choices. The new model puts system scope on the
 //    choice itself (system_id, NULL = "all systems"). Option-level
 //    scope is gone — an option appears whenever any of its choices
@@ -478,5 +525,6 @@ echo json_encode([
     'systems'       => $systems,
     'bands'         => $bands,
     'bandsBySystem' => $bandsBySystem,
+    'defaultFabrics' => $defaultFabrics,
     'extras'        => $extras,
 ]);

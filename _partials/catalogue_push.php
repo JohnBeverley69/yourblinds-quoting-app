@@ -569,6 +569,10 @@ function pp_sync_options(
     $selectCols = $hasSystemIdCol
         ? 'id, system_id, band_code, supplier_name, name, colour, code, sort_order, active'
         : 'id, band_code, supplier_name, name, colour, code, sort_order, active';
+    // The default fabric (Fabrics → "Make default") is behaviour, not a cost, so
+    // it goes with the fabric: the tenant's order page opens on the same slat.
+    $hasOptDefault = pp_has_src_col($pdo, 'product_options', 'is_default');
+    if ($hasOptDefault) $selectCols .= ', is_default';
     $src = $pdo->prepare(
         "SELECT $selectCols
            FROM product_options
@@ -654,6 +658,7 @@ function pp_sync_options(
             ];
             if ($hasSystemIdCol) { $cols[] = 'system_id';        $params[] = $tgtSystemId; }
             if ($hasOptSrc)      { $cols[] = 'source_option_id'; $params[] = $srcOptId;    }
+            if ($hasOptDefault)  { $cols[] = 'is_default';       $params[] = (int) $r['is_default']; }
             $pdo->prepare(
                 'INSERT INTO product_options (' . implode(',', $cols) . ') VALUES ('
                 . implode(',', array_fill(0, count($cols), '?')) . ')'
@@ -686,6 +691,7 @@ function pp_sync_options(
             ];
             if ($hasSystemIdCol) { $sets[] = 'system_id = ?';        $params[] = $tgtSystemId; }
             if ($hasOptSrc)      { $sets[] = 'source_option_id = ?'; $params[] = $srcOptId;    }
+            if ($hasOptDefault)  { $sets[] = 'is_default = ?';       $params[] = (int) $r['is_default']; }
             $params[] = (int) $tgtId;
             $pdo->prepare(
                 'UPDATE product_options SET ' . implode(', ', $sets) . ' WHERE id = ?'

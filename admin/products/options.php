@@ -336,11 +336,21 @@ try {
     )->fetchColumn();
 } catch (Throwable $e) { /* keep false */ }
 
+// is_default is optional (migrate_fabric_default.php) — the fabric the order
+// page fills in before anyone types (Elegant White on Forest Wood). Optional
+// per product: a product with no default is fine and never flagged.
+$hasDefaultCol = false;
+try {
+    db()->query('SELECT is_default FROM product_options LIMIT 0');
+    $hasDefaultCol = true;
+} catch (Throwable $e) { /* keep false */ }
+
 // List existing options. Custom band sort: AAA → AA → A → B → C → ...
 // (premium "A" tiers in descending length, then alphabetical for the rest).
 $rows = db()->prepare(
     "SELECT id, band_code, supplier_name, name, colour, code, sort_order, active"
     . ($hasSystemIdCol ? ', system_id' : '')
+    . ($hasDefaultCol ? ', is_default' : '')
     . ($hasFabricGroupCol ? ', fabric_group' : '') . "
        FROM product_options
       WHERE product_id = ? AND client_id = ?
@@ -840,6 +850,9 @@ $activeNav = 'products';
                                         <?php endif; ?>
                                         <td>
                                             <?= e((string) $o['name']) ?>
+                                            <?php if (!empty($o['is_default'])): ?>
+                                                <span class="band-pill" style="background:#b45309" title="Filled in on the order page before anyone types">&#9733; Default</span>
+                                            <?php endif; ?>
                                             <?php if ((int) $o['active'] !== 1): ?>
                                                 <span class="inactive-pill">Inactive</span>
                                             <?php endif; ?>
@@ -861,6 +874,14 @@ $activeNav = 'products';
                                         <?php endif; ?>
                                         <td class="row-actions">
                                             <a href="/admin/products/option-edit.php?id=<?= (int) $o['id'] ?>">Edit</a>
+                                            <?php if ($hasDefaultCol): ?>
+                                                <button type="button" class="row-default"
+                                                        data-id="<?= (int) $o['id'] ?>"
+                                                        data-on="<?= empty($o['is_default']) ? '1' : '0' ?>"
+                                                        style="font-size:0.875rem;color:var(--accent,#2563eb);background:transparent;border:0;cursor:pointer;padding:0;margin-left:0.5rem;">
+                                                    <?= empty($o['is_default']) ? 'Make default' : 'Remove default' ?>
+                                                </button>
+                                            <?php endif; ?>
                                             <button type="button" class="row-delete"
                                                     data-id="<?= (int) $o['id'] ?>"
                                                     data-name="<?= e((string) $o['name']) ?>"
@@ -1073,6 +1094,21 @@ $activeNav = 'products';
             var name = btn.getAttribute('data-name');
             if (!confirm('Delete ' + name + '?')) return;
             rowBoxes.forEach(function (cb) { cb.checked = (cb.value === id); });
+            form.submit();
+        });
+    });
+
+    // Per-row Make default / Remove default: same form, posted to
+    // option-set-default.php with just this row's id.
+    document.querySelectorAll('.row-default').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            rowBoxes.forEach(function (cb) { cb.checked = false; });
+            [['id', btn.getAttribute('data-id')], ['on', btn.getAttribute('data-on')]].forEach(function (kv) {
+                var h = document.createElement('input');
+                h.type = 'hidden'; h.name = kv[0]; h.value = kv[1];
+                form.appendChild(h);
+            });
+            form.action = '/admin/products/option-set-default.php';
             form.submit();
         });
     });

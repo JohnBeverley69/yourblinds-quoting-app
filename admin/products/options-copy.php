@@ -183,7 +183,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'copy'
             // Build the insert column list once, from a sample row minus
             // the columns we never copy. product_id / system_id / sort_order
             // are overridden per row.
-            $skip = ['id' => true, 'created_at' => true, 'updated_at' => true];
+            // is_default stays behind: this product may already have its own
+            // default in that band, and only one is allowed.
+            $skip = ['id' => true, 'created_at' => true, 'updated_at' => true, 'is_default' => true];
             $batch = [];   // each entry = ordered value array
             $insertCols = null;
 
