@@ -187,9 +187,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
                 // Came from the "New order" launcher (open account → then quote)?
                 // Hand off to the launcher to start a quote FOR the new account.
+                //
+                // A one-shot token travels with it. The launcher creates a quote
+                // on a plain GET, which a refresh or the back button replays —
+                // each replay making another empty quote for the account. The
+                // token is consumed on arrival, so the hand-off works exactly
+                // once and a replay just shows the launcher.
                 if (($_GET['after'] ?? '') === 'quote') {
+                    $autoTok = bin2hex(random_bytes(16));
+                    $_SESSION['no_auto_quote'] = ['token' => $autoTok, 'account' => (int) $newClientId];
                     $_SESSION['flash_success'] = 'Account "' . $f['company_name'] . '" created — starting their quote.';
-                    header('Location: /master-admin/new-order.php?account=' . $newClientId . '&auto=1');
+                    header('Location: /master-admin/new-order.php?account=' . $newClientId . '&auto=1&t=' . $autoTok);
                     exit;
                 }
 

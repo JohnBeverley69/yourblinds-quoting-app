@@ -36,8 +36,20 @@ $m = [
 $dupAccountId = 0;   // set when a "save as account" name clashes with an existing one
 
 // Auto-start a quote for a freshly-created account (new-client.php?after=quote
-// redirects here). GET so it's a clean landing.
-if (($_GET['auto'] ?? '') === '1' && (int) ($_GET['account'] ?? 0) > 0) {
+// redirects here). GET so it's a clean landing — but a GET that CREATES
+// something is replayable, and a refresh or the back button made another empty
+// quote for the account every time. So the hand-off carries a one-shot token
+// that new-client.php put in the session, and it is consumed here before the
+// quote is created: the hand-off works once, and a replay simply shows the
+// launcher instead.
+$autoTok  = (string) ($_GET['t'] ?? '');
+$autoWant = $_SESSION['no_auto_quote'] ?? null;
+unset($_SESSION['no_auto_quote']);   // single use, whatever happens next
+$autoOk   = is_array($autoWant)
+         && $autoTok !== ''
+         && hash_equals((string) ($autoWant['token'] ?? ''), $autoTok)
+         && (int) ($autoWant['account'] ?? 0) === (int) ($_GET['account'] ?? 0);
+if ($autoOk && ($_GET['auto'] ?? '') === '1' && (int) ($_GET['account'] ?? 0) > 0) {
     try {
         $res = no_create_account_quote(db(), $factoryCid, (int) $_GET['account'], (int) $user['user_id']);
         header('Location: /quote-builder/edit.php?id=' . $res['id'] . '#add-line');
