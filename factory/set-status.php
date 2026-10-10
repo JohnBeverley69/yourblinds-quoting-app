@@ -14,6 +14,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/blind_jobs.php';
+require_once __DIR__ . '/../quote-builder/_helpers.php';   // qb_factory_paperwork_block
 
 requireFactoryOffice();
 
@@ -117,6 +118,29 @@ if ($target === 'dispatched') {
 
 try {
     if ($target === 'new') {
+        // Stepping back to "new" hard-deletes the order's whole floor record:
+        // the factory_jobs row, and via bj_clear_order() every
+        // factory_blind_streams and factory_blind_jobs row for the order —
+        // completed ones included, with their started_at / completed_at /
+        // updated_by history. The per-area remake reporting reads that history
+        // (_partials/remakes.php), so it goes too, and nothing can restore it.
+        //
+        // save-order.php:117 already refuses to DELETE an order that has a
+        // delivery note or an invoice, with the reason in its own comment: a
+        // dispatched order was deleted in the go-live test and left a delivery
+        // note that could never be invoiced. The "← step status back" control is
+        // rendered all the way from dispatched (incoming-orders.php:551), so
+        // four clicks reached 'new' on an order already delivered and billed and
+        // wiped the record behind it, unguarded.
+        //
+        // Same shared check as the tenant-side delete and reopen guards (#958,
+        // #959), so all four paths agree on what the factory's paperwork means.
+        $paper = qb_factory_paperwork_block($pdo, $quoteId, 'stepped back to new');
+        if ($paper !== '') {
+            $_SESSION['flash_error'] = $paper . ' Its floor record would be lost.';
+            header('Location: ' . $backTo);
+            exit;
+        }
         $pdo->prepare("DELETE FROM factory_jobs WHERE quote_id = ?")->execute([$quoteId]);
         // Reset pulls the order's blinds back off the floor too.
         if (bj_tables_ready($pdo)) bj_clear_order($pdo, $quoteId);
