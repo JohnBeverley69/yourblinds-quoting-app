@@ -193,10 +193,33 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($action === 'remove_area') {
             $id = (int) ($_POST['area_id'] ?? 0);
             if ($ownArea($pdo, $id, $MASTER)) {
+                // Clear the area off work already on the floor FIRST. Deleting the
+                // area left factory_blind_streams.area_id / factory_blind_jobs.area_id
+                // pointing at an area that no longer exists, and scan-in.php:145
+                // rejects any non-NULL area_id that isn't the scanning bench's:
+                //   if ($sa['area_id'] !== null && $sa['area_id'] !== (int) $area['id'])
+                //       -> 409 WRONG AREA
+                // so every bench refused those blinds and they could never be
+                // completed by scan or reach Ready. NULL is allowed straight
+                // through, which is why clearing is the fix and not a re-map.
+                //
+                // Only in-flight work was affected — anything released afterwards
+                // starts clean — so it looked random rather than like a setting
+                // someone had just changed.
+                //
+                // Stamps before the row, deliberately: there's no transaction here,
+                // and this order fails safe. Stamps cleared but the delete failing
+                // leaves scans working; the row gone with stamps intact is the bug.
+                // The sibling set_product_area branch below re-stamps released work
+                // for exactly this reason ("takes effect at once").
+                try { $pdo->prepare('UPDATE factory_blind_streams SET area_id = NULL WHERE area_id = ?')->execute([$id]); }
+                catch (Throwable $e) { /* factory_blind_streams.area_id not migrated */ }
+                try { $pdo->prepare('UPDATE factory_blind_jobs SET area_id = NULL WHERE area_id = ?')->execute([$id]); }
+                catch (Throwable $e) { /* factory_blind_jobs.area_id not migrated */ }
                 $pdo->prepare('DELETE FROM product_area_map WHERE area_id = ?')->execute([$id]);
                 try { $pdo->prepare('DELETE FROM user_production_areas WHERE area_id = ?')->execute([$id]); } catch (Throwable $e) {}
                 $pdo->prepare('DELETE FROM production_areas WHERE id = ? AND client_id = ?')->execute([$id, $MASTER]);
-                $_SESSION['flash_success'] = 'Area removed.';
+                $_SESSION['flash_success'] = 'Area removed. Any blinds already on the floor for it are no longer tied to an area, so every bench can scan them.';
             }
         } elseif ($action === 'set_wifi') {
             // The network every bench scanner joins. Factory-wide, so it lives in
