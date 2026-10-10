@@ -1963,7 +1963,25 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                                 </tr>
                             <?php endforeach; ?>
 
-                            <?php if (($wtEnabled || $wtAmount > 0.0049) && !$isDirectOrder): ?>
+                            <?php
+                            // Cost-viewers only, like every other cost element here
+                            // (the override panel at 1759, the eye beside Total at
+                            // 2027, the live price bits at 3907/3922).
+                            //
+                            // class="cost-only" is not a gate on its own: the rule
+                            // that hides it, `html:not(.yb-costs-shown) .cost-only
+                            // { display:none }`, lives in cost_reveal_assets(),
+                            // which is only emitted for cost-viewers (line 849). For
+                            // anyone else no such rule exists, so the class was inert
+                            // and the row simply rendered — and the eye that would
+                            // hide it is suppressed for them too (2027), so there was
+                            // no way to put it away. A salesperson without View costs
+                            // with the tablet turned towards the customer was showing
+                            // them a row reading "WT (internal — never shown to the
+                            // customer) £45.00".
+                            ?>
+                            <?php if (($wtEnabled || $wtAmount > 0.0049) && !$isDirectOrder
+                                      && ($isAdmin || $_perms['can_view_costs'])): ?>
                                 <tr class="totals-row cost-only" style="color:#9333ea">
                                     <td colspan="<?= $editable ? 5 : 4 ?>" style="text-align:right">
                                         WT

@@ -7,7 +7,7 @@ declare(strict_types=1);
  *
  *   POST quote_id, wt_amount
  *
- * Gated by the tenant's feature_wt setting + can_create_quotes. Never exposed
+ * Gated by the tenant's feature_wt setting + can_create_quotes AND can_view_costs
  * to customers — the WT only lives on the builder.
  */
 
@@ -35,7 +35,12 @@ $backUrl  = '/quote-builder/edit.php?id=' . $quoteId;
 
 qb_require_quote_access($quote, $user, current_user_permissions());
 
-if (!$isAdmin && empty($_perms['can_create_quotes'])) {
+// WT is an internal surcharge — the row itself says "never shown to the
+// customer" — so setting it belongs with the other cost figures. The totals row
+// carrying this form is cost-viewers only; the handler now matches it. It used
+// to accept can_create_quotes alone, so a quote-creator without View costs
+// could still post a WT amount straight at it.
+if (!$isAdmin && (empty($_perms['can_create_quotes']) || empty($_perms['can_view_costs']))) {
     qb_flash_redirect($backUrl, 'error', 'You don\'t have permission to set this.');
 }
 
