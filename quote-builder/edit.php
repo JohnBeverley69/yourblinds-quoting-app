@@ -1140,11 +1140,16 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                     <a href="/remakes/request.php?order=<?= (int) $quote['id'] ?>" class="btn btn-secondary">Report a problem</a>
                 </div>
                 <?php foreach ($rmList as $rmr):
+                    // The final `else` is the APPROVED wording, so every status
+                    // needs its own arm — 'cancelled' falling through to it read
+                    // "Approved — being remade as " with nothing after it, for a
+                    // remake that is no longer being made at all.
                     $rmState = $rmr['status'] === 'requested' ? 'Waiting for the factory to check it'
                         : ($rmr['status'] === 'declined' ? 'Declined by the factory: ' . (string) $rmr['decline_reason']
+                        : ($rmr['status'] === 'cancelled' ? 'Cancelled by the factory: ' . (string) ($rmr['cancel_reason'] ?? '') . ' · no charge'
                         : 'Approved — being remade as ' . (string) $rmr['remake_number']
                           . ($rmr['remake_stage'] ? ' (' . os_stage_label((string) $rmr['remake_stage']) . ')' : '')
-                          . ((float) $rmr['charge_amount'] > 0 ? ' · charge £' . number_format((float) $rmr['charge_amount'], 2) . ' + VAT' : ' · no charge')); ?>
+                          . ((float) $rmr['charge_amount'] > 0 ? ' · charge £' . number_format((float) $rmr['charge_amount'], 2) . ' + VAT' : ' · no charge'))); ?>
                     <div style="margin-top:.5rem;font-size:.9rem">
                         <b><?= e(date('j M Y', strtotime((string) $rmr['created_at']))) ?> · <?= e((string) $rmr['reason_label']) ?></b> —
                         <?= e($rmState) ?>

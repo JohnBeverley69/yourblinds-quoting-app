@@ -540,6 +540,30 @@ function factory_user_is_office(): bool
 }
 
 /**
+ * Factory ADMIN powers — a narrower gate than factory_user_is_office(), for the
+ * handful of actions that undo a decision the office has already made rather
+ * than carrying one out. Cancelling or undoing an approved remake is the first:
+ * it deletes the remake order the approval created, so it is not something every
+ * office user should reach.
+ *
+ * Deliberately factory_user_is_office() minus its can_create_orders fallback:
+ * super-admin, or an ADMIN on the factory account. John chose this over
+ * super-admin only (2026-10-10) — "canceling should be a function for admin,
+ * not just for myself" — because is_super_admin() is his login alone and no
+ * screen can grant it, so nobody else could ever cancel.
+ *
+ * Keep the two in step: a floor login (factory role without can_create_orders)
+ * fails both, and an office user without Admin passes office but not this.
+ */
+function factory_user_is_admin(): bool
+{
+    if (is_super_admin()) return true;
+    $cid = (int) ($_SESSION['client_id'] ?? 0);
+    if (!is_factory_client($cid) || !current_user_has_role('factory')) return false;
+    return current_user_has_role('admin');
+}
+
+/**
  * The Factory Console (trade-only office home) is for factory office staff signed in
  * to the factory account itself: they get the console menu and land on
  * /factory/dashboard.php instead of the retail-shaped sales screens.
