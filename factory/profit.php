@@ -104,6 +104,8 @@ $hasTableSrc = pe_col_exists($pdo, 'price_tables', 'source_table_id');
 $srcTableSel = $hasTableSrc ? 'tpt.source_table_id AS src_table_id,' : 'NULL AS src_table_id,';
 $sql =
     "SELECT qi.id AS line_id, qi.width_mm, qi.drop_mm, qi.quantity, qi.base_price, qi.extras_total,
+            qi.line_total,
+            q.remake_of_quote_id,
             qi.product_name_snapshot,
             COALESCE(p.source_product_id, p.id) AS master_pid,
             $srcTableSel
@@ -369,10 +371,29 @@ $uncostedProducts = [];
 
 foreach ($lines as $ln) {
     $qty = max(1, (int) $ln['quantity']);
-    $rev = (float) $ln['base_price'] * $qty;
+    // A remake earns only what it was actually charged at, while still costing
+    // what it cost to make. Its lines are COPIES of the original's
+    // (rm_create_remake_order keeps base_price, extras_total and the price-table
+    // pointers), so base_price * qty booked the remade blinds as a second sale
+    // at full trade price and matched them to the cost grid again: a free remake
+    // came out as the most profitable kind of line there is. The tenant's own
+    // Dashboard excludes remakes outright, so this page and theirs disagreed
+    // about the same orders.
+    //
+    // line_total is the right figure: rm_create_remake_order spreads the agreed
+    // charge across the lines into it, so it is £0 on a free remake and the
+    // charge share on a billed one. The cost below is worked out from the grid
+    // independently of revenue, so it still counts — which is the point: the
+    // page should show what putting a fault right costs.
+    $isRemakeLine = (int) ($ln['remake_of_quote_id'] ?? 0) > 0;
+    $rev = $isRemakeLine
+        ? (float) ($ln['line_total'] ?? 0)
+        : (float) $ln['base_price'] * $qty;
     $prod = (string) ($ln['product_name_snapshot'] ?: 'product ' . $ln['master_pid']);
     $tot['lines']++; $tot['blinds'] += $qty;
-    $tot['extras'] += (float) ($ln['extras_total'] ?? 0) * $qty;
+    // Options on a remake are inherited from the original too, so they are not
+    // extra revenue either.
+    if (!$isRemakeLine) $tot['extras'] += (float) ($ln['extras_total'] ?? 0) * $qty;
 
     $p = &$byProduct[$prod];
     if ($p === null) $p = ['rev' => 0.0, 'rev_costed' => 0.0, 'cost' => 0.0, 'blinds' => 0, 'costed' => 0];
