@@ -551,6 +551,26 @@ function factory_console_user(): bool
 }
 
 /**
+ * The retail-shaped screens a Factory Console user is sent away from, and where
+ * they land: path => console path. The four callers of
+ * factory_console_redirect() read it, and so does help/index.php — a guide for
+ * a screen on this list is a guide its reader would be bounced out of, so its
+ * "Open the screen" button is relabelled rather than quietly landing them
+ * somewhere else.
+ *
+ * Add a screen here and to its page's factory_console_redirect() call together.
+ */
+function factory_console_screens(): array
+{
+    return [
+        '/dashboard/index.php' => '/factory/dashboard.php',
+        '/calendar/index.php'  => '/factory/calendar.php',
+        '/orders/index.php'    => '/factory/orders.php',
+        '/orders/pipeline.php' => '/factory/orders.php',
+    ];
+}
+
+/**
  * Send a Factory Console user from a retail-shaped screen (sales dashboard,
  * pipeline, orders list, retail calendar) to its console equivalent. GET only, so
  * a form post to the old page still works. No-op for everyone else.

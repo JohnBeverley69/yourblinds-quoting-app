@@ -39,7 +39,7 @@ return [
 
     ['factory', 'Getting started', 'Where has the Trade menu gone?', 'trade menu missing gone moved quotes orders dispatch invoices bank statements commissions factory console old screen redirect',
      '<p>Into the <strong>Factory Console</strong>. Everything that was under <strong>Trade</strong> now sits in the console menu: <strong>Work</strong> (Dashboard, Orders, Remakes, Calendar), <strong>Production</strong> (Incoming orders, Floor, Dispatch) and <strong>Accounts</strong> (Invoices, Bank, Statements, Commissions, and Trade accounts and The Numbers for the super-admin).</p>
-      <p>The old Trade quotes and orders lists are now the one <strong>Work &rarr; Orders</strong> list &mdash; quotes not placed yet are its <em>Not placed</em> chip. Old links and bookmarks still work: the sales dashboard, the orders and quotes lists, the Pipeline and the old calendar simply take you to their console screen. The guides under <em>Factory Console</em> on this page walk through it.</p>'],
+      <p>The old Trade quotes and orders lists are now the one <strong>Work &rarr; Orders</strong> list &mdash; quotes not placed yet are its <em>Quotes</em> chip, and <strong>Work &rarr; Quotes</strong> in the menu goes straight to them. Old links and bookmarks still work: the sales dashboard, the orders and quotes lists, the Pipeline and the old calendar simply take you to their console screen. The guides under <em>Factory Console</em> on this page walk through it.</p>'],
 
     ['all', 'Getting started', 'What is the Pipeline for?', 'pipeline board kanban columns drag drop move cards cannot move funnel column totals value mine only all time',
      '<p><strong>Work &rarr; Pipeline</strong> is a board that shows where every job has got to, in columns, so you can see the whole funnel in one screen instead of scrolling a list.</p>
@@ -52,7 +52,7 @@ return [
       <li>If you cannot see everyone\'s jobs (the <em>View all customer jobs</em> tick on your user), the board only shows jobs you are on. Prices are hidden unless you have <em>View costs</em>.</li>
       </ul>'],
 
-    ['super', 'Getting started', 'Where has an order got to? (Confirmed, In Production, Ready, Dispatched)', 'fulfilment stage progress where is my order confirmed in production ready dispatched pill chip factory made bought in',
+    ['factory', 'Getting started', 'Where has an order got to? (Confirmed, In Production, Ready, Dispatched)', 'fulfilment stage progress where is my order confirmed in production ready dispatched pill chip factory made bought in',
      '<p>Every placed order that contains something you make carries one <strong>fulfilment stage</strong>, and it is the single honest answer to "where is this order?". You will see it as a coloured pill on <strong>Work &rarr; Factory</strong> (the incoming orders list) and in the <em>Stage</em> column on a trade account\'s page (<strong>Factory Console &rarr; Accounts &rarr; Invoices</strong>, then click the account&rsquo;s name) and in <strong>Factory Console &rarr; Orders</strong>.</p>
       <ul>
       <li><strong>Confirmed</strong> &mdash; the order is in, but nothing has started: not on the production floor and no bought-in items ordered yet.</li>
@@ -63,7 +63,7 @@ return [
       <p><strong>You do not set the stage by hand</strong> &mdash; the app works it out from the floor, the bought-in log and the delivery notes, and recalculates it whenever you change an order\'s status, place it with suppliers, or act on it under Factory Console &rarr; Invoices. If a stage looks wrong, fix the thing underneath it: scan the last blind off the floor, or tick the bought-in items as received.</p>
       <p>A dash instead of a stage means the order has nothing of yours in it, or it is still only a quote &mdash; stages start once an order is placed. On the Factory list the pill sits alongside a <em>made</em> count (click it to open the floor) and the bought-in tag: <em>n to order</em>, <em>ordered</em> or <em>received</em>.</p>'],
 
-    ['super', 'Getting started', 'It won\'t let me dispatch — why?', 'cant dispatch wont let me dispatch not ready greyed out disabled button blocked mark dispatched delivery note print dn bought in awaiting',
+    ['factory', 'Getting started', 'It won\'t let me dispatch — why?', 'cant dispatch wont let me dispatch not ready greyed out disabled button blocked mark dispatched delivery note print dn bought in awaiting',
      '<p>Because the order is not <strong>Ready</strong> yet. The app refuses with <em>"Can\'t dispatch &mdash; the order isn\'t ready yet (every blind made and every bought-in item received)."</em> on <strong>Factory Console &rarr; Invoices</strong> (both <em>Mark dispatched</em> and <em>Print DN &amp; invoice</em>), and with <em>"Can\'t dispatch yet &mdash; the order isn\'t ready. Every blind must be made and every bought-in item received first."</em> on the factory side.</p>
       <p>Ready has two halves, and <strong>both</strong> must be true:</p>
       <ul>
@@ -861,7 +861,7 @@ return [
       <strong>Export payments (CSV)</strong> on the Payments page. <em>Xero &amp; Sage</em> are shown on the same tab
       as “Coming soon”.</p>'],
 
-    ['super', 'Accounts', 'How do I raise a delivery note and invoice for a trade account?', 'delivery note dn invoice trade wholesale raise dispatch print billing account order paperwork',
+    ['factory', 'Accounts', 'How do I raise a delivery note and invoice for a trade account?', 'delivery note dn invoice trade wholesale raise dispatch print billing account order paperwork',
      '<p>Go to <strong>Factory Console → Invoices</strong> in the left-hand menu (the page itself is headed
       <strong>Wholesale</strong>). Every placed trade-account order that contains your products is one row, with a
       status pill and one button for whatever comes next.</p>
@@ -885,8 +885,8 @@ return [
       an order already covered by a live invoice refuses with <em>“Order already invoiced on … (void it first to
       re-invoice).”</em></p>'],
 
-    ['super', 'Accounts', 'One-step or two-step invoicing — which should I use?', 'one step two step auto invoice dispatch delivery note flow wholesale setting mode automatic manual',
-     '<p>There are <strong>two different switches</strong> at the top of <strong>Trade → Invoices</strong> and people
+    ['factory', 'Accounts', 'One-step or two-step invoicing — which should I use?', 'one step two step auto invoice dispatch delivery note flow wholesale setting mode automatic manual',
+     '<p>There are <strong>two different switches</strong> at the top of <strong>Accounts → Invoices</strong> and people
       mix them up constantly. They do not do the same job.</p>
       <ul>
         <li><strong>Delivery-note flow: One-step · print &amp; invoice / Two-step · manual.</strong> This only changes
@@ -904,8 +904,8 @@ return [
       watched a few orders go through and you’re happy they price correctly — the screen says exactly that. Once you
       trust it, turning it on means nothing ever sits un-invoiced because the office forgot.</p>'],
 
-    ['super', 'Accounts', 'A trade invoice is wrong — credit it or void it?', 'void credit note cn cancel invoice wrong mistake wholesale reissue re-invoice trade refund adjust',
-     '<p>Both live on <strong>Trade → Invoices</strong>: open the order’s row with the ▸ arrow and you’ll see
+    ['factory', 'Accounts', 'A trade invoice is wrong — credit it or void it?', 'void credit note cn cancel invoice wrong mistake wholesale reissue re-invoice trade refund adjust',
+     '<p>Both live on <strong>Accounts → Invoices</strong>: open the order’s row with the ▸ arrow and you’ll see
       <strong>Void</strong> and <strong>Credit note</strong> beside each invoice. The difference matters.</p>
       <ul>
         <li><strong>Void</strong> — use it when the invoice should never have gone out as it is (wrong figure, wrong
@@ -923,10 +923,19 @@ return [
       <p><strong>Rule of thumb:</strong> nothing sent yet, or plainly wrong → <strong>Void</strong> and re-raise. The
       customer has the invoice and it needs to stay in the books → <strong>Credit note</strong>.</p>'],
 
-    ['super', 'Accounts', 'How do I record a payment from a trade account?', 'trade payment received allocate allocation invoice outstanding wholesale account money in bank transfer cheque void payment',
-     '<p>Trade payments are <em>not</em> recorded on the retail Payments page. Go to <strong>Trade → Trade
-      accounts</strong> and click <strong>Payments</strong> on the account’s row (or <strong>Record payment</strong> on
-      the account’s own page). The screen is headed <strong>Payments — &lt;the account’s name&gt;</strong>.</p>
+    ['factory', 'Accounts', 'How do I record a payment from a trade account?', 'trade payment received allocate allocation invoice outstanding wholesale account money in bank transfer cheque void payment',
+     '<p>Trade payments are <em>not</em> recorded on the retail Payments page. The screen you want is headed
+      <strong>Payments &mdash; &lt;the account&rsquo;s name&gt;</strong>, and there are three ways in:</p>
+      <ul>
+        <li><strong>Accounts &rarr; Bank</strong> &mdash; the usual route. Match a bank line to an account and it
+        takes you straight there with the amount filled in, or click the payment reference on a line already
+        matched.</li>
+        <li><strong>Accounts &rarr; Statements</strong> &mdash; open an account&rsquo;s statement and use
+        <strong>&larr; Payments &amp; balance</strong> at the top.</li>
+        <li><strong>Accounts &rarr; Trade accounts</strong> &mdash; <strong>Payments</strong> on the account&rsquo;s
+        row, or <strong>Record payment</strong> on its own page. This one is the super-admin&rsquo;s screen; the
+        first two work for everyone in the office.</li>
+      </ul>
       <p>Four cards show where the account stands: <strong>Invoiced</strong>, <strong>Credited</strong>,
       <strong>Paid</strong> and <strong>Outstanding</strong>.</p>
       <ul>
@@ -944,8 +953,8 @@ return [
       <p>Below, <strong>Payment history</strong> lists every payment with its number and a <strong>Void</strong> button.
       Voiding a payment puts the invoices it covered back to open.</p>'],
 
-    ['super', 'Accounts', 'Month-end: chasing what you\'re owed', 'statement run aged debt debtors overdue chase credit control month end email statements pdf as at date',
-     '<p><strong>Trade → Statements</strong> is your chase list. It shows every trade account that owes you money,
+    ['factory', 'Accounts', 'Month-end: chasing what you\'re owed', 'statement run aged debt debtors overdue chase credit control month end email statements pdf as at date',
+     '<p><strong>Accounts → Statements</strong> is your chase list. It shows every trade account that owes you money,
       aged into <strong>Current</strong>, <strong>1–30</strong>, <strong>31–60</strong>, <strong>61–90</strong> and
       <strong>90+ days</strong>, with a grand total across the bottom so you can see the whole debt at a glance.</p>
       <p>Set the <strong>As at date</strong> and press <strong>Apply</strong> — for month-end, put in the last day of
@@ -965,7 +974,7 @@ return [
       still work while it’s paused.</p>'],
 
     ['super', 'Accounts', 'Where do I set up a trade account and its login?', 'trade account new customer business portal login password discount commission address vat deactivate no portal',
-     '<p><strong>Trade → Trade accounts</strong> is the list of every business you supply. The search box filters on
+     '<p><strong>Accounts → Trade accounts</strong> is the list of every business you supply. The search box filters on
       name, contact, email or phone as you type, and each row shows whether they have a <strong>portal</strong> login or
       are <strong>No portal</strong>, their plan, how many discounts are set, when they last logged in, and quick links
       to <strong>Payments</strong> and <strong>Statement</strong>. <strong>+ New account</strong> creates one.</p>
@@ -985,8 +994,8 @@ return [
       whole money picture — balance, aged debt, orders with their production stage, open invoices and payment history —
       open the account overview instead.</p>'],
 
-    ['super', 'Accounts', 'How do I work out a consultant\'s commission?', 'commission consultant sales rep statement percentage turnover rate pdf agent introducer',
-     '<p><strong>Trade → Commissions</strong> works out what a sales consultant has earned. Pick the
+    ['factory', 'Accounts', 'How do I work out a consultant\'s commission?', 'commission consultant sales rep statement percentage turnover rate pdf agent introducer',
+     '<p><strong>Accounts → Commissions</strong> works out what a sales consultant has earned. Pick the
       <strong>Consultant</strong>, set <strong>From</strong> (leave blank for everything from the start) and
       <strong>To</strong>, then press <strong>Apply</strong>.</p>
       <p>The table lists a line per account and product with the <strong>Turnover (net)</strong>, the
@@ -997,10 +1006,10 @@ return [
         <li><strong>Turnover</strong> is <em>invoiced</em> net turnover, ex VAT — what you actually billed the account
         in that period. An order that hasn’t been invoiced yet earns nobody anything, and a voided invoice is left
         out.</li>
-        <li><strong>The rate</strong> comes from each account, not from this page. Open <strong>Trade → Trade
+        <li><strong>The rate</strong> comes from each account, not from this page. Open <strong>Accounts → Trade
         accounts → the account → Commission</strong> and add a row: <strong>Commission %</strong>, the
         <strong>Sales Consultant</strong>, and the <strong>Product</strong> it applies to (<em>All</em> = every
-        product). One consultant can have different percentages on different products for the same account.</li>
+        product). One consultant can have different percentages on different products for the same account. <em>Trade accounts is the super-admin&rsquo;s screen &mdash; if you cannot see it, ask them to set the rate.</em></li>
       </ul>
       <p>Consultants themselves are added once, under <strong>+ Add a sales consultant</strong> on that same section,
       and are then shared across every account. There is also a tick there to <strong>email the consultant when the

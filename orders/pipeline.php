@@ -35,7 +35,7 @@ require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/job_status_colours.php';
 
 requireLogin();
-factory_console_redirect('/factory/orders.php');      // console users: one Orders list
+factory_console_redirect(factory_console_screens()['/orders/pipeline.php']);  // console users: one Orders list
 
 $user        = current_user();
 $clientId    = (int) $user['client_id'];
