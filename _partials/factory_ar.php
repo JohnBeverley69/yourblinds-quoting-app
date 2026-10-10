@@ -731,7 +731,23 @@ function ar_create_invoice(PDO $pdo, int $factory, int $quoteId, int $accountId,
     $subtotal = round($subtotal, 2);
     $vat      = round($subtotal * $vatPct / 100, 2);
     $total    = round($subtotal + $vat, 2);
-    $status   = 'raised';   // 'sent' only once the email has actually gone
+    // A £0 invoice is already settled the moment it's raised, so say so. A free
+    // remake invoices as £0 lines by design (remakes.php:22-24, and
+    // ar_invoice_lines_from_order spreads charge_amount = 0 across them), and
+    // this was hard-coded to 'raised' without looking at the total. Nothing in
+    // the app could then move it: ar_recompute_invoice_paid() is the only writer
+    // of 'paid' and is only reached from a payment allocation or a credit note,
+    // while ar_open_invoices() keeps only invoices with a balance over 0.004 and
+    // record-payment.php builds its allocation list from that — so a £0 invoice
+    // was never offered for payment and sat on the Invoices list for ever.
+    //
+    // Same test and the same epsilon as ar_recompute_invoice_paid():
+    // `if ($netDue <= 0.004 ...) $status = 'paid'`. It would already have called
+    // this invoice paid; it simply never ran at creation.
+    //
+    // Sending still works and still stamps sent_at: ar_send_invoice() only moves
+    // 'draft'/'raised' on to 'sent' and leaves any other status alone.
+    $status   = $total <= 0.004 ? 'paid' : 'raised';   // 'sent' once the email has actually gone
 
     $ownTxn = !$pdo->inTransaction();
     if ($ownTxn) $pdo->beginTransaction();
