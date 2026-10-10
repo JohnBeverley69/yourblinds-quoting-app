@@ -24,10 +24,13 @@ declare(strict_types=1);
  *   face-value price, cost kept in cost_price):
  *     Pelmet Cutting, Pelmet Size (after a pelmet cut), Alignment Multiple
  *     Blinds, Painted Ends (Forest Wood only), Motor & Parts (+ Metal Toggle
- *     Colour after Metal Toggle), Accessories (per-unit, quantity typed).
- *   Bev Night Shade (new, INACTIVE until its price tables are imported)
- *     - one system "Night Shade 25mm", 89 fabrics in bands A / B / C /
- *       Blackout, options Blind or Recess, Frame Colour, Foam Tape.
+ *     Colour after the toggles — a set of 3 passed on AT COST, £4.92),
+ *     Accessories (per-unit, quantity typed).
+ *   Bev Night Shade + Bev Night Shade Plus (new, INACTIVE until their price
+ *   tables are imported)
+ *     - one system each, the same 101 fabrics in bands A (20) / B (47) /
+ *       C (23) / Blackout (11); options Blind or Recess, Frame Colour, Foam
+ *       Tape. Plus also has Fixing Type and a Black frame.
  *
  * Additive + idempotent (matched by name / label) — safe to re-run. Nothing is
  * deleted: a wrong colour is switched off (active = 0) so old quotes keep it.
