@@ -39,7 +39,7 @@ $fail = static function (string $msg) use ($backEdit) { $_SESSION['flash_error']
 // This costs a real submit nothing — it can never carry two — and it turns that
 // accident into a refusal instead of a deletion.
 $posted = array_values(array_filter(
-    ['save', 'add_item', 'del_item', 'del_order'],
+    ['save', 'add_item', 'del_item', 'del_order', 'force_del_order'],
     static fn (string $k): bool => isset($_POST[$k])
 ));
 if (count($posted) > 1) {
@@ -121,7 +121,10 @@ if (isset($_POST['del_order'])) {
     // exactly the same way. Keeping a second copy here is how the tenant and
     // factory delete paths drifted twice already (#946, #958).
     $why = fod_delete_block_reason($pdo, $qid);
-    if ($why !== '') { $fail('This order can\'t be deleted — ' . $why . '.'); }
+    if ($why !== '') {
+        $fail('This order can\'t be deleted — ' . $why . '.'
+            . (is_super_admin() ? ' Use "Force delete" in the Danger zone to clear the paperwork and delete it anyway.' : ''));
+    }
     try {
         $del = fod_delete_order($pdo, $qid, $MASTER);
     } catch (Throwable $e) { $fail('Could not delete order: ' . $e->getMessage()); }
@@ -130,6 +133,58 @@ if (isset($_POST['del_order'])) {
         . ($supplierSends
             ? ' Note: it had already been ordered from ' . implode(', ', $supplierSends)
               . ' — deleting it here does not cancel that, so cancel it with them directly.'
+            : '');
+    header('Location: /factory/incoming-orders.php'); exit;
+}
+
+// ---- Force delete: clear the paperwork, then delete ------------------------
+// For the pre-launch test phase: dummy orders pushed through to invoicing or
+// dispatch can't be tidied away, and the system has to be clean at go-live.
+// Not the everyday fix for a real mistake — voiding the invoice and raising a
+// credit note keeps the audit trail, and this does not.
+if (isset($_POST['force_del_order'])) {
+    // SUPER-ADMIN only, not factory Admin: this destroys invoices and delivery
+    // notes outright. Narrower on purpose than the remake cancel's
+    // factory_user_is_admin().
+    if (!is_super_admin()) { $fail('Only a super-admin can force-delete an order.'); }
+    // Typing the order number is the confirmation. A click-through dialog is too
+    // easy to dismiss on a row you did not mean, and this one cannot be undone.
+    $typed    = trim((string) ($_POST['confirm_ref'] ?? ''));
+    $expected = trim((string) ($order['quote_number'] ?? ''));
+    if ($expected === '' || strcasecmp($typed, $expected) !== 0) {
+        $fail('Nothing was deleted — type the order number (' . $expected . ') exactly to confirm a force delete.');
+    }
+    try {
+        $res = fod_force_delete_order($pdo, $qid, $MASTER);
+    } catch (RuntimeException $e) {
+        $fail($e->getMessage());
+    } catch (Throwable $e) {
+        error_log('force_del_order ' . $qid . ': ' . $e->getMessage());
+        $fail('Could not force-delete the order — nothing was changed. ' . $e->getMessage());
+    }
+    $d = $res['destroyed'];
+    // No order-level audit table exists (catalogue_audit is the product
+    // catalogue's), so the one durable record of a force delete is the log.
+    error_log(sprintf(
+        'force_del_order: order %d (%s) by user %d — %d invoice(s), %d delivery note(s), %d credit note(s), %d deposit(s), £%.2f released',
+        $qid, $expected, (int) (current_user()['user_id'] ?? 0), count($d['invoices']), count($d['delivery_notes']),
+        (int) $d['credit_notes'], (int) $d['payments']['n'], $res['released']
+    ));
+    $bits = [];
+    foreach ($d['invoices'] as $i)       $bits[] = 'invoice ' . $i['inv_number'];
+    foreach ($d['delivery_notes'] as $n) $bits[] = 'delivery note ' . $n['dn_number'];
+    if ($d['credit_notes'] > 0)  $bits[] = $d['credit_notes'] . ' credit note' . ($d['credit_notes'] === 1 ? '' : 's');
+    if ($d['payments']['n'] > 0) $bits[] = $d['payments']['n'] . ' deposit' . ($d['payments']['n'] === 1 ? '' : 's')
+                                         . ' (£' . number_format($d['payments']['total'], 2) . ')';
+    $_SESSION['flash_success'] = 'Order ' . $expected . ' force-deleted'
+        . ($bits ? ', along with ' . implode(', ', $bits) : '') . '.'
+        . ($res['released'] > 0.004
+            ? ' £' . number_format($res['released'], 2) . ' already paid against it is now unallocated credit on the account —'
+              . ' the payment itself was kept, so settle it from the account page.'
+            : '')
+        . ($res['supplier_sends']
+            ? ' Note: it had already been ordered from ' . implode(', ', $res['supplier_sends'])
+              . ' — this does not cancel that, so cancel it with them directly.'
             : '');
     header('Location: /factory/incoming-orders.php'); exit;
 }
