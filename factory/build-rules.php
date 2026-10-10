@@ -26,6 +26,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/formula_engine.php';
+require_once __DIR__ . '/../_partials/worksheet_refs.php';   // ws_orphan_report()
 
 requireFactoryOffice();
 
@@ -189,6 +190,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 $pdo->commit();
                 $_SESSION['flash_success'] = "Saved {$saved} variable" . ($saved === 1 ? '' : 's') . " for {$productName}.";
+                // Saving always succeeds; a worksheet field left pointing at a
+                // variable that is no longer here just prints a bare caption on
+                // the ticket, silently. Say so now, including for any product
+                // set to "Same as this one".
+                $broke = ws_orphan_report($pdo, $productId);
+                if ($broke) {
+                    $_SESSION['flash_error'] = 'Saved, but ' . count($broke) . ' worksheet field'
+                        . (count($broke) === 1 ? '' : 's') . ' now print nothing: ' . implode('; ', $broke)
+                        . '. Fix them on Worksheets, or they print a caption with no value.';
+                }
             } catch (Throwable $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
                 $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage();

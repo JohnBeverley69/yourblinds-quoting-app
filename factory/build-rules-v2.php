@@ -206,6 +206,7 @@ if ($productId > 0) {
 // The names a formula on THIS product may reference: the built-ins plus every
 // rule on the product. Powers the clickable chips AND the "Check" validation.
 require_once __DIR__ . '/../_partials/build_eval.php';   // be_norm_math + formula_eval (via formula_engine)
+require_once __DIR__ . '/../_partials/worksheet_refs.php';   // ws_orphan_report()
 $validNames = bv_builtin_vars();
 foreach ($vars as $v) $validNames[] = (string) $v['name'];
 $validNames = array_values(array_unique(array_filter($validNames)));
@@ -380,6 +381,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             $pdo->prepare('DELETE FROM build_variables WHERE product_id = ? AND name = ?')->execute([$productId, $delName]);
             $_SESSION['flash_success'] = "Removed “{$delName}”.";
+            // Removing a variable cannot fail, but any worksheet field printing
+            // it now prints a bare caption — on this product and on any product
+            // sharing its rules. Name them rather than let it show up on a ticket.
+            $broke = ws_orphan_report($pdo, $productId);
+            if ($broke) {
+                $_SESSION['flash_error'] = count($broke) . ' worksheet field'
+                    . (count($broke) === 1 ? '' : 's') . ' now print nothing: ' . implode('; ', $broke)
+                    . '. Fix them on Worksheets.';
+            }
         } catch (Throwable $e) { $_SESSION['flash_error'] = 'Could not remove: ' . $e->getMessage(); }
         header('Location: /factory/build-rules-v2.php?product_id=' . $productId); exit;
     }

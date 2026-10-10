@@ -97,6 +97,7 @@ catch (Throwable $e) { /* not migrated */ }
 // A product sharing another's cut rules (Build rules → "Same as …") offers that
 // product's variables, since those are what its worksheet will compute.
 require_once __DIR__ . '/../_partials/build_eval.php';
+require_once __DIR__ . '/../_partials/worksheet_refs.php';
 $buildVars = [];
 try {
     $bv = $pdo->prepare('SELECT name FROM build_variables WHERE product_id = ? ORDER BY seq, id');
@@ -374,6 +375,19 @@ $currentLayout = $current ? (json_decode((string) $current['layout_json'], true)
 $currentName   = $current ? (string) $current['name'] : ($productName ? $productName . ' worksheet' : 'Worksheet');
 $currentIsDef  = $current ? (int) $current['is_default'] : 1;
 
+// Fields on the loaded template that this product cannot resolve. A var: or
+// opt: miss prints a caption with nothing beside it — no error, no gap in the
+// layout — so without this the only way to notice is to read a printed ticket
+// closely. Same helper system_check.php uses, so the two always agree.
+$orphans = [];
+if (is_array($currentLayout)) {
+    $orphans = ws_orphan_sources(
+        $currentLayout,
+        ws_valid_var_names($pdo, $productId),
+        ws_valid_opt_keys($pdo, $productId, $MASTER)
+    );
+}
+
 // Saved snapshots for this template (version history — most recent first).
 $versions = [];
 if ($templateId > 0) {
@@ -503,6 +517,9 @@ require __DIR__ . '/../_partials/factory_head.php';
     .fld-break { background:#f8fafc; border-radius:6px; }
     .fld-break .break-label { flex:1; font-size:0.78rem; color:#64748b; font-style:italic; padding:0.15rem 0; }
     .fld input.cap { width:9rem; }
+    /* A field whose source this product can't resolve: it prints its caption
+       and no value, so make it obvious in the row as well as the banner. */
+    .fld select.src-dead { border-color:#dc2626; background:#fef2f2; color:#991b1b; font-weight:600; }
     .fld select.src { width:12rem; max-width:100%; min-width:0; }
     .fld select.show { width:8.5rem; }
     .fld select.align { width:6rem; }
@@ -658,6 +675,20 @@ require __DIR__ . '/../_partials/factory_head.php';
 
 <div class="ws-flash warn" id="unsaved-new" style="display:none;"></div>
 
+<?php if ($orphans): ?>
+    <div class="ws-flash err">
+        <strong><?= count($orphans) ?> field<?= count($orphans) === 1 ? '' : 's' ?> on this worksheet print nothing.</strong>
+        <?= count($orphans) === 1 ? 'It asks' : 'They ask' ?> for something <?= e($productName) ?> doesn&rsquo;t have,
+        so the ticket shows the caption with no value beside it:
+        <ul style="margin:.35rem 0 0 1.1rem">
+            <?php foreach ($orphans as $oSrc => $oCap): ?>
+                <li><code><?= e($oSrc) ?></code><?= $oCap !== '' ? ' &mdash; captioned &ldquo;' . e($oCap) . '&rdquo;' : '' ?></li>
+            <?php endforeach; ?>
+        </ul>
+        Pick the right source on that field below, or remove it.
+    </div>
+<?php endif; ?>
+
 <div class="ws-layout">
 <div class="ws-card">
     <div style="display:flex; align-items:center; gap:0.8rem; flex-wrap:wrap; margin-bottom:0.9rem;">
@@ -766,6 +797,9 @@ require __DIR__ . '/../_partials/factory_head.php';
     var PRODUCT_OPTIONS = <?= json_encode($jsProductOptions, $jsonFlags) ?>;
     var SAMPLES     = <?= json_encode($jsSamples, $jsonFlags) ?>;
     var LAYOUT      = <?= json_encode($currentLayout, $jsonFlags) ?>;
+    // Sources the loaded template asks for that this product can't resolve,
+    // so the row itself can say so — not just the banner at the top.
+    var ORPHANS = <?= json_encode(array_keys($orphans), $jsonFlags) ?>;
     var COPY_SOURCES = <?= json_encode($copySources, $jsonFlags) ?>;
     var PRODUCT_NAME = <?= json_encode($productName, $jsonFlags) ?>;
     var HAS_TEMPLATES = <?= $templates ? 'true' : 'false' ?>;
@@ -866,7 +900,14 @@ require __DIR__ . '/../_partials/factory_head.php';
     // rows) is heavy to build/parse on every re-render, so populate it on focus.
     function srcSelect(source) {
         var label = srcLabel[source] || source || '';
-        return '<select class="src" data-full="0"><option value="' + esc(source) + '" selected>' + esc(label) + '</option></select>';
+        // A source this product can't resolve prints a bare caption on the
+        // ticket and nothing else, and srcLabel has no friendly name for it,
+        // so it shows here as the raw "var:Mtrs" string with no hint that
+        // anything is wrong. Mark it, and say what to do.
+        var dead = ORPHANS.indexOf(source) >= 0;
+        return '<select class="src' + (dead ? ' src-dead' : '') + '" data-full="0"'
+             + (dead ? ' title="' + esc(PRODUCT_NAME) + ' has nothing by this name — this field prints its caption and no value. Pick another source, or remove the field."' : '')
+             + '><option value="' + esc(source) + '" selected>' + esc(label) + (dead ? '  ⚠' : '') + '</option></select>';
     }
 
     function fieldRow(f) {

@@ -136,3 +136,65 @@ if (!function_exists('ws_orphan_sources')) {
         return $bad;
     }
 }
+
+if (!function_exists('ws_rules_audience')) {
+    /**
+     * Every product whose worksheet depends on this product's build variables:
+     * itself, plus any product set to "Same as <this>" in the rules editor
+     * (factory_kv, key build_rules_from:<product>). Renaming or deleting a
+     * variable breaks the sharers' tickets just as surely as its own.
+     */
+    function ws_rules_audience(PDO $pdo, int $rulesProductId): array
+    {
+        $ids = [$rulesProductId];
+        try {
+            $st = $pdo->prepare("SELECT k FROM factory_kv WHERE k LIKE 'build_rules_from:%' AND v = ?");
+            $st->execute([(string) $rulesProductId]);
+            foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $k) {
+                $pid = (int) substr((string) $k, strlen('build_rules_from:'));
+                if ($pid > 0 && $pid !== $rulesProductId) $ids[] = $pid;
+            }
+        } catch (Throwable $e) { /* factory_kv not migrated */ }
+        return $ids;
+    }
+}
+
+if (!function_exists('ws_orphan_report')) {
+    /**
+     * Plain-English lines naming every worksheet field that no longer resolves,
+     * for every product affected by a change to this product's build variables.
+     * Empty when nothing is broken.
+     *
+     * Called after saving or deleting build rules: the save itself always
+     * succeeds, and the damage only shows on a printed ticket, so the editor
+     * has to say so at the moment it happens.
+     */
+    function ws_orphan_report(PDO $pdo, int $rulesProductId): array
+    {
+        $out = [];
+        try {
+            foreach (ws_rules_audience($pdo, $rulesProductId) as $pid) {
+                $st = $pdo->prepare(
+                    'SELECT t.name AS tpl, t.layout_json, p.name AS pname, p.client_id
+                       FROM worksheet_templates t JOIN products p ON p.id = t.product_id
+                      WHERE t.product_id = ?'
+                );
+                $st->execute([$pid]);
+                foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $t) {
+                    $lay = json_decode((string) $t['layout_json'], true);
+                    if (!is_array($lay)) continue;
+                    $bad = ws_orphan_sources(
+                        $lay,
+                        ws_valid_var_names($pdo, $pid),
+                        ws_valid_opt_keys($pdo, $pid, (int) $t['client_id'])
+                    );
+                    foreach ($bad as $src => $cap) {
+                        $out[] = $src . ($cap !== '' ? ' ("' . $cap . '")' : '')
+                               . ' on ' . (string) $t['pname'] . ' — ' . (string) $t['tpl'];
+                    }
+                }
+            }
+        } catch (Throwable $e) { /* reporting only — never block a save */ }
+        return $out;
+    }
+}
