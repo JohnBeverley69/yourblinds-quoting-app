@@ -198,6 +198,25 @@ function rm_store_photo(array $file): string
 }
 
 /**
+ * Bin a photo that rm_store_photo() saved for a remake that then failed to
+ * save. The upload is written to disk before rm_create() runs, and rm_create()
+ * is where the validation lives ("Tick at least one blind to remake", "Choose a
+ * reason for the remake", "That order can't have a remake…"), so a rejected
+ * submit left uploads/remakes/rm_<hex>.<ext> on disk with no factory_remakes
+ * row referencing it — and the user's retry wrote a second copy. Nothing ever
+ * cleaned the first one up.
+ *
+ * Only ever unlinks inside uploads/remakes/, and never complains: by the time
+ * this is called the user is already being shown the real error.
+ */
+function rm_discard_photo(string $path): void
+{
+    if ($path === '' || strpos($path, 'uploads/remakes/') !== 0 || strpos($path, '..') !== false) return;
+    $full = __DIR__ . '/../' . $path;
+    if (is_file($full)) @unlink($full);
+}
+
+/**
  * Raise a remake on an order. $items = [source_item_id => qty]. Returns the new id.
  * Throws RuntimeException with a user-facing message.
  */
@@ -382,7 +401,14 @@ function rm_create_remake_order(PDO $pdo, int $factory, array $r, float $charge,
     $row = [];
     foreach ($q as $col => $val) if (!in_array($col, $skip, true)) $row[$col] = $val;
     $row += [
-        'quote_number' => $number, 'status' => 'ordered', 'public_token' => bin2hex(random_bytes(16)),
+        'quote_number' => $number, 'status' => 'ordered',
+        // 64 hex, like every other quote. This minted 32 (random_bytes(16)) while
+        // qb_generate_public_token() produces 64, and all three public endpoints
+        // require 40-128 hex — quote-history/public.php:25, accept.php:34 and
+        // terms.php:19 — so every customer-facing link for a remake order came
+        // back 404 "Quote not found", including the one in its own invoice email.
+        'public_token' => function_exists('qb_generate_public_token')
+            ? qb_generate_public_token() : bin2hex(random_bytes(32)),
         'subtotal' => $charge, 'vat' => $vat, 'total' => round($charge + $vat, 2),
         'remake_of_quote_id' => $srcId, 'due_date' => $due, 'wt_amount' => 0,
         'additional_reference' => 'Remake of ' . $q['quote_number'], 'notes' => mb_substr($note, 0, 2000),
@@ -432,6 +458,24 @@ function rm_create_remake_order(PDO $pdo, int $factory, array $r, float $charge,
             $pdo->prepare('INSERT INTO quote_item_extras (`' . implode('`,`', $ec) . '`) VALUES ('
                           . implode(',', array_fill(0, count($ec), '?')) . ')')->execute(array_values($ex));
         }
+    }
+
+    // No due date given? Work it out from the product lead times, the same way
+    // every other placed order gets one (dd_stamp_order is called from
+    // change_status.php:114/:275, order_suppliers.php:416 and accept.php:197).
+    // The approve form's "Due date (optional)" is usually left blank, and the
+    // INSERT above just stored that NULL — so remade blinds sorted BELOW every
+    // other order on the floor board, including ones due weeks out, and
+    // oc_remakes_due() listed nothing for them on the office calendar. A remake
+    // is the one job that shouldn't be queued last.
+    //
+    // After the lines, necessarily: dd_stamp_order reads the order's products to
+    // get their lead times, so it has nothing to work from until they exist.
+    if ($due === null) {
+        try {
+            require_once __DIR__ . '/due_dates.php';
+            dd_stamp_order($pdo, $newId, $factory);
+        } catch (Throwable $e) { /* lead times not set up — leave it unstamped */ }
     }
     return $newId;
 }

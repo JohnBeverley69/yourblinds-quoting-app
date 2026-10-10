@@ -30,6 +30,7 @@ $lines = $src ? rm_order_lines($pdo, $factory, $qid) : [];
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $src) {
     csrf_check();
     $old = $_POST;
+    $photo = '';   // tracked so a failed save can bin the upload
     try {
         $photo = rm_store_photo($_FILES['photo'] ?? []);
         $pdo->beginTransaction();
@@ -43,9 +44,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $src) {
         header('Location: /factory/remakes.php?view=open');
         exit;
     } catch (RuntimeException $e) {
+        rm_discard_photo($photo);   // nothing saved — do not leave the upload on disk
         if ($pdo->inTransaction()) $pdo->rollBack();
         $error = $e->getMessage();
     } catch (Throwable $e) {
+        rm_discard_photo($photo);
         if ($pdo->inTransaction()) $pdo->rollBack();
         error_log('remake-new: ' . $e->getMessage());
         $error = 'Something went wrong raising the remake — nothing was saved. Please try again.';
