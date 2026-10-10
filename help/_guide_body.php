@@ -31,8 +31,21 @@ $gdJson   = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSO
                 </div>
             </div>
             <p class="lede"><?= $g['lede'] ?></p>
-            <?php if (!empty($g['open'])): ?>
-                <a class="openbtn" href="<?= e($g['open']) ?>">Open the screen &rarr;</a>
+            <?php if (!empty($g['open'])):
+                // A Factory Console user is redirected away from the retail-shaped
+                // screens (factory_console_screens()), so for them this button
+                // never reached the screen the guide is about. Say where it really
+                // goes rather than bouncing them somewhere unexplained.
+                $gOpenPath = explode('?', (string) $g['open'], 2)[0];
+                $gBounce   = function_exists('factory_console_screens') && factory_console_user()
+                           ? (factory_console_screens()[$gOpenPath] ?? null) : null;
+            ?>
+                <?php if ($gBounce !== null): ?>
+                    <a class="openbtn" href="<?= e($gBounce) ?>">Open the console version &rarr;</a>
+                    <p class="ui-hint" style="margin:.4rem 0 0">This guide shows the sales-side screen. Your login opens the Factory Console version instead.</p>
+                <?php else: ?>
+                    <a class="openbtn" href="<?= e($g['open']) ?>">Open the screen &rarr;</a>
+                <?php endif; ?>
             <?php endif; ?>
 
             <section>

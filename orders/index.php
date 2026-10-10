@@ -32,7 +32,7 @@ require_once __DIR__ . '/../_partials/order_stage.php';   // os_factory_progress
 
 requireLogin();
 // Console users have one Orders list (it finds accounts' orders too); quotes = our unplaced ones.
-factory_console_redirect(($_GET['scope'] ?? '') === 'quotes' ? '/factory/orders.php?stage=notplaced' : '/factory/orders.php');
+factory_console_redirect(factory_console_screens()['/orders/index.php'] . (($_GET['scope'] ?? '') === 'quotes' ? '?stage=notplaced' : ''));
 
 $user     = current_user();
 $clientId = (int) $user['client_id'];
