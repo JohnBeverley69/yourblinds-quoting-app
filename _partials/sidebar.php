@@ -453,7 +453,15 @@ window.addEventListener('pageshow', function (e) {
 
         <!-- InstaPrice CTA — pinned right under New, in a distinct coloured box
              so the "quick price" tool is easy to find. Shown to everyone. -->
-        <div class="sidebar-cta"<?= ($hasQuotes && ($canCreateQuotes || $isSuperAdmin)) ? ' style="padding-top:0.375rem"' : '' ?>>
+        <?php
+        // Must match the CTA condition on line 429, which today widened to
+        // include $canCreateOrders. This still tested the old set, so a
+        // Create-orders-only login got "+ New order" above and then the default
+        // .sidebar-cta padding here instead of the tightened padding-top — a gap
+        // between the two buttons no other permission combination gets.
+        $ctaAbove = $hasQuotes && ($canCreateQuotes || $canCreateOrders || $isSuperAdmin);
+        ?>
+        <div class="sidebar-cta"<?= $ctaAbove ? ' style="padding-top:0.375rem"' : '' ?>>
             <a href="/instaprice/index.php"
                class="sidebar-cta-btn is-instaprice<?= $activeNav === 'instaprice' ? ' is-active' : '' ?>">
                 <span aria-hidden="true">&#9889;</span>

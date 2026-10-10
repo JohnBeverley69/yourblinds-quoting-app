@@ -2559,6 +2559,19 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
              the page (see .qb-top-actions). Only the Delete button
              remains down here — deliberately separated so it can't
              be a top-of-page misclick on a quick visit. -->
+        <?php
+        // Only for users the delete handler would actually accept. delete.php:27
+        // requires admin, or can_create_quotes, or a direct order with
+        // can_create_orders — this section had no permission test at all, so a
+        // restricted user (a fitter with an appointment on the job, say) was
+        // shown a red Danger zone and a Delete button that always came back
+        // "Quote not found." Same condition, so the button is only there when
+        // it can work.
+        $delAllowed = ($user['role'] ?? '') === 'admin'
+                   || !empty($_perms['can_create_quotes'])
+                   || (qb_is_direct_order($quote) && !empty($_perms['can_create_orders']));
+        ?>
+        <?php if ($delAllowed): ?>
         <section class="section">
             <div class="section-header">
                 <h2 class="section-title" style="color:#b91c1c">Danger zone</h2>
@@ -2577,6 +2590,7 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                 <?php endif; ?>
             </div>
         </section>
+        <?php endif; /* $delAllowed */ ?>
         <?php endif; /* !$offlineTemplate: danger zone */ ?>
     </main>
 </div>
