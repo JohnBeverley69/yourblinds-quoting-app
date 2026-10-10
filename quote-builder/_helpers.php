@@ -76,6 +76,24 @@ function qb_user_can_access_quote(array $quote, array $user, array $perms): bool
         || (qb_is_direct_order($quote) && !empty($perms['can_create_orders']))) {
         return true;
     }
+    // A factory office user may open the factory's OWN quotes. They can create
+    // them: the Console's "+ New" (master-admin/new-order.php) is
+    // requireFactoryOffice(), which admits role 'factory' plus
+    // can_create_orders (auth/middleware.php:533). But a factory-raised trade
+    // quote is not a direct order — direct_order is only set by
+    // quote-builder/new_order.php — so such a login failed every test above,
+    // fell through to the appointment lookup and got "Quote not found" on the
+    // very quote it had just created. Clicking "+ New" again just made another
+    // orphan, and every Console → Orders row and Dashboard "Latest orders" link
+    // 404'd the same way.
+    //
+    // Scoped to quotes owned by the factory itself, so this grants nothing over
+    // another tenant's work.
+    if (function_exists('factory_user_is_office') && function_exists('factory_client_id')
+        && (int) ($quote['client_id'] ?? 0) === (int) factory_client_id()
+        && factory_user_is_office()) {
+        return true;
+    }
     $st = db()->prepare(
         'SELECT 1 FROM appointments
           WHERE quote_id = ? AND client_user_id = ? AND client_id = ?

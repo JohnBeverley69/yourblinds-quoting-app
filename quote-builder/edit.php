@@ -59,32 +59,25 @@ if ($isDirectOrder) {
 $measureUnit = effective_unit($quote['measurement_unit'] ?? null, db(), $clientId);
 $unitSuffix  = unit_suffix($measureUnit);
 
-// Access gate: admin / view-all / quote-creator-equivalents see any
-// quote in their tenant. Restricted users (typical fitter) can view
-// ONLY quotes where they have at least one appointment assigned —
-// these are the orders they're installing and need to verify blind
-// details + take balance payments against. 404 (not 403) on mismatch
-// so we don't leak the existence of other tenants' or other fitters'
+// Access gate: admin / view-all / quote-creator-equivalents see any quote in
+// their tenant, and a factory office user sees the factory's own. Restricted
+// users (typical fitter) can view ONLY quotes where they have at least one
+// appointment assigned — these are the orders they're installing and need to
+// verify blind details + take balance payments against. 404 (not 403) on
+// mismatch so we don't leak the existence of other tenants' or other fitters'
 // quotes to a guessing attacker.
-$canSeeAllQuotes = $isAdmin
-    || $_perms['can_view_all_customer_jobs']
-    || $_perms['can_create_quotes']
-    || ($isDirectOrder && !empty($_perms['can_create_orders']));
-if (!$canSeeAllQuotes) {
-    $assignedSt = db()->prepare(
-        'SELECT 1 FROM appointments
-          WHERE quote_id = ? AND client_user_id = ? AND client_id = ?
-          LIMIT 1'
-    );
-    $assignedSt->execute([$id, (int) $user['user_id'], $clientId]);
-    if (!$assignedSt->fetchColumn()) {
-        http_response_code(404);
-        header('Content-Type: text/html; charset=utf-8');
-        echo '<!doctype html><meta charset="utf-8"><title>Not found</title>'
-           . '<h1>Quote not found</h1>'
-           . '<p><a href="/calendar/index.php">Back to Calendar</a></p>';
-        exit;
-    }
+//
+// The rule lives in qb_user_can_access_quote(); this file used to carry its own
+// copy of it. Two copies is how the factory-office case came to be missing from
+// one of them — the Console could create a quote the builder then refused to
+// open — so there is only the one now.
+if (!qb_user_can_access_quote($quote, $user, $_perms)) {
+    http_response_code(404);
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><meta charset="utf-8"><title>Not found</title>'
+       . '<h1>Quote not found</h1>'
+       . '<p><a href="/calendar/index.php">Back to Calendar</a></p>';
+    exit;
 }
 $editable = qb_is_editable($quote);
 $isSuperAdmin = is_super_admin();
