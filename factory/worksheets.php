@@ -408,8 +408,31 @@ foreach ($ORDER_FIELDS as $key => [$label, $sample]) {
     if (!$isVertical && in_array($key, $verticalOnlyFields, true)) continue;
     $jsOrderFields[] = ['key' => $key, 'label' => $label];
 }
-$varSamples = ['H_Cut' => '2330', 'C_L' => '7700', 'CH_L' => '2980', 'Hem_To_Hem' => '1435', 'Mtrs' => '51', 'Vanes' => '32'];
-foreach ($buildVars as $vn) { $jsSamples['var:' . $vn] = $varSamples[$vn] ?? '0'; }
+// Sample values for the live preview, from the product's OWN build rules run at
+// a representative size — not a table of names. The table this replaced held
+// Bev Vertical Blinds' variables (H_Cut, Hem_To_Hem, Mtrs...), so every other
+// product's variables fell through to a flat "0": Fabric Only previewed
+// "Mtrs 0  Cut 0" when its rules were perfectly good, which reads as a broken
+// field. Options are set to each group's first choice so option-keyed rules
+// resolve; anything the rules genuinely don't produce previews as an em dash
+// rather than a number that isn't true.
+$varSamples = [];
+try {
+    $sampleOpts = [];
+    foreach ($productOptions as $po) {
+        $lab = mb_strtolower(trim((string) ($po['label'] ?? '')));
+        if ($lab !== '' && (string) ($po['sample'] ?? '') !== '') $sampleOpts[$lab] = (string) $po['sample'];
+    }
+    $sampleNums = array_fill_keys(bv_builtin_vars(), 0.0);
+    $sampleNums['Width'] = 1200.0;
+    $sampleNums['Drop'] = 1500.0;
+    $sampleNums['Quantity'] = 2.0;
+    foreach (build_evaluate($pdo, $productId, $sampleNums, $sampleOpts)['results'] as $r) {
+        if (empty($r['ok']) || !empty($r['blank'])) continue;
+        $varSamples[(string) $r['name']] = (string) $r['value'];
+    }
+} catch (Throwable $e) { /* preview only — every variable falls back to the dash */ }
+foreach ($buildVars as $vn) { $jsSamples['var:' . $vn] = $varSamples[$vn] ?? '—'; }
 
 $jsProductOptions = [];
 foreach ($productOptions as $po) {
@@ -661,7 +684,6 @@ require __DIR__ . '/../_partials/factory_head.php';
     <div style="display:flex; gap:0.6rem; flex-wrap:wrap; margin-top:0.9rem;">
         <button type="button" class="btn ghost" id="add-label">+ Add label</button>
         <button type="button" class="btn ghost" id="collapse-all">Collapse all</button>
-        <button type="button" class="btn ghost" id="load-starter">Load starter vertical layout</button>
     </div>
 
     <form method="post" action="/factory/worksheets.php?product_id=<?= $productId ?>" id="save-form" style="margin-top:1rem; display:flex; align-items:center; gap:0.8rem; flex-wrap:wrap;">
@@ -766,52 +788,6 @@ require __DIR__ . '/../_partials/factory_head.php';
         if (src.indexOf('barcode:') === 0) return '';
         return srcLabel[src] || src;
     }
-
-    // Starter layout modelled on the real vertical worksheet.
-    var STARTER = {
-        stock: 'a4-diecut',
-        qr: 12,
-        header: { w: 170, h: 22, fields: [
-            { source: 'order:order_no',   caption: 'ONO',       show: 'always' },
-            { source: 'order:order_date', caption: 'Date',      show: 'always' },
-            { source: 'order:customer',   caption: 'Customer',  show: 'always' },
-            { source: 'order:address',    caption: '',          show: 'ifvalue' },
-            { source: 'order:post_code',  caption: '',          show: 'ifvalue' },
-            // Plenty of orders have no customer reference, and "always" printed
-            // a bare "Cust Ref" caption with nothing after it. Still just the
-            // per-field setting — change it on any template that wants it.
-            { source: 'order:cust_ref',   caption: 'Cust Ref',  show: 'ifvalue' }
-        ] },
-        labels: [
-            { title: 'Cutting label', w: 80, h: 18, fields: [
-                { source: 'order:line_no',      caption: '',      show: 'always' },
-                { source: 'order:system',       caption: '',      show: 'always' },
-                { source: 'order:colour',       caption: '',      show: 'always' },
-                { source: 'order:control',      caption: '',      show: 'always' },
-                { source: 'order:bracket',      caption: '',      show: 'always' },
-                { source: 'order:draw',         caption: '',      show: 'always' },
-                { source: 'var:C_L',            caption: 'C/L',   show: 'always' },
-                { source: 'var:CH_L',           caption: 'CH/L',  show: 'always' },
-                { source: 'var:H_Cut',          caption: 'H_Cut', show: 'always' },
-                { source: 'order:location',     caption: 'Loc',   show: 'always' },
-                { source: 'order:size',         caption: 'Size',  show: 'always' },
-                { source: 'order:recess_exact', caption: '',      show: 'always' },
-                { source: 'order:notes',        caption: 'Notes', show: 'always' }
-            ] },
-            { title: 'Fabric label', w: 80, h: 18, fields: [
-                { source: 'order:line_no',      caption: '',        show: 'always' },
-                { source: 'order:fabric',       caption: '',        show: 'always' },
-                { source: 'order:location',     caption: 'Loc',     show: 'always' },
-                { source: 'var:Hem_To_Hem',     caption: 'Hem',     show: 'always' },
-                { source: 'var:Mtrs',           caption: 'Mtrs',    show: 'always' },
-                { source: 'var:Vanes',          caption: 'Vanes',   show: 'always' },
-                { source: 'order:size',         caption: 'Size',    show: 'always' },
-                { source: 'order:recess_exact', caption: '',        show: 'always' },
-                { source: 'order:welded',       caption: '',        show: 'always' },
-                { source: 'order:notes',        caption: 'Notes',   show: 'always' }
-            ] }
-        ]
-    };
 
     // Preserve an existing template as-is — including its `stock`. A roll
     // template is label-only (no header), so the old `LAYOUT.header` test wrongly
@@ -1151,13 +1127,6 @@ require __DIR__ . '/../_partials/factory_head.php';
         STATE.labels.forEach(function (_, i) { collapsed['label-' + i] = anyOpen; });
         editor.querySelectorAll('.sec').forEach(function (sec) { sec.classList.toggle('is-collapsed', anyOpen); });
         this.textContent = anyOpen ? 'Expand all' : 'Collapse all';
-    });
-
-    document.getElementById('load-starter').addEventListener('click', function () {
-        if (STATE.header.fields.length || STATE.labels.length) {
-            if (!confirm('Replace the current layout with the starter vertical layout?')) return;
-        }
-        STATE = JSON.parse(JSON.stringify(STARTER)); render(); refreshQrInput();
     });
 
     document.getElementById('new-tpl').addEventListener('click', function () {
@@ -1534,7 +1503,7 @@ require __DIR__ . '/../_partials/factory_head.php';
         if (document.getElementById('f-tid').value === '0') {
             msg += '<strong>Not saved yet</strong> — this is a new template for ' + esc(PRODUCT_NAME) + '. ' +
                    (HAS_TEMPLATES ? 'Your existing templates are untouched. ' : 'This product has no saved worksheet yet. ') +
-                   'Click <strong>Save worksheet</strong> to keep it.';
+                   'Start from a blank layout, or pick an existing one from <strong>Copy layout from…</strong> above — it tells you if a field won’t work on this product. Click <strong>Save worksheet</strong> to keep it.';
         } else {
             msg += 'Click <strong>Save worksheet</strong> to keep it — until then the saved template is unchanged.';
         }
