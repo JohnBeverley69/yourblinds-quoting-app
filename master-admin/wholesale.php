@@ -84,8 +84,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 os_auto_invoice_on_dispatch($pdo, $dnQid, $factory, (int) ($user['user_id'] ?? 0) ?: null);
                 $_SESSION['flash_success'] = 'Delivery note marked dispatched.';
             } else {
+                // Read the delivery's grouping keys BEFORE cancelling, so the
+                // charge can be re-worked for whatever is left in it.
+                $dnGrp = null;
+                try {
+                    $g = $pdo->prepare(
+                        'SELECT account_client_id, delivery_date, delivery_method
+                           FROM factory_ar_delivery_notes
+                          WHERE id = ? AND factory_client_id = ? LIMIT 1'
+                    );
+                    $g->execute([$dnId, $factory]);
+                    $dnGrp = $g->fetch(PDO::FETCH_ASSOC) ?: null;
+                } catch (Throwable $e) { /* delivery charges not migrated */ }
+
                 $pdo->prepare("UPDATE factory_ar_delivery_notes SET status = 'cancelled' WHERE id = ? AND factory_client_id = ? AND status <> 'cancelled'")
                     ->execute([$dnId, $factory]);
+
+                // dc_recalc_delivery parks the whole delivery charge on ONE bearer
+                // note and zeroes the rest, and its docblock says it must run
+                // "whenever a note joins, leaves or changes group". Cancelling is
+                // leaving, and this branch never ran it — it only called
+                // recompute_order_stage. Since dc_recalc_delivery and
+                // dc_order_carriage both skip cancelled notes, cancelling the
+                // bearer took the charge with it: the remaining order invoiced
+                // with no carriage line and nobody was billed for the delivery.
+                if ($dnGrp && function_exists('dc_recalc_delivery')) {
+                    try {
+                        dc_recalc_delivery(
+                            $pdo, $factory,
+                            (int) $dnGrp['account_client_id'],
+                            (string) $dnGrp['delivery_date'],
+                            (string) $dnGrp['delivery_method']
+                        );
+                    } catch (Throwable $e) { /* leave the charge as it stands */ }
+                }
                 $_SESSION['flash_success'] = 'Delivery note cancelled.';
             }
         } catch (Throwable $e) {
