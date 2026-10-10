@@ -158,6 +158,17 @@ foreach ($bvByProd as $pid => $vars) {
     $validVars = array_fill_keys(array_map('strtolower', bv_builtin_vars()), 1);
     foreach ($vars as $v) { $validVars[strtolower((string) $v['name'])] = 1; }
 
+    // Exact-case names as well, for the worksheet check below. The RUNTIME is
+    // case-sensitive — factory/worksheet-print.php:477 does
+    //   strncmp($src, 'var:', 4) === 0 … array_key_exists($n, $computed)
+    // with the name exactly as the template spells it — while this file matched
+    // the prefix with stripos() and lowercased the name. So the check could pass
+    // a field the ticket renders blank, which is the worst way for a check to be
+    // wrong: var:Hem_To_Hem against a variable named hem_to_hem read as fine
+    // here and printed nothing there.
+    $validVarsExact = array_fill_keys(bv_builtin_vars(), 1);
+    foreach ($vars as $v) { $validVarsExact[(string) $v['name']] = 1; }
+
     $seenCellMiss = []; $seenTblMiss = []; $seenVarMiss = [];
     foreach ($vars as $v) {
         $cols = json_decode((string) $v['columns_json'], true) ?: [];
@@ -237,9 +248,32 @@ foreach ($bvByProd as $pid => $vars) {
                 $node = array_pop($stack);
                 if (!is_array($node)) continue;
                 if (isset($node['source']) && is_string($node['source']) && stripos($node['source'], 'var:') === 0) {
-                    $vn = strtolower(trim(substr($node['source'], 4)));
-                    if ($vn !== '' && !isset($validVars[$vn]) && !isset($seenWs[$vn])) { $seenWs[$vn] = 1;
-                        $bad("{$pname}: worksheet prints var:'{$vn}' — no build variable of that name (renders blank)");
+                    $srcRaw = (string) $node['source'];
+                    $vnRaw  = trim(substr($srcRaw, 4));
+                    $vnLow  = strtolower($vnRaw);
+                    if ($vnRaw === '') { /* nothing named */ }
+                    // The runtime matches the prefix with a case-SENSITIVE
+                    // strncmp, so "Var:" / "VAR:" never matches at all and the
+                    // field falls through to print nothing.
+                    elseif (strncmp($srcRaw, 'var:', 4) !== 0) {
+                        if (!isset($seenWs['!p' . $vnLow])) { $seenWs['!p' . $vnLow] = 1;
+                            $bad("{$pname}: worksheet field source '{$srcRaw}' — the prefix must be lower-case 'var:' (renders blank)");
+                        }
+                    }
+                    // No such variable under any casing: genuinely missing.
+                    elseif (!isset($validVars[$vnLow])) {
+                        if (!isset($seenWs[$vnLow])) { $seenWs[$vnLow] = 1;
+                            $bad("{$pname}: worksheet prints var:'{$vnRaw}' — no build variable of that name (renders blank)");
+                        }
+                    }
+                    // The variable exists but is spelled with different capitals.
+                    // The runtime looks it up with array_key_exists() on the name
+                    // as written, so this prints blank even though the variable is
+                    // right there. Lowercasing both sides is what hid it.
+                    elseif (!isset($validVarsExact[$vnRaw])) {
+                        if (!isset($seenWs['!c' . $vnLow])) { $seenWs['!c' . $vnLow] = 1;
+                            $bad("{$pname}: worksheet prints var:'{$vnRaw}' but the build variable is spelled differently — the lookup is case-sensitive, so it renders blank");
+                        }
                     }
                 }
                 foreach ($node as $child) { if (is_array($child)) $stack[] = $child; }
