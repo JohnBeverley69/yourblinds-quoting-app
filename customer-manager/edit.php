@@ -43,6 +43,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $input[$f] = trim((string) ($_POST[$f] ?? ''));
     }
     $input['has_whatsapp'] = !empty($_POST['has_whatsapp']) ? 1 : 0;
+    $input['sms_opt_out']  = !empty($_POST['sms_opt_out']) ? 1 : 0;
 
     if ($input['name'] === '') {
         $error = 'Name is required.';
@@ -70,6 +71,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $input['notes']    !== '' ? $input['notes']    : null,
             $id, $clientId,
         ]);
+        // "Don't text" tick: kept separate so a missing column (migrate_messages.php
+        // not run yet) can't stop the main save.
+        try {
+            db()->prepare('UPDATE customers SET sms_opt_out = ? WHERE id = ? AND client_id = ?')
+                ->execute([(int) $input['sms_opt_out'], $id, $clientId]);
+        } catch (Throwable $e) { /* not migrated yet */ }
         $_SESSION['flash_success'] = 'Customer updated.';
         header('Location: /customer-manager/edit.php?id=' . $id);
         exit;
@@ -80,6 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $customer[$f] = $input[$f];
     }
     $customer['has_whatsapp'] = $input['has_whatsapp'];
+    $customer['sms_opt_out']  = $input['sms_opt_out'];
 }
 
 // Recent quotes for this customer (read-only, last 5). The `quotes` table
@@ -171,6 +179,11 @@ $activeNav = 'customers';
                             <input type="checkbox" name="has_whatsapp" value="1"
                                    <?= !empty($customer['has_whatsapp']) ? 'checked' : '' ?>>
                             Mobile is on WhatsApp
+                        </label>
+                        <label style="display:inline-flex;align-items:center;gap:0.4rem;margin-top:0.35rem;font-weight:400;font-size:0.875rem;color:#4b5563;cursor:pointer">
+                            <input type="checkbox" name="sms_opt_out" value="1"
+                                   <?= !empty($customer['sms_opt_out']) ? 'checked' : '' ?>>
+                            Don't text this customer
                         </label>
                     </div>
                 </div>

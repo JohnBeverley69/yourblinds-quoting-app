@@ -18,6 +18,7 @@ $customer = [
     'notes' => '',
 ];
 $customer['has_whatsapp'] = 0;
+$customer['sms_opt_out']  = 0;
 $error = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -27,6 +28,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $customer[$k] = trim((string) ($_POST[$k] ?? ''));
     }
     $customer['has_whatsapp'] = !empty($_POST['has_whatsapp']) ? 1 : 0;
+    $customer['sms_opt_out']  = !empty($_POST['sms_opt_out']) ? 1 : 0;
 
     // Soft duplicate check: if a customer with the same case-
     // insensitive trimmed name already exists for this tenant, stop
@@ -80,6 +82,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $customer['notes']    !== '' ? $customer['notes']    : null,
         ]);
         $newId = (int) db()->lastInsertId();
+        if ($customer['sms_opt_out']) {
+            // Separate so a missing column (migrate_messages.php not run) can't stop the add.
+            try {
+                db()->prepare('UPDATE customers SET sms_opt_out = 1 WHERE id = ? AND client_id = ?')
+                    ->execute([$newId, $clientId]);
+            } catch (Throwable $e) { /* not migrated yet */ }
+        }
         cm_remember_created($newId);
         $_SESSION['flash_success'] = 'Customer added.';
         header('Location: /customer-manager/edit.php?id=' . $newId);
@@ -191,6 +200,11 @@ $activeNav = 'customers';
                             <input type="checkbox" name="has_whatsapp" value="1"
                                    <?= !empty($customer['has_whatsapp']) ? 'checked' : '' ?>>
                             Mobile is on WhatsApp
+                        </label>
+                        <label style="display:inline-flex;align-items:center;gap:0.4rem;margin-top:0.35rem;font-weight:400;font-size:0.875rem;color:#4b5563;cursor:pointer">
+                            <input type="checkbox" name="sms_opt_out" value="1"
+                                   <?= !empty($customer['sms_opt_out']) ? 'checked' : '' ?>>
+                            Don't text this customer
                         </label>
                     </div>
                 </div>

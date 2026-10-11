@@ -9,4 +9,5 @@ return [
     'feature_maps'            => 'Maps',
     'feature_postcode_lookup' => 'Postcode lookup',
     'feature_accounts'        => 'Accounts',
+    'feature_sms'             => 'Texts',
 ];
