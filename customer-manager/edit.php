@@ -185,6 +185,21 @@ $activeNav = 'customers';
                                    <?= !empty($customer['sms_opt_out']) ? 'checked' : '' ?>>
                             Don't text this customer
                         </label>
+                        <?php
+                            $custTexts = 0;
+                            if ($canDelete) {   // = can see all customers, which the Messages log needs
+                                try {
+                                    $ct = db()->prepare('SELECT COUNT(*) FROM messages WHERE client_id = ? AND customer_id = ?');
+                                    $ct->execute([$clientId, $id]);
+                                    $custTexts = (int) $ct->fetchColumn();
+                                } catch (Throwable $e) { /* not migrated yet */ }
+                            }
+                        ?>
+                        <?php if ($custTexts > 0): ?>
+                            <a href="/messages/index.php?customer=<?= (int) $id ?>" style="display:block;margin-top:0.35rem;font-size:0.875rem">
+                                <?= $custTexts ?> text<?= $custTexts === 1 ? '' : 's' ?> sent &rarr;
+                            </a>
+                        <?php endif; ?>
                     </div>
                 </div>
 
