@@ -37,25 +37,10 @@ try {
     $hasCategories = false;
 }
 
-$catSelect = $hasCategories ? 'p.category_id,' : 'NULL AS category_id,';
-$rows = db()->prepare(
-    'SELECT p.id, p.name, p.sort_order, p.active, p.updated_at, p.requires_option,
-            ' . $catSelect . '
-            (SELECT COUNT(*) FROM product_options o WHERE o.product_id = p.id AND o.active = 1) AS option_count,
-            (SELECT COUNT(*) FROM product_extras  e WHERE e.product_id = p.id AND e.active = 1) AS extra_count,
-            (SELECT COUNT(*) FROM product_systems s WHERE s.product_id = p.id AND s.active = 1) AS system_count,
-            (SELECT COUNT(*) FROM price_tables   t WHERE t.product_id = p.id AND t.active = 1) AS price_table_count,
-            (CASE
-                WHEN (SELECT COUNT(*) FROM product_systems s WHERE s.product_id = p.id AND s.active = 1) = 1
-                THEN (SELECT s.id FROM product_systems s WHERE s.product_id = p.id AND s.active = 1 LIMIT 1)
-                ELSE NULL
-             END) AS solo_system_id
-       FROM products p
-      WHERE p.client_id = ?
-   ORDER BY p.sort_order, p.name'
-);
-$rows->execute([$clientId]);
-$products = $rows->fetchAll();
+// Products + the counts the "ready to quote" rules need — shared with the
+// dashboard's Quoting readiness panel (_partials/product_readiness.php).
+require_once __DIR__ . '/../../_partials/product_readiness.php';
+$products = pr_products((int) $clientId, $hasCategories);
 
 // Categories for this tenant, and products grouped by them (0 = ungrouped).
 $categories  = [];
@@ -73,17 +58,10 @@ foreach ($products as $p) {
     $grouped[$cid][] = $p;
 }
 
-// "Ready to quote" = has at least one fabric AND at least one price
-// table. Systems and Options are nice-to-have but not strictly
-// required. The same check feeds the status pill on each row.
-// A no-fabric product (requires_option = 0, e.g. a headrail) doesn't need
-// an option/fabric to be quote-ready — just an active price table.
-$isQuoteReady = static function (array $p): bool {
-    $needsFabric = !isset($p['requires_option']) || (int) $p['requires_option'] === 1;
-    return (!$needsFabric || (int) $p['option_count'] > 0)
-        && (int) $p['price_table_count'] > 0
-        && (int) $p['active'] === 1;
-};
+// "Ready to quote" rules live in _partials/product_readiness.php (pr_is_ready /
+// pr_missing / pr_fix_href), kept in step with the edit page's
+// _partials/catalogue_validator.php. The same check feeds the status pill.
+$isQuoteReady = static fn (array $p): bool => pr_is_ready($p);
 
 // Friendly relative-time formatter — shared partial used by every
 // admin/products grid that has an Updated column.
@@ -93,9 +71,7 @@ require_once __DIR__ . '/../../_partials/time_ago.php';
 // in one place. Captures the quote-ready check + the category list.
 $renderRow = function (array $p) use ($isQuoteReady, $categories, $hasCategories): void {
     $ready  = $isQuoteReady($p);
-    $ptHref = !empty($p['solo_system_id'])
-        ? '/admin/products/price-tables.php?system_id=' . (int) $p['solo_system_id']
-        : '/admin/products/systems.php?product_id='     . (int) $p['id'];
+    $ptHref  = pr_price_tables_href($p);
     $fixHref = null;   // when not ready, where clicking the status takes you
     if ((int) $p['active'] !== 1) {
         $statusBg = 'var(--border)'; $statusFg = 'var(--text-secondary)'; $statusLabel = 'Inactive';
@@ -103,25 +79,10 @@ $renderRow = function (array $p) use ($isQuoteReady, $categories, $hasCategories
         $statusBg = '#d1fae5'; $statusFg = '#065f46'; $statusLabel = '✓ Ready';
     } else {
         $statusBg = '#fef3c7'; $statusFg = '#78350f';
-        $needsFabric = !isset($p['requires_option']) || (int) $p['requires_option'] === 1;
-        // Same setup order as the edit-page catalogue health check
-        // (_partials/catalogue_validator.php): systems first — price tables are
-        // per system, so a product with none can't be quoted at all — then
-        // fabrics, then price tables. Keep the two in step.
-        $missing = [];
-        if ((int) $p['system_count'] === 0)                     $missing[] = 'system';
-        if ($needsFabric && (int) $p['option_count'] === 0)     $missing[] = 'fabric';
-        if ((int) $p['price_table_count'] === 0)                $missing[] = 'price table';
-        $statusLabel = 'Needs ' . implode(' + ', $missing);
-        // Click the pill to jump straight to what's missing, in that same order:
-        // systems, then fabrics, else price tables.
-        if ((int) $p['system_count'] === 0) {
-            $fixHref = '/admin/products/systems.php?product_id=' . (int) $p['id'];
-        } elseif ($needsFabric && (int) $p['option_count'] === 0) {
-            $fixHref = '/admin/products/options.php?product_id=' . (int) $p['id'];
-        } else {
-            $fixHref = $ptHref;
-        }
+        // Systems → fabrics → price tables (see _partials/product_readiness.php).
+        // Click the pill to jump straight to the first thing missing.
+        $statusLabel = 'Needs ' . implode(' + ', pr_missing($p));
+        $fixHref     = pr_fix_href($p);
     }
     $cid = $hasCategories ? (int) ($p['category_id'] ?? 0) : 0;
     ?>

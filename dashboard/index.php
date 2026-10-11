@@ -70,6 +70,28 @@ if (!$canSeeAnything) {
     exit;
 }
 
+// ---- Quoting readiness (admins) ----------------------------------------
+// Products that can't be quoted yet, and company details a quote relies on.
+// Same rules as the Products list (_partials/product_readiness.php).
+$readiness = null;
+if ($isAdmin) {
+    try {
+        require_once __DIR__ . '/../_partials/product_readiness.php';
+        $rdActive   = array_values(array_filter(pr_products($clientId), static fn ($p) => (int) $p['active'] === 1));
+        $rdNotReady = array_values(array_filter($rdActive, static fn ($p) => !pr_is_ready($p)));
+        $rdCompany  = pr_company_checks($clientId);
+        $readiness  = [
+            'total'    => count($rdActive),
+            'ready'    => count($rdActive) - count($rdNotReady),
+            'notReady' => $rdNotReady,
+            'company'  => $rdCompany,
+            'allOk'    => $rdActive && !$rdNotReady && !array_filter($rdCompany, static fn ($c) => !$c['ok']),
+        ];
+    } catch (Throwable $e) {
+        error_log('dashboard readiness: ' . $e->getMessage());
+    }
+}
+
 // ---- Period selector -------------------------------------------------
 //
 // Preset periods, plus a custom from/to range:
@@ -688,6 +710,20 @@ $activeNav = 'dashboard';
             color: var(--text-primary); font-weight: 700;
         }
         .panel .panel-sub { color: var(--text-faint); font-size: 0.8125rem; margin: -0.625rem 0 0.875rem; }
+        /* Quoting readiness panel */
+        .ready-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem 2rem; }
+        .ready-h { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint); margin: 0 0 0.5rem; }
+        .ready-line { margin: 0 0 0.4rem; font-size: 0.875rem; }
+        .ready-bar { height: 6px; background: var(--border); border-radius: 999px; overflow: hidden; margin-bottom: 0.6rem; max-width: 22rem; }
+        .ready-bar > div { height: 100%; background: #16a34a; }
+        .ready-list { list-style: none; margin: 0; padding: 0; font-size: 0.875rem; }
+        .ready-list li { padding: 0.3rem 0; border-bottom: 1px solid var(--border); display: flex; flex-wrap: wrap; gap: 0.25rem 0.5rem; align-items: baseline; }
+        .ready-list li:last-child { border-bottom: 0; }
+        .ready-list li.is-ok { color: var(--text-faint); }
+        .ready-mark { width: 1rem; display: inline-block; color: #b45309; }
+        .ready-list li.is-ok .ready-mark { color: #16a34a; }
+        .ready-need { color: #b45309; font-size: 0.8125rem; }
+        .ready-fix { margin-left: auto; font-size: 0.8125rem; font-weight: 600; white-space: nowrap; }
         table.lb {
             width: 100%; border-collapse: collapse; font-size: 0.9375rem;
         }
@@ -1062,6 +1098,61 @@ $activeNav = 'dashboard';
                     <button type="submit">Apply</button>
                 </noscript>
             </form>
+        <?php endif; ?>
+
+        <?php if ($readiness !== null): ?>
+        <!-- Quoting readiness (admins) ------------------------------------>
+        <div class="panel ready-panel">
+            <h2>Ready to quote</h2>
+            <?php if ($readiness['allOk']): ?>
+                <p class="panel-sub" style="margin-bottom:0;color:#166534">
+                    &#10003; All <?= (int) $readiness['total'] ?> products are ready to quote and your company details are filled in.
+                </p>
+            <?php else: ?>
+                <p class="panel-sub">What's left so every quote goes out complete.</p>
+                <div class="ready-grid">
+                    <div>
+                        <h3 class="ready-h">Products</h3>
+                        <?php if ($readiness['total'] === 0): ?>
+                            <p class="ready-line">No products yet. <a href="/admin/products/index.php">Add your first product &rarr;</a></p>
+                        <?php else:
+                            $rdPct = (int) round($readiness['ready'] * 100 / max(1, $readiness['total'])); ?>
+                            <p class="ready-line"><strong><?= (int) $readiness['ready'] ?> of <?= (int) $readiness['total'] ?></strong> ready to quote</p>
+                            <div class="ready-bar"><div style="width:<?= $rdPct ?>%"></div></div>
+                            <?php if ($readiness['notReady']): ?>
+                                <ul class="ready-list">
+                                    <?php foreach (array_slice($readiness['notReady'], 0, 6) as $p): ?>
+                                        <li>
+                                            <a href="/admin/products/edit.php?id=<?= (int) $p['id'] ?>"><?= e((string) $p['name']) ?></a>
+                                            <span class="ready-need">needs <?= e(implode(' + ', pr_missing($p))) ?></span>
+                                            <a class="ready-fix" href="<?= e(pr_fix_href($p)) ?>">Fix &rarr;</a>
+                                        </li>
+                                    <?php endforeach; ?>
+                                </ul>
+                                <?php if (count($readiness['notReady']) > 6): ?>
+                                    <p class="ready-line"><a href="/admin/products/index.php">+ <?= count($readiness['notReady']) - 6 ?> more &mdash; see all products &rarr;</a></p>
+                                <?php endif; ?>
+                            <?php endif; ?>
+                        <?php endif; ?>
+                    </div>
+                    <div>
+                        <h3 class="ready-h">On your quotes</h3>
+                        <ul class="ready-list">
+                            <?php foreach ($readiness['company'] as $chk): ?>
+                                <li class="<?= $chk['ok'] ? 'is-ok' : '' ?>">
+                                    <span class="ready-mark" aria-hidden="true"><?= $chk['ok'] ? '&#10003;' : '&#9675;' ?></span>
+                                    <?= e($chk['label']) ?>
+                                    <?php if (!$chk['ok']): ?>
+                                        <span class="ready-need">&mdash; <?= e($chk['why']) ?></span>
+                                        <a class="ready-fix" href="<?= e($chk['href']) ?>">Add &rarr;</a>
+                                    <?php endif; ?>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    </div>
+                </div>
+            <?php endif; ?>
+        </div>
         <?php endif; ?>
 
         <!-- Upcoming jobs widget --------------------------------------->

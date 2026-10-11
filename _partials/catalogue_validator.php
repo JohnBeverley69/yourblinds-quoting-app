@@ -11,11 +11,10 @@ declare(strict_types=1);
  *                                the top of the page, one chip per
  *                                issue, colour-coded by severity.
  *
- *   - admin/products/index.php — could surface a "things to fix"
- *                                pill on each row (not wired up in
- *                                the first cut — count is enough).
- *
- *   - (future) dashboard       — tenant-wide "things to fix" panel.
+ * The Products list and the dashboard's Quoting readiness panel use a cheap
+ * bulk version of the critical rules instead (one query for all products):
+ * _partials/product_readiness.php. Keep its rules and order (systems →
+ * fabrics → price tables) in step with the criticals here.
  *
  * The validator is pure-ish: it makes read-only DB calls, never
  * writes. Errors during a check log + skip — a missing table on an
