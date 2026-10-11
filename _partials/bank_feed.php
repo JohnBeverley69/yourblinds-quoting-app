@@ -245,6 +245,20 @@ function bf_suggest(array $book, array $txn, array $aliases = []): ?array
         }
     }
 
+    // 2b. Payer known, but their reference is a SHORT number — Blind Matrix
+    // invoice numbers brought forward at the swap-over are 5 digits ("59824").
+    // Too short to trust on their own across every account (rule 1), but safe
+    // within THIS payer's own invoices: a number in the reference that is one
+    // of theirs picks that invoice.
+    if ($accountId !== null && empty($hitInv[$accountId]) && isset($book[$accountId])) {
+        preg_match_all('/\d{4,}/', (string) (($txn['description'] ?? '') . ' ' . ($txn['merchant'] ?? '')), $mm);
+        $runs = array_flip($mm[0] ?? []);
+        foreach ($book[$accountId]['invoices'] as $inv) {
+            $digits = (string) $inv['inv_number'];
+            if (ctype_digit($digits) && isset($runs[$digits])) $hitInv[$accountId][] = $inv['id'];
+        }
+    }
+
     // 3. Amount equals exactly one open invoice.
     $strong = $accountId !== null;
     if ($accountId === null) {
