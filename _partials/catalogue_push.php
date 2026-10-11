@@ -754,6 +754,9 @@ function pp_sync_extras_and_choices(
     // (panels × grid at width ÷ panels), so a mirror must match the master.
     $hasSplitPanels = pp_column_exists($pdo, 'product_extras', 'splits_panels');
     $hasJoinable    = pp_column_exists($pdo, 'product_extras', 'joinable');
+    // collapse_multi ("Collapse to None until needed") — display only, but a
+    // tenant's copy should look like the master's.
+    $hasCollapse    = pp_column_exists($pdo, 'product_extras', 'collapse_multi');
 
     $extraCols = 'id, name, is_required, sort_order, active';
     if ($hasLengthLabel) $extraCols .= ', length_input_label';
@@ -764,6 +767,7 @@ function pp_sync_extras_and_choices(
     if ($hasBeforeSize)  $extraCols .= ', before_size';
     if ($hasSplitPanels) $extraCols .= ', splits_panels';
     if ($hasJoinable)    $extraCols .= ', joinable';
+    if ($hasCollapse)    $extraCols .= ', collapse_multi';
 
     $src = $pdo->prepare(
         "SELECT $extraCols FROM product_extras
@@ -827,6 +831,7 @@ function pp_sync_extras_and_choices(
             if ($hasBeforeSize) { $cols[] = 'before_size'; $params[] = (int) ($r['before_size'] ?? 0); }
             if ($hasSplitPanels) { $cols[] = 'splits_panels'; $params[] = (int) ($r['splits_panels'] ?? 0); }
             if ($hasJoinable) { $cols[] = 'joinable'; $params[] = (int) ($r['joinable'] ?? 0); }
+            if ($hasCollapse) { $cols[] = 'collapse_multi'; $params[] = (int) ($r['collapse_multi'] ?? 0); }
             $placeholders = implode(',', array_fill(0, count($cols), '?'));
             $colsSql      = implode(',', $cols);
             $pdo->prepare("INSERT INTO product_extras ($colsSql) VALUES ($placeholders)")
@@ -866,6 +871,7 @@ function pp_sync_extras_and_choices(
             if ($hasBeforeSize) { $sets[] = 'before_size = ?'; $params[] = (int) ($r['before_size'] ?? 0); }
             if ($hasSplitPanels) { $sets[] = 'splits_panels = ?'; $params[] = (int) ($r['splits_panels'] ?? 0); }
             if ($hasJoinable) { $sets[] = 'joinable = ?'; $params[] = (int) ($r['joinable'] ?? 0); }
+            if ($hasCollapse) { $sets[] = 'collapse_multi = ?'; $params[] = (int) ($r['collapse_multi'] ?? 0); }
             $params[] = $tgtId;
             $pdo->prepare(
                 'UPDATE product_extras SET ' . implode(', ', $sets) . ' WHERE id = ?'

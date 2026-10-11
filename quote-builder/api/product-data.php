@@ -267,6 +267,18 @@ try {
 }
 $extraIds  = array_map(static fn ($r) => (int) $r['id'], $extrasRaw);
 
+// collapse_multi (migrate_extra_collapse_multi.php) — probed on its own so a
+// pre-migration DB keeps the full SELECT above. Absent ⇒ never collapsed.
+$collapseById = [];
+if ($extraIds) {
+    try {
+        $cph = implode(',', array_fill(0, count($extraIds), '?'));
+        $cSt = $pdo->prepare("SELECT id FROM product_extras WHERE id IN ($cph) AND collapse_multi = 1");
+        $cSt->execute($extraIds);
+        foreach ($cSt->fetchAll(PDO::FETCH_COLUMN) as $cid) $collapseById[(int) $cid] = true;
+    } catch (Throwable $e) { /* column not migrated yet */ }
+}
+
 // parent_match_all (migrate_parent_match_all.php) — optional column. When 1,
 // the extra's gate requires ALL distinct parent options to match (AND) rather
 // than ANY (OR). Probed separately so the cascade above stays untouched and
@@ -464,7 +476,7 @@ if ($extraIds) {
     }
 }
 
-$extras = array_map(static function ($r) use ($choicesByExtra, $parentsByExtra, $matchAllById, $codeById) {
+$extras = array_map(static function ($r) use ($choicesByExtra, $parentsByExtra, $matchAllById, $codeById, $collapseById) {
     $eid = (int) $r['id'];
     return [
         'id'                 => $eid,
@@ -490,6 +502,9 @@ $extras = array_map(static function ($r) use ($choicesByExtra, $parentsByExtra, 
         // before_size — render this option (and its nested children) ABOVE the
         // Width/Drop fields when true (e.g. the roller fascia group).
         'before_size'        => (int) ($r['before_size'] ?? 0) === 1,
+        // collapse_multi — a tick-several option shown as one "None" box until
+        // the salesperson picks "Add …", then the tick list opens.
+        'collapse_multi'     => (int) ($r['allow_multi'] ?? 0) === 1 && isset($collapseById[$eid]),
         'choices'            => $choicesByExtra[$eid] ?? [],
     ];
 }, $extrasRaw);
