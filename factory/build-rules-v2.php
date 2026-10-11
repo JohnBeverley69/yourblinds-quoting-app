@@ -29,13 +29,7 @@ $MASTER = function_exists('current_factory_id') ? (int) current_factory_id() : 0
 // can start a product from blank right here).
 $products = [];
 try {
-    $ps = $pdo->prepare(
-        "SELECT id, name FROM products
-          WHERE client_id = ?
-          ORDER BY name"
-    );
-    $ps->execute([$MASTER]);
-    $products = $ps->fetchAll(PDO::FETCH_ASSOC);
+    $products = factory_products($pdo, $MASTER);   // only what this factory makes
 } catch (Throwable $e) { /* handled in view */ }
 
 // Default to Vertical Blinds if present, else first product.

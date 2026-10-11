@@ -75,9 +75,7 @@ $ORDER_FIELDS = [
 // Master products.
 $products = [];
 try {
-    $ps = $pdo->prepare("SELECT id, name FROM products WHERE client_id = ? ORDER BY name");
-    $ps->execute([$MASTER]);
-    $products = $ps->fetchAll(PDO::FETCH_ASSOC);
+    $products = factory_products($pdo, $MASTER);   // only what this factory makes
 } catch (Throwable $e) { /* handled in view */ }
 
 $productId = (int) ($_GET['product_id'] ?? $_POST['product_id'] ?? 0);
@@ -687,7 +685,7 @@ require __DIR__ . '/../_partials/factory_head.php';
 <?php if (!$hasTable): ?>
     <div class="ws-flash err">The <code>worksheet_templates</code> table isn't there yet — run <code>/setup/migrations/migrate_worksheet_templates.php</code>.</div>
 <?php elseif (!$products): ?>
-    <div class="ws-flash err">No products found for this factory.</div>
+    <div class="ws-flash err">This factory doesn&rsquo;t make any products yet. Products copied from another factory&rsquo;s catalogue are made by that factory &mdash; to make one here, <a href="/admin/products/index.php">Duplicate it on Products</a> and use the copy.</div>
 <?php else: ?>
 
 <div class="ws-flash warn" id="unsaved-new" style="display:none;"></div>

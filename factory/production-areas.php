@@ -341,9 +341,7 @@ if ($ready) {
     }
 }
 // Factory's own (master) products — the things it makes.
-$products = $pdo->prepare("SELECT id, name FROM products WHERE client_id = ? ORDER BY name");
-$products->execute([$MASTER]);
-$products = $products->fetchAll(PDO::FETCH_ASSOC);
+$products = factory_products($pdo, $MASTER);
 
 // Each product's routes (streams). A single-route product → ['main'] (shown as one
 // row); a vertical → ['Headrail','Fabric'] (a row each, assignable separately).

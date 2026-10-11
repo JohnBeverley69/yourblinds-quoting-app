@@ -445,6 +445,31 @@ function current_factory_id(): int
  * route / worksheet queries — so the id itself must be re-verified, or a
  * hand-crafted request could read or overwrite another factory's data.
  */
+/**
+ * The products this factory makes — for the factory pickers (worksheets, build
+ * rules, routes, production areas). Same rule as factory_owns_product(): on the
+ * factory's own account AND not a copy of another factory's product. Listing
+ * every product on the account (as the pickers used to) offered a white-label
+ * factory products it doesn't own, so picking one bounced straight back to the
+ * first (Tyler Smyth Blinds, 2026-10-11: everything reverted to Bev 25mm Venetian).
+ */
+function factory_products(PDO $pdo, int $factoryId): array
+{
+    try {
+        $st = $pdo->prepare(
+            'SELECT id, name FROM products
+              WHERE client_id = ? AND COALESCE(NULLIF(source_client_id, 0), client_id) = ?
+           ORDER BY name'
+        );
+        $st->execute([$factoryId, $factoryId]);
+    } catch (Throwable $e) {
+        // products.source_client_id absent (pre-migration) — the account's products.
+        $st = $pdo->prepare('SELECT id, name FROM products WHERE client_id = ? ORDER BY name');
+        $st->execute([$factoryId]);
+    }
+    return $st->fetchAll(PDO::FETCH_ASSOC);
+}
+
 function factory_owns_product(PDO $pdo, int $productId, ?int $factoryId = null): bool
 {
     if ($productId <= 0) return false;
