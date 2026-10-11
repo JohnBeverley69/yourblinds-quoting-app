@@ -208,6 +208,21 @@ $activeNav = 'customers';
                         </label>
                     </div>
                 </div>
+                <?php
+                // Postcode lookup — same widget and plan gate as quotes and bookings.
+                $pcOn = false;
+                try {
+                    $pcSt = db()->prepare('SELECT COALESCE(feature_postcode_lookup, 0) FROM client_settings WHERE client_id = ?');
+                    $pcSt->execute([(int) $user['client_id']]);
+                    $pcOn = (int) $pcSt->fetchColumn() === 1;
+                } catch (Throwable $e) { /* no flag column: no lookup */ }
+                if ($pcOn) {
+                    $pcFieldMap = ['line1' => 'address1', 'line2' => 'address2', 'town' => 'town',
+                                   'county' => 'county', 'postcode' => 'postcode'];
+                    require __DIR__ . '/../_partials/postcode_lookup.php';
+                }
+                ?>
+
 
                 <div class="form-row full">
                     <div class="form-group">
