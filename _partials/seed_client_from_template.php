@@ -2,411 +2,134 @@
 declare(strict_types=1);
 
 /**
- * Copy a template client's product catalogue into a brand-new client.
+ * Give a brand-new client the template client's catalogue.
  *
- * Tables copied (in dependency order):
- *   products
- *     ↳ product_options       (fabrics)
- *     ↳ product_systems
- *     ↳ product_extras        (parent_choice_id wired in a 2nd pass)
- *         ↳ product_extra_choices
- *             ↳ extra_choice_price_rows
- *     ↳ price_tables
- *         ↳ price_table_rows
+ * It runs the catalogue PUSH (push_one_product in catalogue_push.php) for each
+ * product, so a new company gets exactly what a push would give it. It used to
+ * be a separate, simpler copy, and that twin had drifted (John, 2026-10-11):
+ *   - no "came from" markers (source_client_id / source_*_id), so the factory
+ *     treated the products as the company's own. Trade-account discounts said
+ *     "no products yet", and a later push refused them as "already has its own
+ *     product called …";
+ *   - supplier price lists copied at list price, without the trade conversion
+ *     the push applies;
+ *   - no fabric/system scoping, choice band/fabric scoping, before-size and
+ *     other option flags.
+ * One path now, so they can't drift again.
  *
- * Tables intentionally NOT copied:
- *   client_settings   — caller creates a fresh empty row for the new client.
- *   client_users      — admin creates the new client's first user separately.
- *   feature flags     — master admin enables those per-client manually.
- *   quotes / orders / customers — tenant data, never seeded.
+ * Only ACTIVE, READY-TO-QUOTE products are copied (pr_is_ready, the dashboard
+ * rule). Anything still being set up reaches the company by a push later.
  *
- * The function does NOT manage its own transaction — the caller is expected
- * to wrap this (and the surrounding client/user inserts) in a transaction so
- * a failure rolls everything back atomically.
+ * Also copied, as a starting point the company can change: the template's
+ * markups and discounts per product/system (the push never touches those), so
+ * a new company doesn't start out selling at its buying price.
  *
- * @return array{products:int,fabrics:int,systems:int,extras:int,choices:int,price_tables:int,price_table_rows:int,width_table_rows:int}
+ * Not copied: client_settings, users, feature flags, quotes/orders/customers.
+ *
+ * No transaction of its own: the caller wraps this, with the client and user
+ * inserts, in one transaction so a failure rolls everything back.
+ *
+ * @return array{products:int,fabrics:int,systems:int,extras:int,choices:int,price_tables:int,price_table_rows:int,width_table_rows:int,skipped_not_ready:int}
  */
 function seed_client_from_template(PDO $pdo, int $sourceClientId, int $newClientId): array
 {
     if ($sourceClientId <= 0 || $newClientId <= 0 || $sourceClientId === $newClientId) {
         throw new InvalidArgumentException('seed_client_from_template: invalid client ids.');
     }
-
-    $summary = [
-        'products' => 0, 'fabrics' => 0, 'systems' => 0,
-        'extras'   => 0, 'choices' => 0,
-        'price_tables' => 0, 'price_table_rows' => 0,
-        'width_table_rows' => 0,
-    ];
-    $productMap    = [];
-    $systemMap     = [];
-    $extraMap      = [];
-    $choiceMap     = [];
-    $priceTableMap = [];
-
-    // -----------------------------------------------------------------------
-    // 1. products
-    // -----------------------------------------------------------------------
-    // Behaviour flags that change how a product quotes/prices must ride along
-    // with the product, or a seeded tenant silently diverges from the master —
-    // e.g. a no-fabric headrail/shutter loses requires_option=0, falls to the
-    // column default, and gets wrongly flagged "Needs fabric" until a push
-    // re-syncs it. This is the SAME flag set catalogue_push.php carries (costs
-    // are deliberately never copied). Schema-tolerant: skip any column a schema
-    // predating its migration doesn't have yet.
-    $flagCols = [];
-    foreach (['requires_option', 'width_only', 'price_per_slat', 'price_per_sqm',
-              'min_area_m2', 'show_colour_field', 'band_label', 'band_start_first'] as $col) {
-        try {
-            $pdo->query("SELECT $col FROM products LIMIT 1");
-            $flagCols[] = $col;
-        } catch (Throwable $e) { /* column absent on this schema — skip */ }
-    }
-
-    $selCols = array_merge(['id', 'name', 'option_label', 'sort_order', 'active'], $flagCols);
-    $sel = $pdo->prepare(
-        'SELECT ' . implode(', ', $selCols) . '
-           FROM products WHERE client_id = ? ORDER BY id'
-    );
-    $sel->execute([$sourceClientId]);
-
-    $insCols = array_merge(['client_id', 'name', 'option_label', 'sort_order', 'active'], $flagCols);
-    $ins = $pdo->prepare(
-        'INSERT INTO products (' . implode(', ', $insCols) . ')
-         VALUES (' . implode(', ', array_fill(0, count($insCols), '?')) . ')'
-    );
-    // Only products that are active AND ready to quote (John, 2026-10-11). A new
-    // company used to get everything on the master, so 40 half-built Decora
-    // products landed on Tyler Smyth Blinds' first screen as "needs fabric".
-    // Anything still being set up reaches a company later by the push, once
-    // it's finished. Same rule as the dashboard panel and the Products list.
+    require_once __DIR__ . '/catalogue_push.php';
     require_once __DIR__ . '/product_readiness.php';
+
     $readyIds = [];
     foreach (pr_products($sourceClientId) as $p) {
         if (pr_is_ready($p)) $readyIds[(int) $p['id']] = true;
     }
-    $summary['skipped_not_ready'] = 0;
 
-    foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $r) {
-        if (!isset($readyIds[(int) $r['id']])) { $summary['skipped_not_ready']++; continue; }
-        $vals = [
-            $newClientId, $r['name'], $r['option_label'],
-            (int) $r['sort_order'], (int) $r['active'],
-        ];
-        foreach ($flagCols as $col) { $vals[] = $r[$col]; } // pass through as-is (NULL ok)
-        $ins->execute($vals);
-        $productMap[(int) $r['id']] = (int) $pdo->lastInsertId();
-        $summary['products']++;
+    // Same product columns and flags the push reads (push_catalogue_to_client).
+    $flagCols = [];
+    foreach (['requires_option', 'width_only', 'price_per_slat', 'price_per_sqm',
+              'min_area_m2', 'show_colour_field', 'band_label', 'band_start_first', 'line_charge'] as $col) {
+        if (pp_column_exists($pdo, 'products', $col)) $flagCols[] = $col;
     }
-
-    if (!$productMap) {
-        return $summary; // no catalogue at the source — done.
-    }
-
-    // 1b. client_markups / client_discounts come AFTER systems are seeded
-    //     (pricing is per [product, system] now) — see step 3b below.
-
-    // -----------------------------------------------------------------------
-    // 2. product_options (fabrics)
-    // -----------------------------------------------------------------------
     $sel = $pdo->prepare(
-        'SELECT product_id, band_code, supplier_name, name, colour, code, sort_order, active
-           FROM product_options WHERE client_id = ? ORDER BY id'
+        'SELECT ' . implode(', ', array_merge(['id', 'name', 'option_label', 'sort_order', 'active'], $flagCols)) . '
+           FROM products WHERE client_id = ? ORDER BY sort_order, id'
     );
     $sel->execute([$sourceClientId]);
-    $ins = $pdo->prepare(
-        'INSERT INTO product_options
-           (client_id, product_id, band_code, supplier_name, name, colour, code, sort_order, active)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-    );
-    foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $r) {
-        if (!isset($productMap[(int) $r['product_id']])) continue;
-        $ins->execute([
-            $newClientId, $productMap[(int) $r['product_id']],
-            $r['band_code'], $r['supplier_name'], $r['name'], $r['colour'], $r['code'],
-            (int) $r['sort_order'], (int) $r['active'],
-        ]);
-        $summary['fabrics']++;
-    }
-    // Default fabrics (migrate_fabric_default.php), matched across by band +
-    // name + colour + supplier. Skipped on a schema without the column.
-    try {
-        $defSt = $pdo->prepare(
-            'UPDATE product_options n
-               JOIN product_options s
-                 ON s.product_id = ? AND s.is_default = 1
-                AND s.band_code = n.band_code AND s.name = n.name
-                AND s.colour <=> n.colour AND s.supplier_name <=> n.supplier_name
-                SET n.is_default = 1
-              WHERE n.product_id = ?'
-        );
-        foreach ($productMap as $srcPid => $newPid) $defSt->execute([(int) $srcPid, (int) $newPid]);
-    } catch (Throwable $e) { /* no is_default column */ }
 
-    // -----------------------------------------------------------------------
-    // 3. product_systems
-    // -----------------------------------------------------------------------
-    $sel = $pdo->prepare(
-        'SELECT id, product_id, name, sort_order, active, is_default
-           FROM product_systems WHERE client_id = ? ORDER BY id'
-    );
-    $sel->execute([$sourceClientId]);
-    $ins = $pdo->prepare(
-        'INSERT INTO product_systems
-           (client_id, product_id, name, sort_order, active, is_default)
-         VALUES (?, ?, ?, ?, ?, ?)'
-    );
-    foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $r) {
-        if (!isset($productMap[(int) $r['product_id']])) continue;
-        $ins->execute([
-            $newClientId, $productMap[(int) $r['product_id']],
-            $r['name'], (int) $r['sort_order'], (int) $r['active'], (int) $r['is_default'],
-        ]);
-        $systemMap[(int) $r['id']] = (int) $pdo->lastInsertId();
-        $summary['systems']++;
+    // The push's own counters (it increments these, so they must exist).
+    $push = array_fill_keys([
+        'products_added', 'products_updated', 'systems_added', 'systems_removed',
+        'fabrics_added', 'fabrics_updated', 'fabrics_removed',
+        'extras_added', 'extras_updated', 'extras_removed',
+        'choices_added', 'choices_updated', 'choices_removed',
+        'price_tables_added', 'price_tables_removed', 'price_table_cells', 'width_table_cells',
+    ], 0);
+    $push['errors'] = [];
+    $skipped = 0;
+    foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $sp) {
+        if (!isset($readyIds[(int) $sp['id']])) { $skipped++; continue; }
+        // Any failure throws, and the caller's transaction undoes the whole client.
+        push_one_product($pdo, (int) $sp['id'], $sp, $sourceClientId, $newClientId, $push, $flagCols);
     }
 
-    // -----------------------------------------------------------------------
-    // 3b. client_markups / client_discounts (per [product, system])
-    //     Has to come AFTER systems are seeded so we can rewrite system_id
-    //     through $systemMap. A NULL system_id stays NULL (products without
-    //     systems). Discounts only get copied where present (zero = no row).
-    // -----------------------------------------------------------------------
-    $sel = $pdo->prepare(
-        'SELECT product_id, system_id, markup_percent
-           FROM client_markups WHERE client_id = ?'
-    );
-    $sel->execute([$sourceClientId]);
-    $insMarkup = $pdo->prepare(
-        'INSERT INTO client_markups (client_id, product_id, system_id, markup_percent)
-         VALUES (?, ?, ?, ?)'
-    );
-    foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $r) {
-        $sourceProductId = (int) $r['product_id'];
-        if (!isset($productMap[$sourceProductId])) continue;
-        $newSystemId = null;
-        if ($r['system_id'] !== null) {
-            $sid = (int) $r['system_id'];
-            if (!isset($systemMap[$sid])) continue;   // source system was inactive
-            $newSystemId = $systemMap[$sid];
-        }
-        $insMarkup->execute([
-            $newClientId, $productMap[$sourceProductId],
-            $newSystemId, (float) $r['markup_percent'],
-        ]);
-    }
+    seed_copy_pricing($pdo, $sourceClientId, $newClientId);
 
-    $sel = $pdo->prepare(
-        'SELECT product_id, system_id, discount_percent
-           FROM client_discounts WHERE client_id = ?'
-    );
-    $sel->execute([$sourceClientId]);
-    $insDiscount = $pdo->prepare(
-        'INSERT INTO client_discounts (client_id, product_id, system_id, discount_percent)
-         VALUES (?, ?, ?, ?)'
-    );
-    foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $r) {
-        $sourceProductId = (int) $r['product_id'];
-        if (!isset($productMap[$sourceProductId])) continue;
-        $newSystemId = null;
-        if ($r['system_id'] !== null) {
-            $sid = (int) $r['system_id'];
-            if (!isset($systemMap[$sid])) continue;
-            $newSystemId = $systemMap[$sid];
-        }
-        $insDiscount->execute([
-            $newClientId, $productMap[$sourceProductId],
-            $newSystemId, (float) $r['discount_percent'],
-        ]);
-    }
+    $n = static fn (string $k): int => (int) ($push[$k] ?? 0);
+    return [
+        'products'          => $n('products_added'),
+        'fabrics'           => $n('fabrics_added'),
+        'systems'           => $n('systems_added'),
+        'extras'            => $n('extras_added'),
+        'choices'           => $n('choices_added'),
+        'price_tables'      => $n('price_tables_added'),
+        'price_table_rows'  => $n('price_table_cells'),
+        'width_table_rows'  => $n('width_table_cells'),
+        'skipped_not_ready' => $skipped,
+    ];
+}
 
-    // -----------------------------------------------------------------------
-    // 4. product_extras  (pass 1: parent_choice_id = NULL — wired in pass 2)
-    // -----------------------------------------------------------------------
-    $sel = $pdo->prepare(
-        'SELECT id, product_id, name, is_required, sort_order, active
-           FROM product_extras WHERE client_id = ? ORDER BY id'
+/**
+ * Copy the template's client_markups / client_discounts onto the new client's
+ * copies, found through the push's markers (product by source_product_id,
+ * system by source_system_id, else by name within the product). A NULL system
+ * stays NULL. Only rows for products that were copied.
+ */
+function seed_copy_pricing(PDO $pdo, int $sourceClientId, int $newClientId): void
+{
+    $prod = $pdo->prepare(
+        'SELECT id FROM products WHERE client_id = ? AND source_client_id = ? AND source_product_id = ? LIMIT 1'
     );
-    $sel->execute([$sourceClientId]);
-    $ins = $pdo->prepare(
-        'INSERT INTO product_extras
-           (client_id, product_id, parent_choice_id, name, is_required, sort_order, active)
-         VALUES (?, ?, NULL, ?, ?, ?, ?)'
+    $bySrcSys = pp_has_src_col($pdo, 'product_systems', 'source_system_id')
+        ? $pdo->prepare('SELECT id FROM product_systems WHERE client_id = ? AND product_id = ? AND source_system_id = ? LIMIT 1')
+        : null;
+    $byNameSys = $pdo->prepare(
+        'SELECT t.id FROM product_systems t JOIN product_systems s ON s.id = ?
+          WHERE t.client_id = ? AND t.product_id = ? AND t.name = s.name LIMIT 1'
     );
-    foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $r) {
-        if (!isset($productMap[(int) $r['product_id']])) continue;
-        $ins->execute([
-            $newClientId, $productMap[(int) $r['product_id']],
-            $r['name'], (int) $r['is_required'], (int) $r['sort_order'], (int) $r['active'],
-        ]);
-        $extraMap[(int) $r['id']] = (int) $pdo->lastInsertId();
-        $summary['extras']++;
-    }
 
-    // -----------------------------------------------------------------------
-    // 5. product_extra_choices  (system_id column is the authoritative
-    //    system scope in this model — NULL = "every system", otherwise
-    //    the choice is only available on the matching system. Old
-    //    junction tables aren't read or written by anyone any more.)
-    // -----------------------------------------------------------------------
-    if ($extraMap) {
-        $oldExtraIds = array_keys($extraMap);
-        $ph          = implode(',', array_fill(0, count($oldExtraIds), '?'));
-        $sel = $pdo->prepare(
-            "SELECT id, product_extra_id, system_id, label, image_path,
-                    price_delta, price_percent, price_per_metre,
-                    is_default, sort_order, active
-               FROM product_extra_choices
-              WHERE product_extra_id IN ($ph)
-              ORDER BY id"
-        );
-        $sel->execute($oldExtraIds);
-        $ins = $pdo->prepare(
-            'INSERT INTO product_extra_choices
-               (product_extra_id, system_id, label, image_path,
-                price_delta, price_percent, price_per_metre,
-                is_default, sort_order, active)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-        );
-        foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $r) {
-            // Map the source's system_id to the new client's system_id.
-            // NULL stays NULL (= every system).
-            $newSystemId = null;
-            if ($r['system_id'] !== null) {
-                $newSystemId = $systemMap[(int) $r['system_id']] ?? null;
-                // If we can't map it (orphaned), fall back to "all systems"
-                // rather than dropping the row — the source data may have
-                // a stray reference; we'd rather over-show than under-show.
-            }
-            $ins->execute([
-                $extraMap[(int) $r['product_extra_id']],
-                $newSystemId,
-                $r['label'],
-                $r['image_path'],
-                $r['price_delta'], $r['price_percent'], $r['price_per_metre'],
-                (int) $r['is_default'], (int) $r['sort_order'], (int) $r['active'],
-            ]);
-            $choiceMap[(int) $r['id']] = (int) $pdo->lastInsertId();
-            $summary['choices']++;
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // 6. product_extras  (pass 2: wire up parent_choice_id + the junction
-    //    product_extra_parent_choices so multi-parent gating is preserved)
-    // -----------------------------------------------------------------------
-    if ($extraMap && $choiceMap) {
-        // 6a. Legacy single-column parent (kept for back-compat).
-        $sel = $pdo->prepare(
-            'SELECT id, parent_choice_id FROM product_extras
-              WHERE client_id = ? AND parent_choice_id IS NOT NULL'
-        );
+    foreach ([['client_markups', 'markup_percent'], ['client_discounts', 'discount_percent']] as [$table, $col]) {
+        $sel = $pdo->prepare("SELECT product_id, system_id, $col AS v FROM $table WHERE client_id = ?");
         $sel->execute([$sourceClientId]);
-        $upd = $pdo->prepare('UPDATE product_extras SET parent_choice_id = ? WHERE id = ?');
+        $ins = $pdo->prepare("INSERT INTO $table (client_id, product_id, system_id, $col) VALUES (?, ?, ?, ?)");
         foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $r) {
-            $oldExtraId  = (int) $r['id'];
-            $oldChoiceId = (int) $r['parent_choice_id'];
-            if (!isset($extraMap[$oldExtraId]) || !isset($choiceMap[$oldChoiceId])) continue;
-            $upd->execute([$choiceMap[$oldChoiceId], $extraMap[$oldExtraId]]);
-        }
-
-        // 6b. Junction rows — the multi-parent source of truth.
-        $oldExtraIds = array_keys($extraMap);
-        $ph          = implode(',', array_fill(0, count($oldExtraIds), '?'));
-        $sel = $pdo->prepare(
-            "SELECT product_extra_id, product_extra_choice_id
-               FROM product_extra_parent_choices
-              WHERE product_extra_id IN ($ph)"
-        );
-        $sel->execute($oldExtraIds);
-        $ins = $pdo->prepare(
-            'INSERT INTO product_extra_parent_choices
-               (product_extra_id, product_extra_choice_id) VALUES (?, ?)'
-        );
-        foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $r) {
-            $newExtra  = $extraMap[(int) $r['product_extra_id']]         ?? null;
-            $newChoice = $choiceMap[(int) $r['product_extra_choice_id']] ?? null;
-            if ($newExtra === null || $newChoice === null) continue;
-            $ins->execute([$newExtra, $newChoice]);
+            $prod->execute([$newClientId, $sourceClientId, (int) $r['product_id']]);
+            $tgtPid = $prod->fetchColumn();
+            if ($tgtPid === false) continue;   // product not copied
+            $tgtSys = null;
+            if ($r['system_id'] !== null) {
+                $found = false;
+                if ($bySrcSys) {
+                    $bySrcSys->execute([$newClientId, (int) $tgtPid, (int) $r['system_id']]);
+                    $found = $bySrcSys->fetchColumn();
+                }
+                if ($found === false) {
+                    $byNameSys->execute([(int) $r['system_id'], $newClientId, (int) $tgtPid]);
+                    $found = $byNameSys->fetchColumn();
+                }
+                if ($found === false) continue;   // system not copied
+                $tgtSys = (int) $found;
+            }
+            $ins->execute([$newClientId, (int) $tgtPid, $tgtSys, (float) $r['v']]);
         }
     }
-
-    // -----------------------------------------------------------------------
-    // 7. price_tables
-    // -----------------------------------------------------------------------
-    $sel = $pdo->prepare(
-        'SELECT id, product_id, system_id, band_code, name, notes, active
-           FROM price_tables WHERE client_id = ? ORDER BY id'
-    );
-    $sel->execute([$sourceClientId]);
-    $ins = $pdo->prepare(
-        'INSERT INTO price_tables
-           (client_id, product_id, system_id, band_code, name, notes, active)
-         VALUES (?, ?, ?, ?, ?, ?, ?)'
-    );
-    foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $r) {
-        if (!isset($productMap[(int) $r['product_id']])) continue;
-        $newSystemId = $r['system_id'] !== null
-            ? ($systemMap[(int) $r['system_id']] ?? null)
-            : null;
-        $ins->execute([
-            $newClientId, $productMap[(int) $r['product_id']],
-            $newSystemId, $r['band_code'], $r['name'], $r['notes'], (int) $r['active'],
-        ]);
-        $priceTableMap[(int) $r['id']] = (int) $pdo->lastInsertId();
-        $summary['price_tables']++;
-    }
-
-    // -----------------------------------------------------------------------
-    // 8. price_table_rows
-    // -----------------------------------------------------------------------
-    if ($priceTableMap) {
-        $oldTableIds = array_keys($priceTableMap);
-        $ph          = implode(',', array_fill(0, count($oldTableIds), '?'));
-        $sel = $pdo->prepare(
-            "SELECT price_table_id, width_mm, drop_mm, price
-               FROM price_table_rows
-              WHERE price_table_id IN ($ph)"
-        );
-        $sel->execute($oldTableIds);
-        $ins = $pdo->prepare(
-            'INSERT INTO price_table_rows (price_table_id, width_mm, drop_mm, price)
-             VALUES (?, ?, ?, ?)'
-        );
-        foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $r) {
-            $ins->execute([
-                $priceTableMap[(int) $r['price_table_id']],
-                $r['width_mm'], $r['drop_mm'], $r['price'],
-            ]);
-            $summary['price_table_rows']++;
-        }
-    }
-
-    // -----------------------------------------------------------------------
-    // 9. extra_choice_price_rows  (the 4th surcharge mode — width tables)
-    // -----------------------------------------------------------------------
-    if ($choiceMap) {
-        $oldChoiceIds = array_keys($choiceMap);
-        $ph           = implode(',', array_fill(0, count($oldChoiceIds), '?'));
-        $sel = $pdo->prepare(
-            "SELECT product_extra_choice_id, width_mm, price
-               FROM extra_choice_price_rows
-              WHERE product_extra_choice_id IN ($ph)"
-        );
-        $sel->execute($oldChoiceIds);
-        $ins = $pdo->prepare(
-            'INSERT INTO extra_choice_price_rows
-               (product_extra_choice_id, width_mm, price)
-             VALUES (?, ?, ?)'
-        );
-        foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $r) {
-            $ins->execute([
-                $choiceMap[(int) $r['product_extra_choice_id']],
-                $r['width_mm'], $r['price'],
-            ]);
-            $summary['width_table_rows']++;
-        }
-    }
-
-    return $summary;
 }
