@@ -15,10 +15,12 @@ require __DIR__ . '/../../_partials/accounting.php';
 
 requireAdmin();
 $user     = current_user();
-$clientId = (int) $user['client_id'];
+$for      = (string) ($_POST['for'] ?? $_GET['for'] ?? '') === 'factory' ? 'factory' : '';
+$clientId = ac_target_client_id($for);   // for=factory: the platform's own books (super-admin)
+$back     = ac_return_url($for);
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-    header('Location: /admin/settings.php#accounting');
+    header('Location: ' . $back);
     exit;
 }
 csrf_check();
@@ -32,10 +34,11 @@ if ($prov) {
         $prov->disconnect($conn);   // never throws
     }
     ac_delete_connection($clientId, $providerKey);
+    ac_log($clientId, $providerKey, 'disconnect', 'ok', 'Disconnected by ' . (string) ($user['full_name'] ?? 'an admin'));
     $_SESSION['flash_success'] = 'Disconnected from ' . $prov->label() . '.';
 } else {
     $_SESSION['flash_error'] = 'Unknown accounting provider.';
 }
 
-header('Location: /admin/settings.php#accounting');
+header('Location: ' . $back);
 exit;
