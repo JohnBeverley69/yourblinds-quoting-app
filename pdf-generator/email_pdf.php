@@ -112,7 +112,9 @@ $ok = mailer_send(
     null,
     // HTML copy shows a short link instead of the long tokenised address.
     tenant_mail_opts(db(), (int) $user['client_id'])
-        + ['links' => [$publicUrl => 'View and accept your quote']]
+        + ['links' => [$publicUrl => 'View and accept your quote'],
+           'log'   => ['client_id' => (int) $user['client_id'], 'kind' => 'quote', 'quote_id' => (int) $quote['id'],
+                       'customer_id' => $quote['customer_id'] ?? null, 'user_id' => (int) $user['user_id']]]
 );
 
 if ($ok) {

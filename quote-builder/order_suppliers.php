@@ -359,7 +359,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             implode("\n", $bodyLines),
             $attachment,
             null,
-            $mailOpts
+            $mailOpts + ['log' => ['client_id' => $clientId, 'kind' => 'supplier_order', 'quote_id' => $quoteId,
+                                   'user_id' => (int) $user['user_id']]]
         );
 
         if ($ok) {

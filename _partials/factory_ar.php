@@ -1040,7 +1040,8 @@ function ar_email_account_document(PDO $pdo, int $factory, int $accountId, strin
     }
     require_once __DIR__ . '/tenant_mail.php';
     $ok = mailer_send($email, $subject, $body, ['content' => $pdf, 'filename' => $filename, 'mime' => 'application/pdf'],
-                      null, tenant_mail_opts($pdo, $factory));
+                      null, tenant_mail_opts($pdo, $factory)
+                          + ['log' => ['client_id' => $factory, 'kind' => 'account_document']]);
     return $ok
         ? ['ok' => true,  'email' => $email, 'message' => 'Emailed to ' . $email . '.']
         : ['ok' => false, 'email' => $email, 'message' => 'The email to ' . $email . ' could not be sent (mail server error) — try again shortly.'];

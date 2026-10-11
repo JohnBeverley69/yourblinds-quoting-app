@@ -33,6 +33,13 @@ require_once __DIR__ . '/_partials/app_settings.php';
  *                                       built where each url shows as a short
  *                                       "label" link instead of the long
  *                                       address (plain text kept as AltBody).
+ *                                       'log' => ['client_id' => int, 'kind' => str,
+ *                                       'customer_id'?, 'quote_id'?, 'user_id'?]:
+ *                                       record this email (and what happened to
+ *                                       it) in the company's Messages log — see
+ *                                       _partials/email_log.php. Customer, trade
+ *                                       and supplier emails pass this; password
+ *                                       resets and internal notices don't.
  */
 function mailer_send(
     $to,
@@ -42,9 +49,24 @@ function mailer_send(
     ?string $htmlBody = null,
     ?array $opts = null
 ): bool {
+    [$ok, $note] = mailer_deliver($to, $subject, $body, $attachment, $htmlBody, $opts);
+    if (!empty($opts['log']) && is_array($opts['log'])) {
+        require_once __DIR__ . '/_partials/email_log.php';
+        email_log_record($opts['log'], $to, $subject, $body, $attachment['filename'] ?? null, $ok, $note, $opts);
+    }
+    return $ok;
+}
+
+/**
+ * The actual send behind mailer_send(). Returns [bool ok, ?string note]: the
+ * note says why it failed, or that it was paused / caught by a test copy (both
+ * report ok so app flows carry on as if sent).
+ */
+function mailer_deliver($to, string $subject, string $body, ?array $attachment, ?string $htmlBody, ?array $opts): array
+{
     if (!class_exists(PHPMailer::class)) {
         error_log('[YourBlinds] PHPMailer not installed — run "composer install" to enable email.');
-        return false;
+        return [false, 'Email is not set up on the server.'];
     }
 
     // ── Global "pause emails" switch (testing mode) ─────────────────────────
@@ -60,7 +82,7 @@ function mailer_send(
         ), static fn ($r) => $r !== ''));
         error_log('[YourBlinds] email PAUSED (testing mode) — would have gone to: '
             . ($origList !== '' ? $origList : '(no recipient)') . ' | subject: ' . $subject);
-        return true;
+        return [true, 'paused'];
     }
 
     // ── Non-production guard ────────────────────────────────────────────────
@@ -79,8 +101,9 @@ function mailer_send(
         if ($intercept === '' || !filter_var($intercept, FILTER_VALIDATE_EMAIL)) {
             error_log('[YourBlinds][' . $appEnv . '] email suppressed (set MAIL_INTERCEPT_TO to capture) — '
                 . 'would have gone to: ' . ($origList !== '' ? $origList : '(no recipient)'));
-            return true;
+            return [true, 'Test copy: not sent anywhere.'];
         }
+        $testNote = 'Test copy: sent to ' . $intercept . ' instead.';
         $to      = $intercept;
         $subject = '[' . strtoupper($appEnv) . ($origList !== '' ? ' → ' . $origList : '') . '] ' . $subject;
     }
@@ -94,7 +117,7 @@ function mailer_send(
 
     if ($host === '' || $username === '' || $password === '') {
         error_log('[YourBlinds] SMTP not configured — set MAIL_HOST / MAIL_USERNAME / MAIL_PASS in .env');
-        return false;
+        return [false, 'Email is not set up on the server.'];
     }
 
     try {
@@ -153,13 +176,14 @@ function mailer_send(
         }
 
         $mailer->send();
-        return true;
+        return [true, $testNote ?? null];
     } catch (PHPMailerException $e) {
         error_log('[YourBlinds] PHPMailer error: ' . $e->getMessage());
+        return [false, 'The mail server refused it: ' . $e->getMessage()];
     } catch (Throwable $e) {
         error_log('[YourBlinds] Email send failed: ' . $e->getMessage());
+        return [false, 'Could not send: ' . $e->getMessage()];
     }
-    return false;
 }
 
 /**
