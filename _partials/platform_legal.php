@@ -23,7 +23,7 @@ const PL_COMPANY   = 'Beverley Blinds Ltd';
 const PL_REG_NO    = '6058421';
 const PL_ADDRESS   = 'Unit 2, Brindley Road, Exhall CV7 9EP';
 const PL_EMAIL     = 'hello@yourblinds.uk';
-const PL_UPDATED   = '28 September 2026';
+const PL_UPDATED   = '11 October 2026';
 
 /** Open the shared page shell (title, styles, header). */
 function pl_head(string $title, string $lede): void
