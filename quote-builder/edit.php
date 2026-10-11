@@ -2756,6 +2756,14 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
         submitBtns.forEach(function (btn) { btn.disabled = !!disabled; });
     }
 
+    // A ticked per-quantity add-on (brackets, clips…) whose quantity is blank —
+    // it would price at £0, so Save pops this up instead (server refuses it too).
+    function missingQtyInput() {
+        return Array.prototype.find.call(form.querySelectorAll('input[data-needs-qty]'), function (q) {
+            return q.offsetParent !== null && !(parseFloat(q.value) > 0);
+        }) || null;
+    }
+
     var productData    = null;  // cached response from /api/product-data
     var previewTimer   = null;
     var fabricSearchTimer = null;
@@ -3412,6 +3420,7 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                      + ' name="extras[' + idx + '][choice_user_values][' + c.id + ']"'
                      + ' value="' + escapeAttr(val) + '"'
                      + ' data-cuv-for="' + c.id + '"'
+                     + (c.needs_qty ? ' data-needs-qty="' + escapeAttr(c.label) + '"' : '')
                      + ' style="width:100%;max-width:12rem;padding:0.3125rem 0.5rem;'
                      + 'border:1px solid var(--border-strong);border-radius:6px;font:inherit">'
                      + '</div>';
@@ -3977,7 +3986,8 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
             if (data.error) {
                 previewBox.className   = 'error';
                 previewBox.textContent = data.error;
-                setSubmitDisabled(true);
+                // Missing quantity: keep Save pressable so it pops up what's needed.
+                setSubmitDisabled(!missingQtyInput());
                 return;
             }
             var unit  = Number(data.sell_price).toFixed(2);
@@ -4411,6 +4421,14 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
     form.addEventListener('submit', async function (e) {
         e.preventDefault();
         if (submitting) return;
+        // A ticked per-quantity add-on (brackets, clips…) with no quantity
+        // would price at £0 — stop and ask. The server refuses it too.
+        var noQty = missingQtyInput();
+        if (noQty) {
+            alert('You need to choose a quantity for “' + noQty.getAttribute('data-needs-qty') + '”.');
+            noQty.focus();
+            return;
+        }
         var pairs = buildLinePayload(e.submitter);
         var nextAction = (e.submitter && e.submitter.name === 'next_action') ? e.submitter.value : 'stop';
         var action = form.getAttribute('action');

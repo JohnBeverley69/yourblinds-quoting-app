@@ -506,7 +506,7 @@ return [
       <li><strong>Same system.</strong> Tables belong to one system. A fabric quoted on <em>Motorised</em> needs a Band B table on <em>Motorised</em>, not just on <em>Standard</em>.</li>
       <li><strong>The table must have prices in it.</strong> Empty grids get created in batches and are easy to leave blank — the price-tables list shows how many are filled.</li>
       </ul>
-      <p>Two other messages mean something different. <em>“Size … exceeds the largest cell in this price table”</em> means the blind is bigger than your grid goes — extend the table or re-import a fuller sheet. <em>“No price table set up for … ”</em> on a no-fabric product means that system has no grid at all.</p>
+      <p>Two other messages mean something different. <em>“No price for this size — … is outside this price table”</em> means the blind is bigger than your grid goes — extend the table or re-import a fuller sheet. <em>“No price table set up for … ”</em> on a no-fabric product means that system has no grid at all.</p>
       <p>Whatever you change, re-pick the fabric on the quote line so it prices again.</p>'],
 
     ['admin', 'Products & pricing', 'How do I add choices like control side or lining?', 'options extras control side lining bottom weight bracket colour choices required multiple per metre percent surcharge quantity',
@@ -519,7 +519,7 @@ return [
       <li><strong>Also show a number input</strong> — a box beside the choice for a wand or cable length; you name the field yourself and it is recorded on the line for the supplier paperwork.</li>
       </ul>
       <p>Two more ticks sit on the option’s own <strong>Edit</strong> page: <strong>Show above the size fields</strong> (puts it before Width / Drop) and <strong>Splits the blind into equal panels</strong> (see <em>How do I price a shutter split into panels?</em>).</p>
-      <p>Each choice can carry a price: <strong>Flat (£)</strong>, <strong>Percent (%)</strong>, <strong>Per metre (£/m)</strong> or <strong>Price per unit (£)</strong> (typing a quantity multiplies it — brackets, fixings). For per-metre there is <em>Per-metre length is measured along</em>: width usually, or <strong>Perimeter</strong> for a trim that runs all the way round (2 &times; width + 2 &times; drop).</p>
+      <p>Each choice can carry a price: <strong>Flat (£)</strong>, <strong>Percent (%)</strong>, <strong>Per metre (£/m)</strong> or <strong>Price per unit (£)</strong> (typing a quantity multiplies it — brackets, fixings). A per-unit choice that is ticked must have a quantity: the quote builder and InstaPrice pop up <em>“You need to choose a quantity for …”</em> and won’t save the blind until one is typed. For per-metre there is <em>Per-metre length is measured along</em>: width usually, or <strong>Perimeter</strong> for a trim that runs all the way round (2 &times; width + 2 &times; drop).</p>
       <p>Setting up a second product that needs the same list? Use <strong>Copy from another product</strong> at the top right rather than retyping it.</p>'],
 
     ['admin', 'Products & pricing', 'How do I price a shutter split into panels?', 'multi panel panels shutter perfect fit pf split equal number of panels glass width multiply price per panel',

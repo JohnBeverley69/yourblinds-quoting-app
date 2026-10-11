@@ -363,10 +363,17 @@ if ($extraIds) {
         $pdo->query('SELECT code FROM product_extra_choices LIMIT 1');
         $choiceCodeCol = ', code';
     } catch (Throwable $e) { /* column absent — choices report code null */ }
+    // Per-unit price (migrate_extra_per_unit.php) — optional. Only its presence
+    // is exposed (needs_qty), never the figure: the page must ask for a quantity.
+    $choicePerUnitCol = '';
+    try {
+        $pdo->query('SELECT price_per_unit FROM product_extra_choices LIMIT 1');
+        $choicePerUnitCol = ', price_per_unit';
+    } catch (Throwable $e) { /* column absent — no choice needs a quantity */ }
     $st = $pdo->prepare(
         "SELECT id, product_extra_id, system_id, label,
                 price_delta, price_percent, price_per_metre,
-                is_default, sort_order, image_path$choiceLenCol$choiceCodeCol
+                is_default, sort_order, image_path$choiceLenCol$choiceCodeCol$choicePerUnitCol
            FROM product_extra_choices
           WHERE product_extra_id IN ($ph) AND active = 1
        ORDER BY product_extra_id, sort_order, label"
@@ -432,6 +439,9 @@ if ($extraIds) {
             // typed value rides on the choice's quote_item_extras row.
             'length_input_label' => isset($r['length_input_label']) && $r['length_input_label'] !== ''
                 ? (string) $r['length_input_label'] : null,
+            // Priced per unit — its number box is a QUANTITY that must be
+            // filled in when the choice is picked (blank would price at £0).
+            'needs_qty'  => isset($r['price_per_unit']) && (float) $r['price_per_unit'] != 0.0,
             // Stable machine key — lets the front-end identify a choice (e.g.
             // the roller fascia-sizing modes) without depending on its caption.
             'code' => isset($r['code']) && $r['code'] !== '' ? (string) $r['code'] : null,

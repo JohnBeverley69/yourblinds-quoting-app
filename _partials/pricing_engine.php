@@ -499,6 +499,12 @@ function pe_apply_extra(
     if ($perUnit != 0.0 && $userValue !== null && (float) $userValue > 0) {
         $amount         += $perUnit * (float) $userValue;
         $modesApplied[]  = 'per_unit';
+    } elseif ($perUnit != 0.0) {
+        // Ticked but no quantity typed — it would otherwise go through at £0.
+        // Refused on every product so a priced add-on can never be given away
+        // by a blank box (the quote builder / InstaPrice also pop this up).
+        return ['error' => "Enter a quantity for '" . $choice['label'] . "' ("
+                          . $extra['name'] . ")."];
     }
 
     // 5. Width-based price table (the 4th mode).
@@ -1328,7 +1334,7 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input, int $forAccoun
         if ($row === null) {
             $wTxt = pe_panel_width_text($widthMm, $panels, $panelWidthMm);
             return ['error' => $roundUp
-                ? "Width $wTxt exceeds the largest entry in this price list."
+                ? "No price for this size — width $wTxt is outside this price list."
                 : "No exact price for width $wTxt. Try the next available width."];
         }
         $basePrice = $panels * (float) $row['price'];
@@ -1338,7 +1344,7 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input, int $forAccoun
         );
         if ($row === null) {
             return ['error' => $roundUp
-                ? "Drop $dropMm mm exceeds the largest entry in this per-slat rate list."
+                ? "No price for this size — drop $dropMm mm is outside this per-slat rate list."
                 : "No per-slat rate for drop $dropMm mm. Try the next available drop."];
         }
         $basePrice = (float) $row['price'];   // per slat; × quantity below
@@ -1362,7 +1368,7 @@ function pe_calculate_item(PDO $pdo, int $clientId, array $input, int $forAccoun
         if ($row === null) {
             $wTxt = pe_panel_width_text($widthMm, $panels, $panelWidthMm);
             return ['error' => $roundUp
-                ? "Size $wTxt × $dropMm mm exceeds the largest cell in this price table."
+                ? "No price for this size — $wTxt × $dropMm mm is outside this price table."
                 : "No exact price for $wTxt × $dropMm mm. Try the next available size."];
         }
         $basePrice = $panels * (float) $row['price'];

@@ -418,7 +418,7 @@ return [
                   <div class="sct a-fade" style="--d:.2s">&ldquo;Exceeds the largest cell&rdquo;</div>
                   <div class="frm">
                     <div class="g4">' . $f('Width (mm) ' . $rq, '2400', '', 'a-ring', '--d:5.1s') . $f('Drop (mm) ' . $rq, '3000') . $f('Quantity', '1') . $f('Notes', $ph('Optional internal note')) . '</div>
-                    <div class="prv bad a-pop" style="--d:1.3s">Size 2400 &times; 3000 mm exceeds the largest cell in this price table.</div>
+                    <div class="prv bad a-pop" style="--d:1.3s">No price for this size &mdash; 2400 &times; 3000 mm is outside this price table.</div>
                   </div>
                   <div class="two" style="margin-top:.7rem">
                     <div class="card a-rise" style="--d:8.7s"><h4>Check the unit first</h4><b>150</b> typed in a millimetre quote is a <b>15 cm</b> blind.</div>
@@ -561,7 +561,7 @@ return [
              fabric. Its cousin <em>&ldquo;No price table set up for Roller Blind for system &lsquo;Grip Fit&rsquo;.&rdquo;</em> means that system has no
              prices at all yet.</div>
 
-          <div class="oops"><b>&ldquo;Size 2400 &times; 3000 mm exceeds the largest cell in this price table.&rdquo;</b> The size is past the end of the grid.
+          <div class="oops"><b>&ldquo;No price for this size &mdash; 2400 &times; 3000 mm is outside this price table.&rdquo;</b> The size is past the end of the grid.
              <b>Check the unit first</b> &mdash; 150 typed in a millimetre quote is a 15&nbsp;cm blind. You will <b>never</b> be told your exact size is not
              in the grid: the builder <b>rounds up to the next cell</b>, so a size between two rows prices at the larger one.</div>
 
@@ -613,7 +613,7 @@ return [
             ['9', 'The sizes',                       'Now the sizes. Measurement sets the unit for the whole quote, and you can change it at any time. You can also type a unit on the end, like one hundred and fifty c m, and it is read for you. Quantity is how many identical blinds. And Notes is for you: an internal note for your own paperwork. It never shows on the customer\'s quote.', 9],
             ['10', 'The live price',                 'Under the form is the live price box, and it does the checking. Grey means it is still waiting, and it tells you what for. Still need: drop. Green means it has a price. Seventy seven pounds per blind. The save buttons stay greyed out until it is green. If you can see costs, they start hidden, in case the customer is watching. Tap the small eye at the end of the line to show them, and tap it again to hide them.', 10],
             ['11', 'The slip everybody makes once',  'Here is the slip everyone makes once. The box goes red: no price table for Roller Blind band A, on system Grip Fit. The band box only narrows the fabric list. It never promises a price. The price belongs to the product, the system, and the band, together. So change the system to one that is priced for that band, and pick the fabric again.', 11],
-            ['12', 'Exceeds the largest cell',       'You may also see: size exceeds the largest cell in this price table. Before you blame the price list, check the unit. One hundred and fifty, typed in a millimetre quote, is a fifteen centimetre blind. A size between two rows of the table is fine. It simply rounds up to the next one. Only a size past the end of the table stops it.', 12],
+            ['12', 'No price for this size',          'You may also see: no price for this size. It is outside the price table. Before you blame the price list, check the unit. One hundred and fifty, typed in a millimetre quote, is a fifteen centimetre blind. A size between two rows of the table is fine. It simply rounds up to the next one. Only a size past the end of the table stops it.', 12],
             ['13', 'Options',                        'Then the options. They look different on every product, because each product has its own. Some are a dropdown, some are tick boxes where you can pick more than one, and some are just a number to type. Some only appear once you have picked the fabric or the system. And a few, like the roller fascia, sit above the size, because you need them first.', 13],
             ['14', 'Save, and the blinds list',      'When the price is green, click Save. The blind lands in the list on the right, with the room in bold, then the product, the fabric, and its options folded underneath. Or click Save and add another blind, to keep going. Beside each blind are Edit, and Dup, which copies it, so you only change the size. The cross removes it, after asking.', 14],
             ['15', 'One blind, or the whole job',    'There are two ways to change a price. For one blind, tap the eye first, and Adjust price for this blind appears, with its own discount and markup. Leave them blank to use the product\'s rates. For the whole job, the Override price row, under the totals, takes the price you agreed, before VAT. The difference shows as a discount, so the sums still add up.', 15],
