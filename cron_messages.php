@@ -4,9 +4,9 @@ declare(strict_types=1);
 /**
  * Scheduled customer messages: runs every ~15 minutes.
  *
- * Today it sends the day-before appointment reminders (10am–8pm UK time, see
- * sms_run_day_before() in _partials/sms.php). Further timed messages (e.g. a
- * quote follow-up) belong here too.
+ * Sends, 10am–8pm UK time:
+ *   - day-before appointment reminders (sms_run_day_before(), _partials/sms.php)
+ *   - quote follow-ups (qfu_run(), _partials/quote_follow_up.php)
  *
  * RUN IT — one of:
  *   CLI (the Cloudways cron; no auth needed, nothing served):
@@ -17,9 +17,11 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/bootstrap.php';
 require_once __DIR__ . '/_partials/sms.php';
+require_once __DIR__ . '/_partials/quote_follow_up.php';
+// Also needed from the CLI: the email cap (send_quota.php) uses is_factory_client().
+require_once __DIR__ . '/auth/middleware.php';
 
 if (PHP_SAPI !== 'cli') {
-    require_once __DIR__ . '/auth/middleware.php';
     requireSuperAdmin();
     header('Content-Type: text/plain; charset=utf-8');
     header('Cache-Control: no-store');
@@ -45,6 +47,8 @@ if (!sms_ready()) {
 
 $r = sms_run_day_before($now);
 echo "Day-before reminders: {$r['sent']} sent, {$r['blocked']} not sent (see Master Admin → Texts), {$r['skipped']} skipped (no mobile / switched off).\n";
+$f = qfu_run($now);
+echo "Quote follow-ups: {$f['texts']} texts and {$f['emails']} emails sent, {$f['not_sent']} not sent (see Messages).\n";
 if ((int) $now->format('G') < 10 || (int) $now->format('G') >= 20) {
-    echo "(Reminders only go out between 10am and 8pm.)\n";
+    echo "(Reminders and follow-ups only go out between 10am and 8pm.)\n";
 }
