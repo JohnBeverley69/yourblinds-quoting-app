@@ -19,7 +19,7 @@ require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require_once __DIR__ . '/../_partials/band_sort.php';
 
-requireFactoryOffice();
+requireFactoryAccounts();   // main factory only — see factory_accounts_user()
 
 $user     = current_user();
 $pdo      = db();

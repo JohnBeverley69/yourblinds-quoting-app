@@ -620,6 +620,38 @@ function requireFactoryOffice(): void
     exit;
 }
 
+/**
+ * Is this the MAIN factory's office (Beverley, factory_client_id), or the
+ * super-admin? The wholesale accounts side (trade accounts, dispatch, invoices,
+ * payments, statements, commissions, promotions, bank feed, QuickBooks) was built
+ * for one factory. It treats "trade accounts" as every company except the
+ * factory, and QuickBooks and the bank feed are Beverley's own. A white-label
+ * factory (Master Admin → Factories) passing requireFactoryOffice() therefore saw
+ * every company on the platform and could change Beverley's QuickBooks matches
+ * (Tyler Smyth Blinds, 2026-10-11). Until white-label accounts are designed, those
+ * screens are the main factory's only. Production (queue, floor, worksheets,
+ * build rules, remakes) already follows current_factory_id() and stays open.
+ */
+function factory_accounts_user(): bool
+{
+    if (is_super_admin()) return true;
+    return (int) ($_SESSION['client_id'] ?? 0) === factory_client_id() && factory_user_is_office();
+}
+
+function requireFactoryAccounts(): void
+{
+    requireFactoryOffice();
+    if (factory_accounts_user()) return;
+
+    http_response_code(403);
+    header('Content-Type: text/html; charset=utf-8');
+    echo '<!doctype html><meta charset="utf-8"><title>403 Forbidden</title>'
+       . '<h1>Not available on this account</h1><p>Trade accounts, invoices, payments, statements, '
+       . 'the bank feed and QuickBooks are only on the main factory account for now. '
+       . 'Your production screens are under <a href="/factory/incoming-orders.php">Incoming orders</a>.</p>';
+    exit;
+}
+
 // ---------------------------------------------------------------------------
 // CSRF
 // ---------------------------------------------------------------------------
