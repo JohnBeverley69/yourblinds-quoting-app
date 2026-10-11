@@ -251,6 +251,7 @@ $navSections = [
                 'pricing'       => ['/master-admin/pricing.php',       'Pricing',       $isSuperAdmin],
                 'subscriptions' => ['/master-admin/subscriptions.php', 'Subscriptions', $isSuperAdmin],
                 'paypal-health' => ['/master-admin/paypal-health.php', 'PayPal health', $isSuperAdmin],
+                'texts'         => ['/master-admin/texts.php',         'Texts',         $isSuperAdmin],
             ]],
             ['heading' => 'System health', 'items' => [
                 'support'      => ['/master-admin/support.php',     $_ybSupportLabel, $isSuperAdmin],

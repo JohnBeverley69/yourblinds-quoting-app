@@ -16,6 +16,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 csrf_check();
 
 $flags = require __DIR__ . '/../_partials/feature_flags.php';
+// Skip any flag whose column isn't migrated yet, so a new add-on deployed
+// ahead of its migration doesn't break this page.
+$flags = array_intersect_key($flags, array_flip(db()->query('SHOW COLUMNS FROM client_settings')->fetchAll(PDO::FETCH_COLUMN)));
 
 $pdo     = db();
 $clients = $pdo->query('SELECT id FROM clients')->fetchAll(PDO::FETCH_COLUMN);

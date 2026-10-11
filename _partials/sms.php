@@ -1,0 +1,416 @@
+<?php
+declare(strict_types=1);
+
+/**
+ * Customer texting (SMS) engine — the one place that sends a text.
+ *
+ * Model (decided with John, 2026-10-11):
+ *  - ONE provider account, paid for by YourBlinds. Each company's texts go out
+ *    under its own NAME (alphanumeric sender, up to 11 chars) — customers can't
+ *    reply, so the wording ends with the company's phone number.
+ *  - Paid plans only (Silver/Gold grant feature_sms; never Bronze). The
+ *    factory account always has it.
+ *  - Every text is logged in `messages` and counted against a per-company
+ *    MONTHLY limit — a safety net, not an allowance. NULL on the company means
+ *    the platform default (SMS_DEFAULT_MONTHLY_LIMIT, 1000); master-admin can
+ *    set it per company on /master-admin/texts.php.
+ *  - A customer with "Don't text" ticked (customers.sms_opt_out) is never texted.
+ *
+ * Replies are a later paid add-on: a rented UK number per company, inbound
+ * webhook routed by TO number → company, FROM number → customer, stored as
+ * messages.direction = 'in'. Nothing in the send path needs changing for it —
+ * sms_send() would just use the company's number as the sender.
+ *
+ * Provider: The SMS Works (api.thesmsworks.co.uk). The token lives in
+ * platform_config (SMSWORKS_TOKEN), pasted in by a super-admin. Delivery
+ * reports come back per message to /api/sms_webhook.php?k=<SMS_WEBHOOK_KEY>.
+ *
+ * Defensive throughout: if the migration (migrate_messages.php) hasn't run,
+ * texting is simply off — nothing else in the app breaks.
+ */
+
+require_once __DIR__ . '/../bootstrap.php';
+require_once __DIR__ . '/accounting.php';   // pc_get() / pc_set()
+
+if (!defined('SMS_DEFAULT_MONTHLY_LIMIT')) define('SMS_DEFAULT_MONTHLY_LIMIT', 1000);
+if (!defined('SMS_WARN_PERCENT'))          define('SMS_WARN_PERCENT', 80);
+
+/**
+ * The automatic texts a company can tick, with their client_settings column
+ * and default wording. Placeholders are filled by sms_render().
+ */
+function sms_kinds(): array
+{
+    return [
+        'booking_confirm' => [
+            'label'   => 'Booking confirmation',
+            'hint'    => 'Sent when an appointment is booked, and again if it is moved.',
+            'column'  => 'sms_booking_confirm',
+            'default' => 'Hi {{first_name}}, your appointment with {{company}} is booked for {{date}}, {{time}}. To change it please call {{company_phone}}.',
+        ],
+        'day_before' => [
+            'label'   => 'Reminder the day before',
+            'hint'    => 'Sent at 10am the day before the appointment.',
+            'column'  => 'sms_day_before',
+            'default' => 'Reminder: {{company}} will see you tomorrow, {{date}}, {{time}}. To rearrange please call {{company_phone}}.',
+        ],
+        'on_the_way' => [
+            'label'   => 'Your fitter is on the way',
+            'hint'    => 'Sent when the fitter taps "On my way" on their day screen.',
+            'column'  => 'sms_on_the_way',
+            'default' => 'Hi {{first_name}}, {{staff_name}} from {{company}} is on the way to you now. Any questions please call {{company_phone}}.',
+        ],
+    ];
+}
+
+/** Placeholders the wording can use, with a description for the Settings page. */
+function sms_placeholders(): array
+{
+    return [
+        '{{first_name}}'    => "Customer's first name",
+        '{{company}}'       => 'Your company name',
+        '{{company_phone}}' => 'Your company phone number',
+        '{{date}}'          => 'Appointment date, e.g. Tue 14 Oct',
+        '{{time}}'          => 'Appointment time or slot, e.g. 10:30 or AM',
+        '{{staff_name}}'    => 'The fitter or salesperson',
+    ];
+}
+
+/** Fill placeholders. Unknown ones are left as typed so a typo is visible. */
+function sms_render(string $template, array $vars): string
+{
+    $map = [];
+    foreach ($vars as $k => $v) $map['{{' . $k . '}}'] = trim((string) $v);
+    $out = strtr($template, $map);
+    // Tidy doubled spaces left by an empty value.
+    return trim((string) preg_replace('/ {2,}/', ' ', $out));
+}
+
+/** Example values, for the Settings preview and the test text. */
+function sms_sample_vars(array $client): array
+{
+    return [
+        'first_name'    => 'Sarah',
+        'company'       => (string) ($client['company_name'] ?? 'Your company'),
+        'company_phone' => (string) ($client['phone'] ?? ''),
+        'date'          => date('D j M', strtotime('+2 days')),
+        'time'          => '10:30',
+        'staff_name'    => 'Dave',
+    ];
+}
+
+/* ------------------------------------------------------------------ *
+ *  Text maths
+ * ------------------------------------------------------------------ */
+
+/**
+ * How many billable texts (segments) a message takes. Plain GSM-7 text is 160
+ * characters for one text, 153 per part after that; anything outside GSM-7
+ * (emoji, curly quotes) drops it to 70 / 67.
+ */
+function sms_segments(string $text): int
+{
+    $basic = "@£\$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?"
+           . "¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà";
+    $ext   = "^{}\\[~]|€\f";
+    $chars = preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    $len   = 0;
+    $gsm   = true;
+    foreach ($chars as $c) {
+        if (mb_strpos($basic, $c) !== false)      { $len += 1; }
+        elseif (mb_strpos($ext, $c) !== false)    { $len += 2; }
+        else { $gsm = false; break; }
+    }
+    if (!$gsm) {
+        $len = count($chars);
+        return $len <= 70 ? 1 : (int) ceil($len / 67);
+    }
+    return $len <= 160 ? 1 : (int) ceil($len / 153);
+}
+
+/**
+ * A UK mobile in international form without the + (447xxxxxxxxx), or null if
+ * it isn't one. Accepts 07…, +447…, 00447…, 447… with spaces/dashes/brackets.
+ */
+function sms_normalise_uk_mobile(?string $raw): ?string
+{
+    $d = preg_replace('/[^0-9+]/', '', (string) $raw) ?? '';
+    if (str_starts_with($d, '+'))   $d = substr($d, 1);
+    if (str_starts_with($d, '00'))  $d = substr($d, 2);
+    if (str_starts_with($d, '07'))  $d = '44' . substr($d, 1);
+    if (str_starts_with($d, '440')) $d = '44' . substr($d, 3);   // +44 (0)7…
+    return preg_match('/^447\d{9}$/', $d) ? $d : null;
+}
+
+/** Display form of a stored number: 447700900123 → 07700 900123. */
+function sms_display_number(string $intl): string
+{
+    if (preg_match('/^447(\d{3})(\d{6})$/', $intl, $m)) return '07' . $m[1] . ' ' . $m[2];
+    return $intl;
+}
+
+/**
+ * Clean a sender name: letters, numbers and spaces, 3–11 characters, with at
+ * least one letter (an all-digit sender would look like a phone number).
+ * Returns null if it can't be used.
+ */
+function sms_clean_sender(?string $name): ?string
+{
+    $s = trim((string) preg_replace('/[^A-Za-z0-9 ]/', '', (string) $name));
+    $s = (string) preg_replace('/ {2,}/', ' ', $s);
+    if (strlen($s) < 3 || strlen($s) > 11 || !preg_match('/[A-Za-z]/', $s)) return null;
+    return $s;
+}
+
+/** A suggested sender from the company name: "Beverley Blinds Ltd" → "BeverleyBli". */
+function sms_suggest_sender(string $companyName): string
+{
+    $s = preg_replace('/\b(ltd|limited|plc|llp)\b\.?/i', '', $companyName) ?? '';
+    $s = preg_replace('/[^A-Za-z0-9]/', '', $s) ?? '';
+    return substr($s, 0, 11);
+}
+
+/* ------------------------------------------------------------------ *
+ *  Per-company settings, usage and the limit
+ * ------------------------------------------------------------------ */
+
+/** True once migrate_messages.php has run. */
+function sms_ready(): bool
+{
+    static $has = null;
+    if ($has !== null) return $has;
+    try {
+        $has = (bool) db()->query("SHOW TABLES LIKE 'messages'")->fetchColumn();
+    } catch (Throwable $e) {
+        $has = false;
+    }
+    return $has;
+}
+
+/** This company's texting settings (defaults when unset / not migrated). */
+function sms_settings(int $clientId, bool $fresh = false): array
+{
+    static $cache = [];
+    if (!$fresh && isset($cache[$clientId])) return $cache[$clientId];
+    $s = [
+        'feature_sms' => 0, 'sms_sender_name' => null, 'sms_monthly_limit' => null,
+        'sms_booking_confirm' => 0, 'sms_day_before' => 0, 'sms_on_the_way' => 0,
+        'sms_templates' => [],
+    ];
+    if (!sms_ready()) return $s;
+    try {
+        $st = db()->prepare(
+            'SELECT feature_sms, sms_sender_name, sms_monthly_limit,
+                    sms_booking_confirm, sms_day_before, sms_on_the_way, sms_templates
+               FROM client_settings WHERE client_id = ? LIMIT 1'
+        );
+        $st->execute([$clientId]);
+        $row = $st->fetch();
+        if ($row) {
+            $s = array_merge($s, $row);
+            $t = json_decode((string) ($row['sms_templates'] ?? ''), true);
+            $s['sms_templates'] = is_array($t) ? $t : [];
+        }
+    } catch (Throwable $e) { /* not migrated — defaults */ }
+    return $cache[$clientId] = $s;
+}
+
+/** Does this company get texting? (paid plan, or the factory account) */
+function sms_feature_enabled(int $clientId): bool
+{
+    if (!sms_ready()) return false;
+    if (function_exists('is_factory_client') && is_factory_client($clientId)) return true;
+    return (int) sms_settings($clientId)['feature_sms'] === 1;
+}
+
+/** The wording a company uses for one kind (its own, or the default). */
+function sms_template(int $clientId, string $kind): string
+{
+    $own = sms_settings($clientId)['sms_templates'][$kind] ?? '';
+    if (is_string($own) && trim($own) !== '') return $own;
+    return sms_kinds()[$kind]['default'] ?? '';
+}
+
+/** Platform default monthly limit (master-admin can change it). */
+function sms_default_limit(): int
+{
+    $v = (int) (pc_get('SMS_DEFAULT_MONTHLY_LIMIT', (string) SMS_DEFAULT_MONTHLY_LIMIT) ?? 0);
+    return $v > 0 ? $v : SMS_DEFAULT_MONTHLY_LIMIT;
+}
+
+/** This company's monthly limit, in texts (segments). */
+function sms_monthly_limit(int $clientId): int
+{
+    $own = sms_settings($clientId)['sms_monthly_limit'];
+    return ($own !== null && (int) $own >= 0) ? (int) $own : sms_default_limit();
+}
+
+/** Texts (segments) this company has used this calendar month. */
+function sms_used_this_month(int $clientId): int
+{
+    if (!sms_ready()) return 0;
+    try {
+        $st = db()->prepare(
+            "SELECT COALESCE(SUM(segments), 0) FROM messages
+              WHERE client_id = ? AND channel = 'sms' AND direction = 'out'
+                AND status IN ('queued', 'sent', 'delivered')
+                AND created_at >= ?"
+        );
+        $st->execute([$clientId, date('Y-m-01 00:00:00')]);
+        return (int) $st->fetchColumn();
+    } catch (Throwable $e) {
+        return 0;
+    }
+}
+
+/* ------------------------------------------------------------------ *
+ *  Provider: The SMS Works
+ * ------------------------------------------------------------------ */
+
+function sms_provider_configured(): bool
+{
+    return (pc_get('SMSWORKS_TOKEN', '') ?? '') !== '';
+}
+
+/** Secret in the delivery-report URL (generated on first use). */
+function sms_webhook_key(): string
+{
+    $k = pc_get('SMS_WEBHOOK_KEY', '') ?? '';
+    if ($k === '') {
+        $k = bin2hex(random_bytes(16));
+        try { pc_set('SMS_WEBHOOK_KEY', $k); } catch (Throwable $e) { /* no table — report URL just won't verify */ }
+    }
+    return $k;
+}
+
+function sms_webhook_url(): string
+{
+    $base = rtrim((string) (env('APP_URL', '') ?: 'https://yourblinds.uk'), '/');
+    return $base . '/api/sms_webhook.php?k=' . sms_webhook_key();
+}
+
+/**
+ * Send one text through The SMS Works.
+ * @return array{ok:bool, ref:?string, error:?string}
+ */
+function sms_provider_send(string $sender, string $to, string $body): array
+{
+    $token = pc_get('SMSWORKS_TOKEN', '') ?? '';
+    if ($token === '') return ['ok' => false, 'ref' => null, 'error' => 'Texting is not connected yet.'];
+
+    $payload = json_encode([
+        'sender'            => $sender,
+        'destination'       => $to,
+        'content'           => $body,
+        'deliveryreporturl' => sms_webhook_url(),
+    ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+    $ch = curl_init('https://api.thesmsworks.co.uk/v1/message/send');
+    curl_setopt_array($ch, [
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => $payload,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_TIMEOUT        => 15,
+        CURLOPT_HTTPHEADER     => [
+            'Content-Type: application/json',
+            'Accept: application/json',
+            'Authorization: ' . $token,
+        ],
+    ]);
+    $raw    = curl_exec($ch);
+    $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $err    = curl_error($ch);
+    curl_close($ch);
+
+    if ($raw === false) return ['ok' => false, 'ref' => null, 'error' => 'Could not reach the text provider: ' . $err];
+    $json = json_decode((string) $raw, true);
+    if ($status >= 200 && $status < 300) {
+        $ref = is_array($json) ? (string) ($json['messageid'] ?? $json['messageId'] ?? '') : '';
+        return ['ok' => true, 'ref' => $ref !== '' ? $ref : null, 'error' => null];
+    }
+    $why = [401 => 'the text provider rejected our key', 402 => 'the text account is out of credit',
+            403 => 'the text provider refused the send'][$status] ?? ('the text provider said ' . $status);
+    $msg = is_array($json) ? (string) ($json['message'] ?? $json['error'] ?? '') : '';
+    return ['ok' => false, 'ref' => null, 'error' => 'Not sent: ' . $why . ($msg !== '' ? ' (' . $msg . ')' : '') . '.'];
+}
+
+/* ------------------------------------------------------------------ *
+ *  The one send function
+ * ------------------------------------------------------------------ */
+
+/**
+ * Send (and log) one text for a company. Every check that stops a send is
+ * logged too (status 'blocked'), so the Messages log can say why.
+ *
+ * $ctx: kind (booking_confirm | day_before | on_the_way | test),
+ *       customer_id, appointment_id, user_id — all optional.
+ *
+ * @return array{ok:bool, status:string, message:string, id:?int}
+ */
+function sms_send(int $clientId, string $toRaw, string $body, array $ctx = []): array
+{
+    $kind   = (string) ($ctx['kind'] ?? '');
+    $custId = isset($ctx['customer_id']) ? (int) $ctx['customer_id'] : null;
+    $apptId = isset($ctx['appointment_id']) ? (int) $ctx['appointment_id'] : null;
+    $userId = isset($ctx['user_id']) ? (int) $ctx['user_id'] : null;
+
+    if (!sms_ready()) {
+        return ['ok' => false, 'status' => 'blocked', 'message' => 'Texting is not set up yet.', 'id' => null];
+    }
+
+    $settings = sms_settings($clientId);
+    $sender   = sms_clean_sender($settings['sms_sender_name'] ?? '') ?? '';
+    $to       = sms_normalise_uk_mobile($toRaw);
+    $body     = trim($body);
+    $segments = max(1, sms_segments($body));
+
+    $block = null;
+    if (!sms_feature_enabled($clientId)) {
+        $block = 'Texts are part of the Silver and Gold plans.';
+    } elseif ($sender === '') {
+        $block = 'Set a sender name in Settings → Texts first.';
+    } elseif ($to === null) {
+        $block = 'Not a UK mobile number.';
+    } elseif ($body === '') {
+        $block = 'The text is empty.';
+    } elseif ($custId) {
+        try {
+            $st = db()->prepare('SELECT sms_opt_out FROM customers WHERE id = ? AND client_id = ? LIMIT 1');
+            $st->execute([$custId, $clientId]);
+            if ((int) $st->fetchColumn() === 1) $block = 'This customer is marked "Don\'t text".';
+        } catch (Throwable $e) { /* column missing — allow */ }
+    }
+    if ($block === null && sms_used_this_month($clientId) + $segments > sms_monthly_limit($clientId)) {
+        $block = 'Monthly text limit reached (' . sms_monthly_limit($clientId) . ').';
+    }
+    if ($block === null && !sms_provider_configured()) {
+        $block = 'Texting is not connected yet.';
+    }
+
+    $ins = db()->prepare(
+        "INSERT INTO messages
+            (client_id, channel, direction, kind, customer_id, appointment_id, user_id,
+             to_addr, from_addr, body, segments, status, status_detail, provider)
+         VALUES (?, 'sms', 'out', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'smsworks')"
+    );
+    $ins->execute([
+        $clientId, $kind, $custId, $apptId, $userId,
+        $to ?? substr(trim($toRaw), 0, 190), $sender, $body, $segments,
+        $block === null ? 'queued' : 'blocked', $block,
+    ]);
+    $id = (int) db()->lastInsertId();
+    if ($block !== null) {
+        return ['ok' => false, 'status' => 'blocked', 'message' => $block, 'id' => $id];
+    }
+
+    $res = sms_provider_send($sender, (string) $to, $body);
+    if ($res['ok']) {
+        db()->prepare("UPDATE messages SET status = 'sent', provider_ref = ?, sent_at = NOW() WHERE id = ?")
+            ->execute([$res['ref'], $id]);
+        return ['ok' => true, 'status' => 'sent', 'message' => 'Text sent to ' . sms_display_number((string) $to) . '.', 'id' => $id];
+    }
+    db()->prepare("UPDATE messages SET status = 'failed', status_detail = ? WHERE id = ?")
+        ->execute([substr((string) $res['error'], 0, 255), $id]);
+    return ['ok' => false, 'status' => 'failed', 'message' => (string) $res['error'], 'id' => $id];
+}
