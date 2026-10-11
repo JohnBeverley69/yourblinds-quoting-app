@@ -108,6 +108,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $un  = round((float) $txn['amount'] - $res['allocated'], 2);
             $msg .= $un > 0.004 ? ' (£' . number_format($un, 2) . ' left as credit on account).' : '.';
             $_SESSION['flash_success'] = $msg;
+            require_once __DIR__ . '/../_partials/qbo_push.php';
+            qbo_push_kick($factory);   // send it to QuickBooks now if that's switched on
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             $_SESSION['flash_error'] = 'Could not record the payment: ' . $e->getMessage();

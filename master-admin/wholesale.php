@@ -322,6 +322,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // account instead of vanishing with the void invoice.
                 $v = ar_void_invoice($pdo, $factory, $invId, $reason);
                 $cnVoided = (int) $v['cn_voided'];
+                if (!$pdo->inTransaction()) {   // QuickBooks: update the payment, void the invoice there too
+                    require_once __DIR__ . '/../_partials/qbo_push.php';
+                    qbo_push_kick($factory);
+                }
 
                 $_SESSION['flash_success'] = 'Invoice voided (its number is kept).'
                     . ($cnVoided > 0

@@ -73,6 +73,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'deposit_account_name' => $label($depositJson, $depositId),
         'updated_at'           => date('c'),
     ];
+    // Keep settings stored alongside the mapping (the push on/off switch and
+    // send-from date set in Master Admin → QuickBooks).
+    $prev = json_decode((string) (ac_get_connection($clientId, 'quickbooks')['mapping_json'] ?? ''), true) ?: [];
+    $newMapping = array_merge($prev, $newMapping);
     ac_save_connection($clientId, 'quickbooks', ['mapping_json' => json_encode($newMapping)]);
     $_SESSION['flash_success'] = 'QuickBooks mapping saved.';
     header('Location: /admin/accounting/quickbooks-mapping.php' . $forQs);
