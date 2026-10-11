@@ -75,7 +75,20 @@ function seed_client_from_template(PDO $pdo, int $sourceClientId, int $newClient
         'INSERT INTO products (' . implode(', ', $insCols) . ')
          VALUES (' . implode(', ', array_fill(0, count($insCols), '?')) . ')'
     );
+    // Only products that are active AND ready to quote (John, 2026-10-11). A new
+    // company used to get everything on the master, so 40 half-built Decora
+    // products landed on Tyler Smyth Blinds' first screen as "needs fabric".
+    // Anything still being set up reaches a company later by the push, once
+    // it's finished. Same rule as the dashboard panel and the Products list.
+    require_once __DIR__ . '/product_readiness.php';
+    $readyIds = [];
+    foreach (pr_products($sourceClientId) as $p) {
+        if (pr_is_ready($p)) $readyIds[(int) $p['id']] = true;
+    }
+    $summary['skipped_not_ready'] = 0;
+
     foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        if (!isset($readyIds[(int) $r['id']])) { $summary['skipped_not_ready']++; continue; }
         $vals = [
             $newClientId, $r['name'], $r['option_label'],
             (int) $r['sort_order'], (int) $r['active'],
