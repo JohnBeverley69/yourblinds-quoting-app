@@ -49,6 +49,10 @@ $isSuperAdmin = $isSuperAdmin ?? (bool) ($user['is_super_admin'] ?? false);
 // Factory office staff (factory admin, or a factory login with "Can create orders")
 // run the wholesale side: trade orders, dispatch, invoices, bank, statements.
 $isFactoryOffice = $isSuperAdmin || (function_exists('factory_user_is_office') && factory_user_is_office());
+// The wholesale accounts screens (and Dispatch, the factory "New" launcher) are
+// the MAIN factory's only — a white-label factory's office gets production only.
+// Same test the pages use (requireFactoryAccounts in auth/middleware.php).
+$isFactoryAccounts = $isSuperAdmin || (function_exists('factory_accounts_user') && factory_accounts_user());
 $dashTag      = $dashTag      ?? ($isAdmin ? 'Admin Console'    : 'Trade Portal');
 $activeNav    = $activeNav    ?? '';
 
@@ -303,20 +307,20 @@ if ($isFactoryConsole) {
             'items' => [
                 'factory'  => ['/factory/incoming-orders.php', 'Incoming orders', true],
                 'floor'    => ['/factory/floor.php',           'Floor',           true],
-                'dispatch' => ['/master-admin/dispatch.php',   'Dispatch',        true],
+                'dispatch' => ['/master-admin/dispatch.php',   'Dispatch',        $isFactoryAccounts],
             ],
         ],
         [
             'name'  => 'Accounts',
             'items' => [
                 'trade-accounts' => ['/master-admin/trade-accounts.php', 'Trade accounts', $isSuperAdmin],
-                'wholesale'      => ['/master-admin/wholesale.php',      'Invoices',       true],
-                'bank'           => ['/master-admin/bank.php',           'Bank',           true],
+                'wholesale'      => ['/master-admin/wholesale.php',      'Invoices',       $isFactoryAccounts],
+                'bank'           => ['/master-admin/bank.php',           'Bank',           $isFactoryAccounts],
                 'quickbooks'     => ['/master-admin/quickbooks.php',     'QuickBooks',     $isSuperAdmin],
                 // The accounts person matches customers; super-admins reach it from the QuickBooks page.
-                'qbo-customers'  => ['/master-admin/quickbooks-customers.php', 'QuickBooks customers', !$isSuperAdmin],
-                'statement-run'  => ['/master-admin/statement-run.php',  'Statements',     true],
-                'commissions'    => ['/master-admin/commissions.php',    'Commissions',    true],
+                'qbo-customers'  => ['/master-admin/quickbooks-customers.php', 'QuickBooks customers', !$isSuperAdmin && $isFactoryAccounts],
+                'statement-run'  => ['/master-admin/statement-run.php',  'Statements',     $isFactoryAccounts],
+                'commissions'    => ['/master-admin/commissions.php',    'Commissions',    $isFactoryAccounts],
                 // Real manufacturing cost → super-admin only (factory/profit.php requires it).
                 'profit'         => ['/factory/profit.php',              'The Numbers',    $isSuperAdmin],
             ],
@@ -441,7 +445,7 @@ window.addEventListener('pageshow', function (e) {
                  Create orders → New order (a straight order to us, no retail
                  customer). Both → New opens a two-item menu; one → straight there. -->
             <div class="sidebar-cta">
-                <?php if ($isFactoryOffice): ?>
+                <?php if ($isFactoryOffice && $isFactoryAccounts): ?>
                     <a href="/master-admin/new-order.php" class="sidebar-cta-btn"><span aria-hidden="true">+</span> New</a>
                 <?php elseif ($canCreateQuotes && $canCreateOrders): ?>
                     <details class="sidebar-new">

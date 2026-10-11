@@ -21,7 +21,7 @@ require_once __DIR__ . '/../_partials/app_settings.php';
 require_once __DIR__ . '/../mailer.php';
 require_once __DIR__ . '/../pdf-generator/ar_pdf.php';
 
-requireFactoryOffice();
+requireFactoryAccounts();   // main factory only — see factory_accounts_user()
 
 $pdo     = db();
 $factory = ar_factory_id();

@@ -30,7 +30,7 @@ require __DIR__ . '/../auth/middleware.php';
 require_once __DIR__ . '/../_partials/factory_ar.php';
 require_once __DIR__ . '/../_partials/order_stage.php';
 
-requireFactoryOffice();
+requireFactoryAccounts();   // main factory only — see factory_accounts_user()
 
 $user    = current_user();
 $pdo     = db();

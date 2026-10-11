@@ -20,7 +20,7 @@ require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/_helpers_new_order.php';
 
-requireFactoryOffice();
+requireFactoryAccounts();   // main factory only — see factory_accounts_user()
 
 $user       = current_user();
 $factoryCid = (int) $user['client_id'];   // the quote is owned by the factory (Beverley)
