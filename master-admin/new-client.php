@@ -222,6 +222,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                           . $summary['price_tables'] . ' price tables ('
                           . $summary['price_table_rows'] . ' cells), '
                           . $summary['width_table_rows'] . ' width-table rows.'
+                          . (!empty($summary['skipped_not_ready'])
+                              ? ' Left out ' . $summary['skipped_not_ready'] . ' product'
+                                . ($summary['skipped_not_ready'] === 1 ? '' : 's')
+                                . ' that are inactive or not ready to quote — push them once finished.'
+                              : '')
                         : ' (empty catalogue — no seed).')
                     . ' Granted ' . $trialsAdded . '-add-on trial through '
                     . date('j M Y', strtotime($trialExpiry)) . '.'
@@ -382,6 +387,13 @@ $activeNav = 'master-admin';
                     <strong><?= (int) $mySizes['systems'] ?></strong> systems,
                     <strong><?= (int) $mySizes['extras'] ?></strong> options,
                     <strong><?= (int) $mySizes['price_tables'] ?></strong> price tables.
+                    <?php
+                    require_once __DIR__ . '/../_partials/product_readiness.php';
+                    $seedReady = count(array_filter(pr_products($myClientId), 'pr_is_ready'));
+                    $seedLeft  = (int) $mySizes['products'] - $seedReady;
+                    ?>
+                    <br>Only the <strong><?= $seedReady ?></strong> active, ready-to-quote products are copied<?php if ($seedLeft > 0): ?>
+                        &mdash; <?= $seedLeft ?> inactive or unfinished one<?= $seedLeft === 1 ? '' : 's' ?> stay behind until you push them<?php endif; ?>.
                 </div>
 
                 <div class="toggle-stack">
