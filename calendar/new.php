@@ -337,8 +337,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $params[] = $slotWindow;
                 }
                 $astmt->execute($params);
+                $newApptId = (int) $pdo->lastInsertId();
 
                 $pdo->commit();
+
+                // Booking-confirmation text, if the company has it ticked.
+                // Never throws — a text problem can't stop the booking.
+                require_once __DIR__ . '/../_partials/sms.php';
+                sms_after_appointment_saved((int) $clientId, $newApptId, null, (int) ($user['user_id'] ?? 0));
 
                 // Phase 2: email the customer their window (AM/PM mode only,
                 // opt-out via the "Email the customer" checkbox, and only when

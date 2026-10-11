@@ -56,7 +56,7 @@ function sms_kinds(): array
         ],
         'on_the_way' => [
             'label'   => 'Your fitter is on the way',
-            'hint'    => 'Sent when the fitter taps "On my way" on their day screen.',
+            'hint'    => 'Sent when the fitter taps "On my way" on My Schedule or the appointment page (on the day).',
             'column'  => 'sms_on_the_way',
             'default' => 'Hi {{first_name}}, {{staff_name}} from {{company}} is on the way to you now. Any questions please call {{company_phone}}.',
         ],
@@ -126,6 +126,19 @@ function sms_segments(string $text): int
         return $len <= 70 ? 1 : (int) ceil($len / 67);
     }
     return $len <= 160 ? 1 : (int) ceil($len / 153);
+}
+
+/**
+ * Swap typographic characters (curly quotes, dashes, ellipsis, non-breaking
+ * space) for plain ones. One curly apostrophe pasted in from Word would
+ * otherwise make a 160-character text count as three (70 characters each).
+ */
+function sms_plain(string $text): string
+{
+    return strtr($text, [
+        "\u{2018}" => "'", "\u{2019}" => "'", "\u{201C}" => '"', "\u{201D}" => '"',
+        "\u{2013}" => '-', "\u{2014}" => '-', "\u{2026}" => '...', "\u{00A0}" => ' ',
+    ]);
 }
 
 /**
@@ -305,7 +318,8 @@ function sms_provider_send(string $sender, string $to, string $body): array
         'deliveryreporturl' => sms_webhook_url(),
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
-    $ch = curl_init('https://api.thesmsworks.co.uk/v1/message/send');
+    // SMSWORKS_API_URL in .env points at a stand-in server for local testing.
+    $ch = curl_init((env('SMSWORKS_API_URL', '') ?: 'https://api.thesmsworks.co.uk/v1') . '/message/send');
     curl_setopt_array($ch, [
         CURLOPT_POST           => true,
         CURLOPT_POSTFIELDS     => $payload,
@@ -354,6 +368,7 @@ function sms_send(int $clientId, string $toRaw, string $body, array $ctx = []): 
     $custId = isset($ctx['customer_id']) ? (int) $ctx['customer_id'] : null;
     $apptId = isset($ctx['appointment_id']) ? (int) $ctx['appointment_id'] : null;
     $userId = isset($ctx['user_id']) ? (int) $ctx['user_id'] : null;
+    $refKey = isset($ctx['ref_key']) ? substr((string) $ctx['ref_key'], 0, 40) : null;
 
     if (!sms_ready()) {
         return ['ok' => false, 'status' => 'blocked', 'message' => 'Texting is not set up yet.', 'id' => null];
@@ -362,7 +377,7 @@ function sms_send(int $clientId, string $toRaw, string $body, array $ctx = []): 
     $settings = sms_settings($clientId);
     $sender   = sms_clean_sender($settings['sms_sender_name'] ?? '') ?? '';
     $to       = sms_normalise_uk_mobile($toRaw);
-    $body     = trim($body);
+    $body     = sms_plain(trim($body));
     $segments = max(1, sms_segments($body));
 
     $block = null;
@@ -391,13 +406,13 @@ function sms_send(int $clientId, string $toRaw, string $body, array $ctx = []): 
     $ins = db()->prepare(
         "INSERT INTO messages
             (client_id, channel, direction, kind, customer_id, appointment_id, user_id,
-             to_addr, from_addr, body, segments, status, status_detail, provider)
-         VALUES (?, 'sms', 'out', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'smsworks')"
+             to_addr, from_addr, body, segments, status, status_detail, provider, ref_key)
+         VALUES (?, 'sms', 'out', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'smsworks', ?)"
     );
     $ins->execute([
         $clientId, $kind, $custId, $apptId, $userId,
         $to ?? substr(trim($toRaw), 0, 190), $sender, $body, $segments,
-        $block === null ? 'queued' : 'blocked', $block,
+        $block === null ? 'queued' : 'blocked', $block, $refKey,
     ]);
     $id = (int) db()->lastInsertId();
     if ($block !== null) {
@@ -413,4 +428,239 @@ function sms_send(int $clientId, string $toRaw, string $body, array $ctx = []): 
     db()->prepare("UPDATE messages SET status = 'failed', status_detail = ? WHERE id = ?")
         ->execute([substr((string) $res['error'], 0, 255), $id]);
     return ['ok' => false, 'status' => 'failed', 'message' => (string) $res['error'], 'id' => $id];
+}
+
+/* ------------------------------------------------------------------ *
+ *  The automatic texts (Step 2): booking confirmation, day-before
+ *  reminder, "on the way". Each is only sent when the company has
+ *  texting AND has ticked that text in Settings → Texts.
+ * ------------------------------------------------------------------ */
+
+/** Has this company ticked this kind of text? */
+function sms_kind_on(int $clientId, string $kind): bool
+{
+    $col = sms_kinds()[$kind]['column'] ?? null;
+    return $col !== null && sms_feature_enabled($clientId) && (int) (sms_settings($clientId)[$col] ?? 0) === 1;
+}
+
+/** "Mrs J Smith" → "Mrs Smith"; "John Smith" → "John". */
+function sms_first_name(string $name): string
+{
+    $parts = preg_split('/\s+/', trim($name)) ?: [];
+    if (!$parts || $parts[0] === '') return '';
+    if (preg_match('/^(mr|mrs|ms|miss|dr|mx)\.?$/i', $parts[0])) {
+        return count($parts) > 1 ? $parts[0] . ' ' . end($parts) : $parts[0];
+    }
+    return $parts[0];
+}
+
+/** Everything a text about one appointment needs, or null if it doesn't exist. */
+function sms_appointment(int $clientId, int $apptId): ?array
+{
+    $pdo = db();
+    $slotCol = '';
+    try {
+        if ($pdo->query("SHOW COLUMNS FROM appointments LIKE 'slot_window'")->fetchColumn()) $slotCol = 'a.slot_window, ';
+    } catch (Throwable $e) { /* no AM/PM column */ }
+    $st = $pdo->prepare(
+        "SELECT {$slotCol}a.id, a.client_id, a.customer_id, a.client_user_id, a.status,
+                a.appointment_date, a.appointment_time,
+                c.name AS customer_name, c.mobile AS customer_mobile, c.phone AS customer_phone,
+                u.full_name AS staff_name,
+                cl.company_name, cl.phone AS company_phone
+           FROM appointments a
+      LEFT JOIN customers c     ON c.id = a.customer_id AND c.client_id = a.client_id
+      LEFT JOIN client_users u  ON u.id = a.client_user_id
+      LEFT JOIN clients cl      ON cl.id = a.client_id
+          WHERE a.id = ? AND a.client_id = ? LIMIT 1"
+    );
+    $st->execute([$apptId, $clientId]);
+    $a = $st->fetch();
+    return $a ?: null;
+}
+
+/** The mobile to text for an appointment: the mobile field, else a phone that is a mobile. */
+function sms_appointment_mobile(array $a): ?string
+{
+    return sms_normalise_uk_mobile((string) ($a['customer_mobile'] ?? ''))
+        ?? sms_normalise_uk_mobile((string) ($a['customer_phone'] ?? ''));
+}
+
+/** "Morning (9am-1pm)" for a window booking, else "10:30am". */
+function sms_appointment_time_label(array $a): string
+{
+    $slot = (string) ($a['slot_window'] ?? '');
+    if ($slot !== '') {
+        require_once __DIR__ . '/slot_window.php';
+        try {
+            $wins = ampm_build_windows(ampm_settings(db(), (int) $a['client_id']), true);
+            if (isset($wins[$slot])) return $wins[$slot]['label'] . ' (' . $wins[$slot]['range'] . ')';
+        } catch (Throwable $e) { /* fall back to the clock time */ }
+    }
+    $t = (string) ($a['appointment_time'] ?? '');
+    return $t !== '' ? strtolower(date('g:ia', strtotime('2000-01-01 ' . $t))) : '';
+}
+
+/** Placeholder values for one appointment. $staffName overrides the assignee. */
+function sms_appointment_vars(array $a, ?string $staffName = null): array
+{
+    $staff = trim((string) ($staffName ?? $a['staff_name'] ?? ''));
+    return [
+        'first_name'    => ucfirst(sms_first_name((string) ($a['customer_name'] ?? ''))),
+        'company'       => (string) ($a['company_name'] ?? ''),
+        'company_phone' => (string) ($a['company_phone'] ?? ''),
+        'date'          => !empty($a['appointment_date']) ? date('D j M', strtotime((string) $a['appointment_date'])) : '',
+        'time'          => sms_appointment_time_label($a),
+        'staff_name'    => $staff !== '' ? (preg_split('/\s+/', $staff)[0] ?? $staff) : 'our fitter',
+    ];
+}
+
+/**
+ * What the booking-confirmation text depends on: date + time + window. A
+ * changed key means the appointment moved, so the customer gets a new one.
+ */
+function sms_appointment_key(int $clientId, int $apptId): ?string
+{
+    try {
+        $a = sms_appointment($clientId, $apptId);
+    } catch (Throwable $e) {
+        return null;
+    }
+    if (!$a || empty($a['appointment_date'])) return null;
+    return $a['appointment_date'] . '|' . substr((string) $a['appointment_time'], 0, 5) . '|' . (string) ($a['slot_window'] ?? '');
+}
+
+/**
+ * Call after an appointment is booked or saved. Sends the booking
+ * confirmation when the company has it ticked, the appointment is booked
+ * for today or later, and its date/time differs from $previousKey (pass
+ * sms_appointment_key() from BEFORE the save; null for a new booking).
+ * Never throws — a text problem must never stop a booking saving.
+ */
+function sms_after_appointment_saved(int $clientId, int $apptId, ?string $previousKey = null, ?int $userId = null): void
+{
+    try {
+        if (!sms_kind_on($clientId, 'booking_confirm')) return;
+        $key = sms_appointment_key($clientId, $apptId);
+        if ($key === null || $key === $previousKey) return;
+        $a = sms_appointment($clientId, $apptId);
+        if (!$a || (string) $a['status'] !== 'booked') return;
+        if ((string) $a['appointment_date'] < date('Y-m-d')) return;
+
+        // Already confirmed for exactly this date/time? (e.g. saved twice)
+        $st = db()->prepare(
+            "SELECT ref_key FROM messages
+              WHERE appointment_id = ? AND client_id = ? AND kind = 'booking_confirm'
+           ORDER BY id DESC LIMIT 1"
+        );
+        $st->execute([$apptId, $clientId]);
+        if ($st->fetchColumn() === $key) return;
+
+        $to = sms_appointment_mobile($a);
+        if ($to === null) return;   // no mobile on file — nothing to log
+        $body = sms_render(sms_template($clientId, 'booking_confirm'), sms_appointment_vars($a));
+        sms_send($clientId, $to, $body, [
+            'kind' => 'booking_confirm', 'customer_id' => $a['customer_id'],
+            'appointment_id' => $apptId, 'user_id' => $userId, 'ref_key' => $key,
+        ]);
+    } catch (Throwable $e) {
+        error_log('sms_after_appointment_saved(' . $apptId . '): ' . $e->getMessage());
+    }
+}
+
+/**
+ * "On my way": sent when the fitter taps the button. Once per appointment
+ * per day.
+ * @return array{ok:bool, message:string}
+ */
+function sms_send_on_the_way(int $clientId, int $apptId, int $userId, ?string $userName): array
+{
+    if (!sms_kind_on($clientId, 'on_the_way')) {
+        return ['ok' => false, 'message' => '"On my way" texts are switched off in Settings → Texts.'];
+    }
+    $a = sms_appointment($clientId, $apptId);
+    if (!$a) return ['ok' => false, 'message' => 'Appointment not found.'];
+    if ((string) $a['appointment_date'] !== date('Y-m-d')) {
+        return ['ok' => false, 'message' => '"On my way" can only be sent on the day of the appointment.'];
+    }
+    $sent = sms_on_the_way_sent_at($clientId, [$apptId]);
+    if (isset($sent[$apptId])) {
+        return ['ok' => false, 'message' => 'The customer was already texted at ' . $sent[$apptId] . '.'];
+    }
+    $to = sms_appointment_mobile($a);
+    if ($to === null) return ['ok' => false, 'message' => 'There is no mobile number for this customer.'];
+    $body = sms_render(sms_template($clientId, 'on_the_way'), sms_appointment_vars($a, $userName));
+    $res  = sms_send($clientId, $to, $body, [
+        'kind' => 'on_the_way', 'customer_id' => $a['customer_id'],
+        'appointment_id' => $apptId, 'user_id' => $userId, 'ref_key' => date('Y-m-d'),
+    ]);
+    return ['ok' => $res['ok'], 'message' => $res['ok'] ? "Customer texted that you're on the way." : $res['message']];
+}
+
+/** apptId => "10:42" for appointments that already had their "on the way" text today. */
+function sms_on_the_way_sent_at(int $clientId, array $apptIds): array
+{
+    $ids = array_values(array_filter(array_map('intval', $apptIds)));
+    if (!$ids || !sms_ready()) return [];
+    try {
+        $st = db()->prepare(
+            "SELECT appointment_id, MAX(created_at) FROM messages
+              WHERE client_id = ? AND kind = 'on_the_way' AND ref_key = ?
+                AND status IN ('queued', 'sent', 'delivered')
+                AND appointment_id IN (" . implode(',', array_fill(0, count($ids), '?')) . ")
+           GROUP BY appointment_id"
+        );
+        $st->execute(array_merge([$clientId, date('Y-m-d')], $ids));
+        $out = [];
+        foreach ($st->fetchAll(PDO::FETCH_NUM) as [$id, $at]) $out[(int) $id] = date('H:i', strtotime((string) $at));
+        return $out;
+    } catch (Throwable $e) {
+        return [];
+    }
+}
+
+/**
+ * Day-before reminders, run by cron_messages.php every ~15 minutes. Sends
+ * from 10am (UK time) until 8pm, so a missed cron run catches up later the
+ * same day, for every booked appointment tomorrow whose company has the
+ * reminder ticked. One per appointment per date, whatever the outcome (a
+ * blocked one isn't retried every 15 minutes).
+ * @return array{sent:int, skipped:int, blocked:int}
+ */
+function sms_run_day_before(?DateTimeImmutable $now = null): array
+{
+    $now   = $now ?? new DateTimeImmutable('now');
+    $stats = ['sent' => 0, 'skipped' => 0, 'blocked' => 0];
+    $hour  = (int) $now->format('G');
+    if (!sms_ready() || $hour < 10 || $hour >= 20) return $stats;
+
+    $tomorrow = $now->modify('+1 day')->format('Y-m-d');
+    $st = db()->prepare(
+        "SELECT a.id, a.client_id
+           FROM appointments a
+           JOIN client_settings s ON s.client_id = a.client_id
+          WHERE a.appointment_date = ? AND a.status = 'booked'
+            AND s.sms_day_before = 1
+            AND NOT EXISTS (SELECT 1 FROM messages m
+                             WHERE m.appointment_id = a.id AND m.kind = 'day_before' AND m.ref_key = ?)"
+    );
+    $st->execute([$tomorrow, $tomorrow]);
+    foreach ($st->fetchAll() as $row) {
+        $cid = (int) $row['client_id'];
+        try {
+            if (!sms_kind_on($cid, 'day_before')) { $stats['skipped']++; continue; }
+            $a  = sms_appointment($cid, (int) $row['id']);
+            $to = $a ? sms_appointment_mobile($a) : null;
+            if ($to === null) { $stats['skipped']++; continue; }
+            $res = sms_send($cid, $to, sms_render(sms_template($cid, 'day_before'), sms_appointment_vars($a)), [
+                'kind' => 'day_before', 'customer_id' => $a['customer_id'],
+                'appointment_id' => (int) $row['id'], 'ref_key' => $tomorrow,
+            ]);
+            $stats[$res['ok'] ? 'sent' : 'blocked']++;
+        } catch (Throwable $e) {
+            error_log('sms_run_day_before(' . $row['id'] . '): ' . $e->getMessage());
+            $stats['blocked']++;
+        }
+    }
+    return $stats;
 }

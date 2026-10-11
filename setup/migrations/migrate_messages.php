@@ -65,6 +65,15 @@ $colExists = static function (string $table, string $col) use ($pdo): bool {
     return $st->fetchColumn() !== false;
 };
 
+// Step 2: what a text was about (booking confirmation: date|time|window;
+// reminder / on-the-way: the date), so the automatic texts never double-send.
+if ($colExists('messages', 'ref_key')) {
+    echo "messages.ref_key already there.\n";
+} else {
+    $pdo->exec('ALTER TABLE messages ADD COLUMN ref_key VARCHAR(40) NULL AFTER kind, ADD KEY idx_msg_appt_kind_ref (appointment_id, kind, ref_key)');
+    echo "Added messages.ref_key.\n";
+}
+
 $settingsCols = [
     'feature_sms'         => 'TINYINT(1) NOT NULL DEFAULT 0',
     'sms_sender_name'     => 'VARCHAR(11) NULL',

@@ -287,6 +287,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($error === null && $conflictWarn === null) {
             $billingDifferent = $f['different_billing_address'] === 1;
 
+            // Date/time before the save, so a move re-sends the booking text.
+            require_once __DIR__ . '/../_partials/sms.php';
+            $smsPrevKey = sms_appointment_key((int) $clientId, (int) $id);
+
             $u = db()->prepare(
                 'UPDATE appointments SET
                     client_user_id            = ?,
@@ -373,6 +377,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     );
                 }
             }
+
+            // Booking-confirmation text only if the date/time actually changed.
+            sms_after_appointment_saved((int) $clientId, (int) $id, $smsPrevKey, (int) ($user['user_id'] ?? 0));
 
             $_SESSION['flash_success'] = 'Appointment updated.';
             header('Location: /calendar/view.php?id=' . $id);

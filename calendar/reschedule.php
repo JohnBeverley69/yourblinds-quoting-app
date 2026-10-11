@@ -175,6 +175,9 @@ if ($newDate !== null) {
     }
 }
 
+require_once __DIR__ . '/../_partials/sms.php';
+$smsPrevKey = sms_appointment_key($clientId, $apptId);   // before the move
+
 try {
     // Tenant scope check + only-touch-it-if-it-belongs-to-us. Set the time
     // too when one was supplied (scheduling a pending job); otherwise only
@@ -210,6 +213,9 @@ try {
         }
         // Same date as before — silently ok, no work needed.
     }
+
+    // Booking-confirmation text for the new date (no-op if unscheduled or unchanged).
+    sms_after_appointment_saved($clientId, $apptId, $smsPrevKey, (int) ($user['user_id'] ?? 0));
 
     echo json_encode(['ok' => true]);
 } catch (Throwable $e) {
