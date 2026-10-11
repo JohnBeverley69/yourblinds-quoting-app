@@ -592,11 +592,18 @@ function factory_user_is_admin(): bool
  * The Factory Console (trade-only office home) is for factory office staff signed in
  * to the factory account itself: they get the console menu and land on
  * /factory/dashboard.php instead of the retail-shaped sales screens.
+ *
+ * The MAIN factory only (Beverley Trade, factory_client_id). It's a trade-only
+ * home, and its Accounts menu is main-factory only anyway (requireFactoryAccounts).
+ * A white-label factory (Master Admin → Factories) still sells retail, so it keeps
+ * its own menu — Calendar, Dashboard, Pipeline, Customers — with the Factory link
+ * into production. It used to get the console too, which took away its Pipeline
+ * and sent it from its own screens to trade ones (Tyler Smyth Blinds, 2026-10-11).
  */
 function factory_console_user(): bool
 {
     $cid = (int) ($_SESSION['client_id'] ?? 0);
-    return $cid > 0 && is_factory_client($cid) && factory_user_is_office();
+    return $cid > 0 && $cid === factory_client_id() && factory_user_is_office();
 }
 
 /**
