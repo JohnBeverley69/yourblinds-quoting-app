@@ -22,6 +22,53 @@ require_once __DIR__ . '/accounting.php';
 require_once __DIR__ . '/quickbooks.php';
 
 /**
+ * WHICH QuickBooks company. A match ("this trade account is customer 58") and
+ * a sent record ("invoice X is QuickBooks invoice 183") only mean anything in
+ * the company they were made in — the test company's ids are not Annette's.
+ * So both tables carry the company's realm id, and everything reads and writes
+ * only the rows for the company connected now. Switching from the test company
+ * to the real one starts with no matches and nothing sent; switching back finds
+ * the test company's rows again.
+ *
+ * Adds the columns on first use (idempotent); rows made before this are
+ * stamped with the company connected at that moment (they were all made in it).
+ */
+function qbc_realm_schema(PDO $pdo, int $clientId): void
+{
+    static $done = [];
+    if (isset($done[$clientId])) return;
+    $cols = static function (string $t) use ($pdo): array {
+        $s = $pdo->prepare('SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?');
+        $s->execute([$t]);
+        return $s->fetchAll(PDO::FETCH_COLUMN);
+    };
+    $realm = qbc_realm($clientId);
+    foreach ([
+        'accounting_customer_links' => ['uq_aclink', '(client_id, provider, realm_id, account_client_id)'],
+        'accounting_sync'           => ['uq_acsync', '(client_id, provider, realm_id, entity, local_id)'],
+    ] as $t => [$key, $def]) {
+        $have = $cols($t);
+        if (!$have) throw new RuntimeException('Run setup/migrations/migrate_accounting_sync.php first.');
+        if (!in_array('realm_id', $have, true)) {
+            $pdo->exec("ALTER TABLE $t ADD COLUMN realm_id VARCHAR(40) NULL AFTER provider");
+            try { $pdo->exec("ALTER TABLE $t DROP INDEX $key"); } catch (Throwable $e) { /* already gone */ }
+            $pdo->exec("ALTER TABLE $t ADD UNIQUE KEY $key $def");
+        }
+        if ($realm !== '') {
+            $pdo->prepare("UPDATE $t SET realm_id = ? WHERE client_id = ? AND provider = 'quickbooks' AND realm_id IS NULL")
+                ->execute([$realm, $clientId]);
+        }
+    }
+    $done[$clientId] = true;
+}
+
+/** The connected QuickBooks company's id ('' when not connected). */
+function qbc_realm(int $clientId): string
+{
+    return (string) (ac_get_connection($clientId, 'quickbooks')['realm_id'] ?? '');
+}
+
+/**
  * Every customer in the connected QuickBooks company (active and inactive —
  * an inactive one is shown, flagged, so it isn't recreated by mistake).
  * Pages through QuickBooks' 1,000-row query limit.
@@ -134,40 +181,52 @@ function qbc_words_within(string $a, string $b): bool
     return true;
 }
 
-/** Saved links for a company: account_client_id => row. */
+/** Saved links in the connected QuickBooks company: account_client_id => row. */
 function qbc_links(int $clientId): array
 {
-    $st = db()->prepare('SELECT * FROM accounting_customer_links WHERE client_id = ? AND provider = ?');
-    $st->execute([$clientId, 'quickbooks']);
+    qbc_realm_schema(db(), $clientId);
+    $st = db()->prepare('SELECT * FROM accounting_customer_links WHERE client_id = ? AND provider = ? AND realm_id = ?');
+    $st->execute([$clientId, 'quickbooks', qbc_realm($clientId)]);
     $out = [];
     foreach ($st->fetchAll() as $r) $out[(int) $r['account_client_id']] = $r;
     return $out;
 }
 
-/** The QuickBooks customer Id a trade account is linked to, or null. Used by the push. */
+/** How many trade accounts are linked in the connected company. */
+function qbc_link_count(int $clientId): int
+{
+    return count(qbc_links($clientId));
+}
+
+/** The QuickBooks customer Id a trade account is linked to (connected company), or null. Used by the push. */
 function qbc_customer_id(int $clientId, int $accountId): ?string
 {
-    $st = db()->prepare('SELECT external_id FROM accounting_customer_links WHERE client_id = ? AND provider = ? AND account_client_id = ?');
-    $st->execute([$clientId, 'quickbooks', $accountId]);
+    qbc_realm_schema(db(), $clientId);
+    $st = db()->prepare('SELECT external_id FROM accounting_customer_links WHERE client_id = ? AND provider = ? AND realm_id = ? AND account_client_id = ?');
+    $st->execute([$clientId, 'quickbooks', qbc_realm($clientId), $accountId]);
     $v = $st->fetchColumn();
     return $v === false ? null : (string) $v;
 }
 
-/** Link (or re-link) a trade account to a QuickBooks customer. */
+/** Link (or re-link) a trade account to a QuickBooks customer in the connected company. */
 function qbc_link(int $clientId, int $accountId, string $externalId, string $externalName, ?int $userId): void
 {
+    qbc_realm_schema(db(), $clientId);
+    $realm = qbc_realm($clientId);
+    if ($realm === '') throw new RuntimeException('QuickBooks is not connected.');
     db()->prepare(
-        'INSERT INTO accounting_customer_links (client_id, provider, account_client_id, external_id, external_name, linked_by)
-         VALUES (?, ?, ?, ?, ?, ?)
+        'INSERT INTO accounting_customer_links (client_id, provider, realm_id, account_client_id, external_id, external_name, linked_by)
+         VALUES (?, ?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE external_id = VALUES(external_id), external_name = VALUES(external_name),
                                  linked_by = VALUES(linked_by), linked_at = CURRENT_TIMESTAMP'
-    )->execute([$clientId, 'quickbooks', $accountId, $externalId, mb_substr($externalName, 0, 190), $userId]);
+    )->execute([$clientId, 'quickbooks', $realm, $accountId, $externalId, mb_substr($externalName, 0, 190), $userId]);
 }
 
 function qbc_unlink(int $clientId, int $accountId): void
 {
-    db()->prepare('DELETE FROM accounting_customer_links WHERE client_id = ? AND provider = ? AND account_client_id = ?')
-        ->execute([$clientId, 'quickbooks', $accountId]);
+    qbc_realm_schema(db(), $clientId);
+    db()->prepare('DELETE FROM accounting_customer_links WHERE client_id = ? AND provider = ? AND realm_id = ? AND account_client_id = ?')
+        ->execute([$clientId, 'quickbooks', qbc_realm($clientId), $accountId]);
 }
 
 /**

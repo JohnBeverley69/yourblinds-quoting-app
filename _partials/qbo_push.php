@@ -90,10 +90,12 @@ function qbo_push_ensure_schema(PDO $pdo): void
     $done = true;
 }
 
+/** What was sent for one invoice/payment — in the CONNECTED QuickBooks company only. */
 function qbo_sync_row(PDO $pdo, int $factory, string $entity, int $localId): ?array
 {
-    $st = $pdo->prepare('SELECT * FROM accounting_sync WHERE client_id = ? AND provider = ? AND entity = ? AND local_id = ?');
-    $st->execute([$factory, 'quickbooks', $entity, $localId]);
+    qbc_realm_schema($pdo, $factory);
+    $st = $pdo->prepare('SELECT * FROM accounting_sync WHERE client_id = ? AND provider = ? AND realm_id = ? AND entity = ? AND local_id = ?');
+    $st->execute([$factory, 'quickbooks', qbc_realm($factory), $entity, $localId]);
     $r = $st->fetch(PDO::FETCH_ASSOC);
     return $r ?: null;
 }
@@ -110,8 +112,10 @@ function qbo_sync_set(PDO $pdo, int $factory, string $entity, int $localId, stri
         $vals[] = (int) $cur['id'];
         $pdo->prepare('UPDATE accounting_sync SET ' . implode(', ', $set) . ' WHERE id = ?')->execute($vals);
     } else {
-        $cols = array_merge(['client_id', 'provider', 'entity', 'local_id'], array_keys($f));
-        $vals = array_merge([$factory, 'quickbooks', $entity, $localId], array_values($f));
+        $realm = qbc_realm($factory);
+        if ($realm === '') throw new RuntimeException('QuickBooks is not connected.');
+        $cols = array_merge(['client_id', 'provider', 'realm_id', 'entity', 'local_id'], array_keys($f));
+        $vals = array_merge([$factory, 'quickbooks', $realm, $entity, $localId], array_values($f));
         $pdo->prepare('INSERT INTO accounting_sync (' . implode(', ', $cols) . ') VALUES ('
             . implode(', ', array_fill(0, count($cols), '?')) . ')')->execute($vals);
     }
@@ -404,10 +408,10 @@ function qbo_push_voided_invoices(PDO $pdo, int $factory): int
     $st = $pdo->prepare(
         "SELECT s.local_id, s.external_id, i.inv_number
            FROM accounting_sync s JOIN factory_ar_invoices i ON i.id = s.local_id
-          WHERE s.client_id = ? AND s.provider = 'quickbooks' AND s.entity = 'invoice'
+          WHERE s.client_id = ? AND s.provider = 'quickbooks' AND s.realm_id = ? AND s.entity = 'invoice'
             AND s.status = 'sent' AND i.status = 'void'"
     );
-    $st->execute([$factory]);
+    $st->execute([$factory, qbc_realm($factory)]);
     $n = 0;
     foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $v) {
         $id = (string) $v['external_id'];
@@ -447,14 +451,15 @@ function qbo_push_run(int $factory, int $limit = 200): array
         $st = $pdo->prepare(
             "SELECT p.id FROM factory_ar_payments p
                LEFT JOIN accounting_sync s ON s.client_id = p.factory_client_id AND s.provider = 'quickbooks'
-                                          AND s.entity = 'payment' AND s.local_id = p.id
+                                          AND s.realm_id = ? AND s.entity = 'payment' AND s.local_id = p.id
               WHERE p.factory_client_id = ?
                 AND ( (p.voided_at IS NULL AND p.payment_date >= ?)
                    OR (p.voided_at IS NOT NULL AND s.status IN ('sent','failed','held') AND s.external_id IS NOT NULL) )
               ORDER BY p.payment_date, p.id
               LIMIT " . (int) $limit
         );
-        $st->execute([$factory, $s['from']]);
+        qbc_realm_schema($pdo, $factory);
+        $st->execute([qbc_realm($factory), $factory, $s['from']]);
         foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $payId) {
             try {
                 $out = qbo_push_payment($pdo, $factory, $s, (int) $payId);

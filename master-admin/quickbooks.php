@@ -72,25 +72,24 @@ $push    = qbo_push_settings($factory);
 $blocker = qbo_push_blocker($push);
 $syncRows = []; $syncCounts = [];
 try {
+    // Only what belongs to the QuickBooks company connected now.
     qbo_push_ensure_schema(db());
+    qbc_realm_schema(db(), $factory);
+    $realm = qbc_realm($factory);
     $st = db()->prepare(
         "SELECT entity, local_id, ref, status, external_id, last_error, sent_at, updated_at
-           FROM accounting_sync WHERE client_id = ? AND provider = 'quickbooks'
+           FROM accounting_sync WHERE client_id = ? AND provider = 'quickbooks' AND realm_id = ?
           ORDER BY (status IN ('held','failed')) DESC, updated_at DESC LIMIT 60"
     );
-    $st->execute([$factory]);
+    $st->execute([$factory, $realm]);
     $syncRows = $st->fetchAll();
-    $c = db()->prepare("SELECT status, COUNT(*) FROM accounting_sync WHERE client_id = ? AND provider = 'quickbooks' AND entity = 'payment' GROUP BY status");
-    $c->execute([$factory]);
+    $c = db()->prepare("SELECT status, COUNT(*) FROM accounting_sync WHERE client_id = ? AND provider = 'quickbooks' AND realm_id = ? AND entity = 'payment' GROUP BY status");
+    $c->execute([$factory, $realm]);
     $syncCounts = $c->fetchAll(PDO::FETCH_KEY_PAIR);
-} catch (Throwable $e) { /* older table without ref — shows after the first run */ }
+} catch (Throwable $e) { /* tables not migrated yet — the log check above says so */ }
 
 $nLinks = 0;
-try {
-    $st = db()->prepare('SELECT COUNT(*) FROM accounting_customer_links WHERE client_id = ? AND provider = ?');
-    $st->execute([$factory, 'quickbooks']);
-    $nLinks = (int) $st->fetchColumn();
-} catch (Throwable $e) { /* table not migrated yet — the log check above says so */ }
+try { $nLinks = qbc_link_count($factory); } catch (Throwable $e) { /* not migrated yet */ }
 
 $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
