@@ -715,8 +715,19 @@ $activeNav = 'instaprice';
             return !!extra.length_input_label
                 && extra.choices.filter(choiceAvailable).length === 1;
         }
+        // "Collapse to None" tick list that's shut (box reads None, or never
+        // opened and nothing ticked) — nothing picked, gated options hide.
+        function collapsedShut(extra) {
+            if (!extra.collapse_multi) return false;
+            var s = preset[extra.id];
+            if (s === 'open') return false;
+            if (s === 'none') return true;
+            var cm = preset[extra.id + '__multi'];
+            return !(Array.isArray(cm) && cm.length > 0);
+        }
         function effectiveChoiceIds(extra) {
             if (extra.allow_multi) {
+                if (collapsedShut(extra)) return [];
                 var m = preset[extra.id + '__multi'];
                 if (m !== undefined) return m.slice();
                 return extra.choices.filter(function (c) { return choiceAvailable(c) && c.is_default; }).map(function (c) { return c.id; });
@@ -790,6 +801,16 @@ $activeNav = 'instaprice';
             } else if (extra.allow_multi) {
                 var pm = preset[extra.id + '__multi'];
                 var pre = Array.isArray(pm) ? pm.slice() : visible.filter(function (c) { return c.is_default; }).map(function (c) { return c.id; });
+                if (extra.collapse_multi) {
+                    // One "None" box until "Add …" is picked (unnamed — never read as a choice).
+                    var cOpen = !collapsedShut(extra);
+                    if (!Array.isArray(pm)) pre = [];
+                    out += '<select data-collapse-toggle="1" aria-label="' + escapeAttr(extra.name) + '">'
+                         + '<option value="none"' + (cOpen ? '' : ' selected') + '>None</option>'
+                         + '<option value="open"' + (cOpen ? ' selected' : '') + '>Add ' + escapeHtml(extra.name) + '…</option>'
+                         + '</select>';
+                    if (!cOpen) { out += '</div>'; return out; }
+                }
                 out += '<div style="display:flex;flex-direction:column;gap:0.3125rem;padding:0.4375rem 0.5rem;background:var(--bg-input);border:1px solid var(--border-strong);border-radius:8px">';
                 visible.forEach(function (c) {
                     var t = pre.indexOf(c.id) !== -1;

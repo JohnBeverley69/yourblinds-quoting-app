@@ -108,8 +108,11 @@ $f = [
     // joinable: 1 = when a choice's width table runs out, split the length into
     // equal pieces (joined in the middle) and charge each piece at its length.
     'joinable'           => 0,
+    // collapse_multi: 1 = a tick-several option shows as one "None" box until
+    // "Add …" is picked, then the tick list opens (keeps rare add-ons tidy).
+    'collapse_multi'     => 0,
 ];
-foreach (['splits_panels', 'joinable'] as $flagCol) {
+foreach (['splits_panels', 'joinable', 'collapse_multi'] as $flagCol) {
     try {
         $spSt = db()->prepare("SELECT $flagCol FROM product_extras WHERE id = ? AND client_id = ?");
         $spSt->execute([$id, $clientId]);
@@ -129,6 +132,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $f['before_size']        = !empty($_POST['before_size']) ? 1 : 0;
     $f['splits_panels']      = !empty($_POST['splits_panels']) ? 1 : 0;
     $f['joinable']           = !empty($_POST['joinable']) ? 1 : 0;
+    $f['collapse_multi']     = !empty($_POST['collapse_multi']) && $f['allow_multi'] === 1 ? 1 : 0;
     $f['parent_choice_ids']  = array_values(array_unique(array_filter(array_map(
         'intval',
         is_array($_POST['parent_choice_ids'] ?? null) ? $_POST['parent_choice_ids'] : []
@@ -204,6 +208,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->prepare('UPDATE product_extras SET splits_panels = ? WHERE id = ? AND client_id = ?')
                     ->execute([$f['splits_panels'], $id, $clientId]);
             } catch (Throwable $e) { /* migrate_extra_splits_panels.php not run yet — ignore */ }
+            try {
+                $pdo->prepare('UPDATE product_extras SET collapse_multi = ? WHERE id = ? AND client_id = ?')
+                    ->execute([$f['collapse_multi'], $id, $clientId]);
+            } catch (Throwable $e) { /* migrate_extra_collapse_multi.php not run yet — ignore */ }
             try {
                 $pdo->prepare('UPDATE product_extras SET joinable = ? WHERE id = ? AND client_id = ?')
                     ->execute([$f['joinable'], $id, $clientId]);
@@ -466,6 +474,12 @@ $activeNav = 'products';
                                <?= (int) $f['allow_multi'] === 1 ? 'checked' : '' ?>>
                         Allow multiple choices
                         <small>renders as tick-boxes instead of a dropdown &mdash; salesperson can pick any combination, each ticked choice contributes to the price</small>
+                    </label>
+                    <label for="collapse_multi" style="margin-left:1.5rem">
+                        <input type="checkbox" id="collapse_multi" name="collapse_multi" value="1"
+                               <?= (int) ($f['collapse_multi'] ?? 0) === 1 ? 'checked' : '' ?>>
+                        Collapse to &ldquo;None&rdquo; until needed
+                        <small>with multiple choices on: the quote shows one box reading None, and picking &ldquo;Add &hellip;&rdquo; opens the tick list &mdash; for add-ons most customers skip (motors, accessories)</small>
                     </label>
                     <?php endif; ?>
                     <label for="before_size">

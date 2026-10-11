@@ -3291,10 +3291,23 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
             });
         }
 
+        // A "collapse to None" tick list that's currently shut: its box reads
+        // None (or it has never been opened and nothing is ticked). Shut means
+        // nothing picked — no default ticks, and anything gated on it hides.
+        function collapsedShut(extra) {
+            if (!extra.collapse_multi) return false;
+            var s = preset[extra.id];
+            if (s === 'open') return false;
+            if (s === 'none') return true;
+            var m = preset[extra.id + '__multi'];
+            return !(Array.isArray(m) && m.length > 0);
+        }
+
         function effectiveChoiceIds(extra) {
             // Multi-pick: the multi preset is an array of ids. Drop any that
             // are no longer offered; keep the rest of the customer's picks.
             if (extra.allow_multi) {
+                if (collapsedShut(extra)) return [];
                 var multi = preset[extra.id + '__multi'];
                 if (multi !== undefined) {
                     var kept = multi.filter(function (id) {
@@ -3458,6 +3471,20 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                     preselectIds = visibleChoices.filter(function (c) {
                         return c.is_default;
                     }).map(function (c) { return c.id; });
+                }
+
+                // Collapsed until needed (extra.collapse_multi): one box reading
+                // "None"; "Add …" opens the tick list. Opens by itself when
+                // something is already ticked (an edited line). The box has no
+                // name, so it's never submitted or read as a choice.
+                if (extra.collapse_multi) {
+                    var cOpen = !collapsedShut(extra);
+                    if (!Array.isArray(presetMulti)) preselectIds = [];   // no default ticks on opening
+                    out += '<select data-collapse-toggle="1" aria-label="' + escapeAttr(extra.name) + '">'
+                         + '<option value="none"' + (cOpen ? '' : ' selected') + '>None</option>'
+                         + '<option value="open"' + (cOpen ? ' selected' : '') + '>Add ' + escapeHtml(extra.name) + '…</option>'
+                         + '</select>';
+                    if (!cOpen) { out += '</div>'; return out; }
                 }
 
                 out += '<div class="multi-choice-list"'
@@ -3757,8 +3784,15 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
             var cb = document.querySelector(
                 '[data-extra-id="' + ex.extra_id + '"] input[data-multi-choice="' + ex.choice_id + '"]'
             );
+            var shut = document.querySelector(
+                '[data-extra-id="' + ex.extra_id + '"] select[data-collapse-toggle]'
+            );
             if (cb) {
                 cb.checked = true;
+            } else if (shut) {
+                // A collapsed tick list with a saved tick — open it; the next
+                // pass ticks the box once it has been rendered.
+                if (ex.choice_id) shut.value = 'open';
             } else {
                 var sel = document.querySelector(
                     '[data-extra-id="' + ex.extra_id + '"] select'

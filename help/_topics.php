@@ -515,6 +515,7 @@ return [
       <ul>
       <li><strong>Required</strong> — the quote will not save without an answer.</li>
       <li><strong>Allow multiple choices</strong> — renders as tick boxes so any combination can be picked.</li>
+      <li><strong>Collapse to “None” until needed</strong> (on an option&rsquo;s Edit page, with multiple choices on) — the quote shows one box reading <em>None</em>; picking <em>Add …</em> opens the tick boxes. Good for add-ons most customers skip, like motors and accessories.</li>
       <li><strong>Appears when</strong> — tick one or more choices from other options and this one only shows when one of them is selected. Tick none and it is always visible.</li>
       <li><strong>Also show a number input</strong> — a box beside the choice for a wand or cable length; you name the field yourself and it is recorded on the line for the supplier paperwork.</li>
       </ul>

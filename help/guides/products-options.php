@@ -615,7 +615,8 @@ return [
             <li><b>Name *</b> &mdash; what the customer is choosing (placeholder <em>e.g. Control side</em>), up to 150 characters.</li>
             <li><b>Required</b> &mdash; <b>already ticked</b>. Untick it for an extra they can skip.</li>
             <li><b>Allow multiple choices</b> &mdash; <em>renders as tick-boxes &mdash; salesperson can pick any combination</em>; every ticked
-                choice adds its price.</li>
+                choice adds its price. On the Edit page, <b>Collapse to &ldquo;None&rdquo; until needed</b> shows it as one box reading
+                <em>None</em> instead, and the tick-boxes only open when <em>Add &hellip;</em> is picked &mdash; tidy for motors and accessories.</li>
             <li><b>Appears when (optional)</b> &mdash; one tick box per choice already on this product (<em>Control type = Motorised</em>).
                 Tick one or more and the option shows when <b>any</b> of them is selected; tick none for an always-visible option.</li>
             <li><b>Also show a number input next to this option</b> &mdash; reveals <b>What to call this field</b>, pre-filled with
