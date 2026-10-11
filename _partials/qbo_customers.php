@@ -92,8 +92,9 @@ function qbc_suggest(array $account, array $customers): ?array
                 // Two words or more on both sides, so "Blinds" alone never matches "Vesta Blinds".
                 $score = 90.0;   // every word of one name appears in the other
             } else {
-                similar_text($mine, $theirs, $pct);
-                $score = (float) $pct >= 88 ? (float) $pct : 0.0;   // only a near-identical spelling
+                // Only a typo or a missing space: "Hilarys"/"Hillarys", "ShadeTech"/"Shade Tech".
+                // Never short codes or initials — "BCS Blinds" is not "ABC Blinds".
+                $score = qbc_near_spelling($mine, $theirs) ? 88.0 : 0.0;
             }
             if (!$c['active']) $score -= 5;
             if ($score > $bestScore) { $bestScore = $score; $best = $c['id']; }
@@ -101,6 +102,26 @@ function qbc_suggest(array $account, array $customers): ?array
     }
     if ($best === null || $bestScore < 82) return null;
     return ['id' => $best, 'strength' => $bestScore >= 99 ? 'exact' : 'likely'];
+}
+
+/**
+ * Same name apart from a small typo in a LONG word, or spaces: word by word,
+ * each pair is equal, or both are 5+ letters and one or two letters apart.
+ * Short words (ABC, BCS, D&D…) must match exactly.
+ */
+function qbc_near_spelling(string $a, string $b): bool
+{
+    if (str_replace(' ', '', $a) === str_replace(' ', '', $b)) return true;   // ShadeTech / Shade Tech
+    $wa = explode(' ', $a); $wb = explode(' ', $b);
+    if (count($wa) !== count($wb)) return false;
+    $typos = 0;
+    foreach ($wa as $i => $w) {
+        if ($w === $wb[$i]) continue;
+        if (mb_strlen($w) < 5 || mb_strlen($wb[$i]) < 5) return false;
+        if (levenshtein($w, $wb[$i]) > 2) return false;
+        $typos++;
+    }
+    return $typos === 1;
 }
 
 /** True when every word of $a (normalised) is a whole word in $b. */
