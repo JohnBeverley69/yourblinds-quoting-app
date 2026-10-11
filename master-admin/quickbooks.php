@@ -20,6 +20,30 @@ require_once __DIR__ . '/../_partials/quickbooks.php';
 requireSuperAdmin();
 
 $factory  = ac_target_client_id('factory');
+
+require_once __DIR__ . '/../_partials/qbo_push.php';
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    csrf_check();
+    $act = (string) ($_POST['_action'] ?? '');
+    try {
+        if ($act === 'push_settings') {
+            $on   = (string) ($_POST['push_on'] ?? '') === '1';
+            $from = trim((string) ($_POST['push_from'] ?? ''));
+            if ($on && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $from)) throw new RuntimeException('Choose the date to send invoices from before switching sending on.');
+            qbo_push_save_settings($factory, $on, $from);
+            ac_log($factory, 'quickbooks', 'sending settings', 'ok', ($on ? 'Sending ON' : 'Sending OFF') . ($from !== '' ? ', invoices from ' . $from : ''));
+            $_SESSION['flash_success'] = $on ? 'Sending is on. Paid invoices dated from ' . date('j M Y', strtotime($from)) . ' will go to QuickBooks.' : 'Sending is off. Nothing will be sent to QuickBooks.';
+            if ($on) { $r = qbo_push_run($factory); $_SESSION['flash_success'] .= ' ' . $r['message']; }
+        } elseif ($act === 'push_now') {
+            $r = qbo_push_run($factory);
+            $_SESSION[$r['ran'] ? 'flash_success' : 'flash_error'] = $r['ran'] ? 'Done: ' . $r['message'] : $r['message'];
+        }
+    } catch (Throwable $e) {
+        $_SESSION['flash_error'] = $e->getMessage();
+    }
+    header('Location: /master-admin/quickbooks.php#sending');
+    exit;
+}
 $prov     = ac_provider('quickbooks');
 $ready    = $prov && $prov->isConfigured();
 $conn     = ac_get_connection($factory, 'quickbooks');
@@ -43,6 +67,23 @@ try {
 } catch (Throwable $e) {
     $logReady = false;
 }
+
+$push    = qbo_push_settings($factory);
+$blocker = qbo_push_blocker($push);
+$syncRows = []; $syncCounts = [];
+try {
+    qbo_push_ensure_schema(db());
+    $st = db()->prepare(
+        "SELECT entity, local_id, ref, status, external_id, last_error, sent_at, updated_at
+           FROM accounting_sync WHERE client_id = ? AND provider = 'quickbooks'
+          ORDER BY (status IN ('held','failed')) DESC, updated_at DESC LIMIT 60"
+    );
+    $st->execute([$factory]);
+    $syncRows = $st->fetchAll();
+    $c = db()->prepare("SELECT status, COUNT(*) FROM accounting_sync WHERE client_id = ? AND provider = 'quickbooks' AND entity = 'payment' GROUP BY status");
+    $c->execute([$factory]);
+    $syncCounts = $c->fetchAll(PDO::FETCH_KEY_PAIR);
+} catch (Throwable $e) { /* older table without ref — shows after the first run */ }
 
 $nLinks = 0;
 try {
@@ -175,9 +216,82 @@ $activeNav = 'quickbooks';
                         <span class="qb-muted">(connect first)</span>
                     <?php endif; ?>
                 </li>
-                <li>When a payment is confirmed (bank feed or recorded by hand), the invoice(s) it pays go across with one payment against them, matching the bank line. Nothing goes across before it's paid. <span class="qb-muted">(coming next)</span></li>
+                <li>When a payment is confirmed (bank feed or recorded by hand), the invoice(s) it pays go across with one payment against them, matching the bank line. Nothing goes across before it's paid. <span class="qb-muted">(below)</span></li>
             </ol>
         </div>
+
+        <div class="qb-card" id="sending">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+                <strong>Sending to QuickBooks</strong>
+                <?php if ($push['on'] && $blocker === ''): ?>
+                    <span style="font-size:.8125rem;font-weight:600;color:#065f46">● On</span>
+                <?php elseif ($push['on']): ?>
+                    <span style="font-size:.8125rem;font-weight:600;color:#92400e">● On, but waiting</span>
+                <?php else: ?>
+                    <span class="qb-muted">Off</span>
+                <?php endif; ?>
+            </div>
+            <p style="margin:.5rem 0 .75rem;color:var(--text-secondary);font-size:.875rem">
+                When on, every payment recorded in YourBlinds (Bank screen or by hand) sends the invoice(s) it pays,
+                then one payment against them, into QuickBooks. Voiding a payment or invoice here voids it there.
+                Only invoices dated on or after the date below are sent &mdash; anything earlier (for example entered from
+                Blind Matrix) is left alone, so nothing goes in twice.
+            </p>
+            <?php if ($push['on'] && $blocker !== ''): ?>
+                <p style="margin:0 0 .75rem;color:#92400e;font-size:.875rem"><?= e($blocker) ?></p>
+            <?php endif; ?>
+            <form method="post" action="/master-admin/quickbooks.php" style="display:flex;gap:.75rem 1rem;align-items:flex-end;flex-wrap:wrap">
+                <?= csrf_field() ?>
+                <input type="hidden" name="_action" value="push_settings">
+                <label style="display:flex;flex-direction:column;gap:.25rem;font-size:.8125rem;color:var(--text-secondary)">
+                    Send invoices dated from
+                    <input type="date" name="push_from" value="<?= e($push['from']) ?>" class="form-control" style="min-width:10rem">
+                </label>
+                <label style="display:flex;gap:.4rem;align-items:center;font-size:.875rem;padding-bottom:.45rem">
+                    <input type="checkbox" name="push_on" value="1" <?= $push['on'] ? 'checked' : '' ?>> Sending on
+                </label>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </form>
+            <?php if ($push['on'] && $blocker === ''): ?>
+                <form method="post" action="/master-admin/quickbooks.php" style="margin-top:.75rem">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="_action" value="push_now">
+                    <button type="submit" class="btn btn-secondary">Send now</button>
+                    <span class="qb-muted" style="margin-left:.5rem">It also runs by itself after each payment and every 15 minutes, retrying anything that failed.</span>
+                </form>
+            <?php endif; ?>
+            <?php if ($syncCounts): ?>
+                <p class="qb-muted" style="margin:.75rem 0 0">
+                    Payments: <?= (int) ($syncCounts['sent'] ?? 0) ?> sent
+                    &middot; <?= (int) ($syncCounts['held'] ?? 0) ?> held
+                    &middot; <?= (int) ($syncCounts['failed'] ?? 0) ?> failed
+                    &middot; <?= (int) ($syncCounts['skipped'] ?? 0) ?> nothing to send
+                </p>
+            <?php endif; ?>
+        </div>
+
+        <?php if ($syncRows): ?>
+        <section class="section">
+            <div class="section-header"><h2 class="section-title">What's been sent</h2></div>
+            <p class="qb-muted" style="margin:0 0 .75rem">Held and failed ones first, with the reason. Fix the reason (for example match the customer) and it goes on the next run.</p>
+            <div class="table-wrap">
+            <table class="table qb-log">
+                <thead><tr><th>Item</th><th>Status</th><th>Details</th><th>QuickBooks id</th><th>When</th></tr></thead>
+                <tbody>
+                <?php foreach ($syncRows as $s): $st = (string) $s['status']; ?>
+                    <tr>
+                        <td style="white-space:nowrap"><?= e($s['entity'] === 'payment' ? 'Payment' : 'Invoice') ?> <strong><?= e((string) ($s['ref'] ?? '#' . $s['local_id'])) ?></strong></td>
+                        <td><span class="qb-pill <?= $st === 'sent' ? 'ok' : ($st === 'skipped' || $st === 'voided' ? '' : 'failed') ?>"><?= e(['sent' => 'sent', 'held' => 'held', 'failed' => 'failed — will retry', 'skipped' => 'nothing to send', 'voided' => 'voided', 'pending' => 'waiting'][$st] ?? $st) ?></span></td>
+                        <td style="max-width:30rem;white-space:normal"><?= e((string) ($s['last_error'] ?? '')) ?></td>
+                        <td class="qb-muted"><?= e((string) ($s['external_id'] ?? '')) ?></td>
+                        <td style="white-space:nowrap" class="qb-muted"><?= e(date('j M H:i', strtotime((string) ($s['sent_at'] ?: $s['updated_at'])))) ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+            </div>
+        </section>
+        <?php endif; ?>
 
         <section class="section">
             <div class="section-header"><h2 class="section-title">Log</h2></div>

@@ -62,6 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ar_payments_ready($pdo)) {
         // first, or one invoice). Creates allocations from the existing payments.
         try {
             $r = ar_apply_account_credit($pdo, $factory, $accountId, (int) ($_POST['invoice_id'] ?? 0));
+            if ($r['applied'] > 0.004) { require_once __DIR__ . '/../_partials/qbo_push.php'; qbo_push_kick($factory); }
             $_SESSION[$r['applied'] > 0.004 ? 'flash_success' : 'flash_error'] = $r['applied'] > 0.004
                 ? 'Applied £' . number_format($r['applied'], 2) . ' of credit on account to ' . implode(', ', $r['invoices']) . '.'
                 : 'Nothing to apply — there is no unallocated payment on account, or no open invoice to put it against.';
@@ -77,6 +78,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ar_payments_ready($pdo)) {
         $payId = (int) ($_POST['payment_id'] ?? 0);
         try {
             ar_void_payment($pdo, $factory, $payId, (string) ($_POST['void_reason'] ?? ''));
+            require_once __DIR__ . '/../_partials/qbo_push.php';
+            qbo_push_kick($factory);   // void it in QuickBooks too, if it went across
             $_SESSION['flash_success'] = 'Payment voided — the invoices it covered are open again.';
         } catch (Throwable $e) {
             $_SESSION['flash_error'] = 'Could not void: ' . $e->getMessage();
@@ -140,6 +143,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ar_payments_ready($pdo)) {
              . ', £' . number_format($res['allocated'], 2) . ' allocated';
         $msg .= $unallocated > 0.004 ? ', £' . number_format($unallocated, 2) . ' left as credit on account.' : '.';
         $_SESSION['flash_success'] = $msg;
+        require_once __DIR__ . '/../_partials/qbo_push.php';
+        qbo_push_kick($factory);   // send it to QuickBooks now if that's switched on
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
         $_SESSION['flash_error'] = 'Could not record the payment: ' . $e->getMessage();

@@ -40,6 +40,19 @@ if ($lock && !flock($lock, LOCK_EX | LOCK_NB)) {
 $now = new DateTimeImmutable('now');
 echo 'cron_messages ' . $now->format('Y-m-d H:i T') . "\n";
 
+// QuickBooks: send paid invoices + payments (and retry any that failed). Does
+// nothing unless switched on in Master Admin → QuickBooks.
+try {
+    require_once __DIR__ . '/_partials/qbo_push.php';
+    $qf = factory_client_id();
+    if ($qf > 0 && qbo_push_settings($qf)['on']) {
+        $q = qbo_push_run($qf);
+        echo 'QuickBooks: ' . $q['message'] . "\n";
+    }
+} catch (Throwable $e) {
+    echo 'QuickBooks: ' . $e->getMessage() . "\n";
+}
+
 if (!sms_ready()) {
     echo "Texting tables not migrated yet; nothing to do.\n";
     exit;
