@@ -813,11 +813,14 @@ return [
       account</strong> is recorded on a different screen altogether, so it can be allocated across their invoices.</p>'],
 
     ['admin', 'Accounts', 'Getting my figures to the bookkeeper (CSV export)', 'accounts csv export xero quickbooks sage invoices payments accounting accountant bookkeeper download spreadsheet vat',
-     '<p>On <strong>Retail → Payments</strong>, admins get three export buttons at the top right:
-      <strong>Export invoices (CSV)</strong>, <strong>Export for QuickBooks (CSV)</strong> and
-      <strong>Export payments (CSV)</strong>. They download spreadsheet files you hand to your bookkeeper or import
-      into <strong>Xero, QuickBooks or Sage</strong>. The Help guide <em>Get your figures into Xero, QuickBooks or
-      Sage</em> walks through each package step by step.</p>
+     '<p>The easiest place is <strong>Setup → Settings → Accounting</strong>: pick the dates, then
+      <strong>Download for QuickBooks</strong>, <strong>Download for Xero</strong> or <strong>Download for Sage</strong>,
+      each with a short “How to import it” underneath.</p>
+      <p>The same files are on <strong>Retail → Payments</strong>, where admins get export buttons at the top right:
+      <strong>Export invoices (CSV)</strong> (the Xero layout), <strong>Export for QuickBooks (CSV)</strong>,
+      <strong>Export for Sage (.zip)</strong> and <strong>Export payments (CSV)</strong>. They download spreadsheet
+      files you hand to your bookkeeper or import into <strong>Xero, QuickBooks or Sage</strong>. The Help guide
+      <em>Get your figures into Xero, QuickBooks or Sage</em> walks through each package step by step.</p>
       <ul>
         <li><strong>Export invoices (CSV)</strong> — one row per order line, priced <em>net of VAT</em> so the
         accounting package works the tax out itself. It covers every order from <strong>accepted</strong> onward
@@ -828,6 +831,10 @@ return [
         invoice’s lines so the total still matches), QuickBooks’ VAT codes (20.0% S / 5.0% R / No VAT), a line amount
         and rate, and the item “Blinds” on every line. More than 100 invoices comes as a .zip of numbered parts,
         because QuickBooks only takes 100 invoices per file.</li>
+        <li><strong>Export for Sage (.zip)</strong> — two files for Sage Accounting: <em>1-customers.csv</em> (import
+        it first: Contacts → Import, because Sage refuses an invoice for a customer it doesn’t know) and
+        <em>2-invoices.csv</em>, one row per order (Sales → Quick entries → Import Quick Entries) to sales ledger 4000.
+        Sage renames its import columns now and then — if one doesn’t match, copy the columns into Sage’s own template.</li>
         <li><strong>Export payments (CSV)</strong> — one row per payment received: date, order number, customer,
         amount, method, reference, and whether it was a Deposit or a Payment.</li>
       </ul>
@@ -836,11 +843,11 @@ return [
       <code>&lt;your-company&gt;-invoices-&lt;date&gt;.csv</code> and
       <code>&lt;your-company&gt;-payments-&lt;date&gt;.csv</code>.</p>
       <p>The invoice rows default to account code <strong>200 (Sales)</strong> and <strong>20% VAT</strong>. Those are
-      Xero’s usual UK defaults — if your chart of accounts differs, remap them as you import, not here.</p>
-      <p>There is also a live <strong>QuickBooks Online</strong> link under Settings → Accounting, but it only sets up
-      the connection at the moment; the CSV is still how the figures actually reach your accounts.</p>'],
+      Xero’s usual UK defaults — if your chart of accounts differs, remap them as you import, not here.</p>'],
 
-    ['admin', 'Accounts', 'Can I link QuickBooks so I don\'t re-key everything?', 'quickbooks qbo intuit connect link accounting integration oauth mapping sales receipt xero sage api',
+    // Super-admins only until the live link is opened to companies
+    // (platform_config QBO_CLIENT_CONNECT = 1) — companies don't see the section yet.
+    ['super', 'Accounts', 'Can I link QuickBooks so I don\'t re-key everything?', 'quickbooks qbo intuit connect link accounting integration oauth mapping sales receipt xero sage api',
      '<p>You can link your <strong>QuickBooks Online</strong> company today, but be clear what that does and doesn’t
       do yet. Go to <strong>Setup → Settings</strong> and pick the <strong>Accounting</strong> tab.</p>
       <p>There you’ll see a <strong>QuickBooks Online</strong> card with a badge reading
@@ -858,9 +865,8 @@ return [
       <p><strong>It is cash accounting.</strong> Nothing is ever sent to QuickBooks until a sale is <em>paid</em> — you
       will never see an open debtor created from here.</p>
       <p><strong>Be warned:</strong> at the moment this sets up the connection and the mapping only — no sales are
-      pushed across automatically yet. Until that arrives, keep using <strong>Export invoices (CSV)</strong> and
-      <strong>Export payments (CSV)</strong> on the Payments page. <em>Xero &amp; Sage</em> are shown on the same tab
-      as “Coming soon”.</p>'],
+      pushed across automatically yet. Until that arrives, use the downloads at the top of the same Accounting tab.
+      The section is only shown to super-admins until the link is opened to companies.</p>'],
 
     ['factory', 'Accounts', 'How do I raise a delivery note and invoice for a trade account?', 'delivery note dn invoice trade wholesale raise dispatch print billing account order paperwork',
      '<p>Go to <strong>Factory Console → Invoices</strong> in the left-hand menu (the page itself is headed
