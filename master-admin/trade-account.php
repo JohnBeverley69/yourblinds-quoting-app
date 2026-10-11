@@ -881,6 +881,25 @@ $activeNav = 'trade-accounts';
                         <label for="vat_number">VAT number</label>
                         <input id="vat_number" name="vat_number" type="text" maxlength="40" value="<?= e((string) ($acc['vat_number'] ?? '')) ?>">
                     </div>
+                    <?php
+                    // Postcode lookup — same widget and plan gate as quotes and bookings,
+                    // gated on the signed-in company (the factory), not the account.
+                    $pcOn = false;
+                    try {
+                        $pcSt = db()->prepare('SELECT COALESCE(feature_postcode_lookup, 0) FROM client_settings WHERE client_id = ?');
+                        $pcSt->execute([(int) $user['client_id']]);
+                        $pcOn = (int) $pcSt->fetchColumn() === 1;
+                    } catch (Throwable $e) { /* no flag column: no lookup */ }
+                    ?>
+                    <?php if ($pcOn): ?>
+                        <div class="full">
+                            <?php
+                            $pcFieldMap = ['line1' => 'address1', 'line2' => 'address2', 'town' => 'town',
+                                           'county' => 'county', 'postcode' => 'postcode'];
+                            require __DIR__ . '/../_partials/postcode_lookup.php';
+                            ?>
+                        </div>
+                    <?php endif; ?>
                     <div class="full">
                         <label for="address1">Address line 1</label>
                         <input id="address1" name="address1" type="text" maxlength="150" value="<?= e((string) ($acc['address1'] ?? '')) ?>">
