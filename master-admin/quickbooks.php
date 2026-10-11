@@ -44,6 +44,13 @@ try {
     $logReady = false;
 }
 
+$nLinks = 0;
+try {
+    $st = db()->prepare('SELECT COUNT(*) FROM accounting_customer_links WHERE client_id = ? AND provider = ?');
+    $st->execute([$factory, 'quickbooks']);
+    $nLinks = (int) $st->fetchColumn();
+} catch (Throwable $e) { /* table not migrated yet — the log check above says so */ }
+
 $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
@@ -160,7 +167,14 @@ $activeNav = 'quickbooks';
             <strong>How it will work</strong>
             <ol class="qb-steps" style="margin:.5rem 0 0;padding-left:1.25rem;color:var(--text-secondary);font-size:.875rem">
                 <li>Connect, and set up the mapping (sales item, VAT code, bank account).</li>
-                <li>Match each trade account to its customer already in QuickBooks, once. <span class="qb-muted">(coming next)</span></li>
+                <li>Match each trade account to its customer already in QuickBooks, once.
+                    <?php if ($linked && !$reconn): ?>
+                        <a href="/master-admin/quickbooks-customers.php">Match customers &rarr;</a>
+                        <span class="qb-muted">(<?= (int) $nLinks ?> linked so far)</span>
+                    <?php else: ?>
+                        <span class="qb-muted">(connect first)</span>
+                    <?php endif; ?>
+                </li>
                 <li>When a payment is confirmed (bank feed or recorded by hand), the invoice(s) it pays go across with one payment against them, matching the bank line. Nothing goes across before it's paid. <span class="qb-muted">(coming next)</span></li>
             </ol>
         </div>
