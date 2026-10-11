@@ -153,13 +153,16 @@ $activeNav  = 'texts';
                 <input type="hidden" name="_action" value="provider">
                 <p style="margin:0 0 1rem">
                     Status:
-                    <?php if ($hasToken): ?><strong style="color:#166534">Connected</strong> — a token is saved.
+                    <?php if ($hasToken && sms_token_kind((string) pc_get('SMSWORKS_TOKEN', '')) === 'key'): ?>
+                        <strong style="color:#991b1b">Wrong code saved</strong> — this looks like the API key or the secret.
+                        Paste the <strong>JWT</strong> instead (the long code starting <code>eyJ</code>, or <code>JWT eyJ</code>).
+                    <?php elseif ($hasToken): ?><strong style="color:#166534">Connected</strong> — a JWT is saved.
                     <?php else: ?><strong style="color:#991b1b">Not connected</strong> — no texts will go out until a token is saved.
                     <?php endif; ?>
                 </p>
                 <div class="form-row">
                     <div class="form-group">
-                        <label for="smsworks_token">API token <span style="color:#9ca3af;font-weight:400">(from The SMS Works → API Key; leave blank to keep the saved one)</span></label>
+                        <label for="smsworks_token">JWT <span style="color:#9ca3af;font-weight:400">(The SMS Works → API Key page has three codes: key, secret and JWT. Paste the JWT. Leave blank to keep the saved one.)</span></label>
                         <input id="smsworks_token" name="smsworks_token" type="password" autocomplete="off" value="">
                     </div>
                     <div class="form-group">

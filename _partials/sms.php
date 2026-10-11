@@ -302,6 +302,43 @@ function sms_webhook_url(): string
     return $base . '/api/sms_webhook.php?k=' . sms_webhook_key();
 }
 
+/** The pasted token with any "JWT " / "Bearer " prefix, spaces and line breaks removed. */
+function sms_token_bare(string $token): string
+{
+    $t = trim((string) preg_replace('/\s+/', ' ', $token));
+    if (preg_match('/^(jwt|bearer)\s+(.+)$/i', $t, $m)) $t = $m[2];
+    return str_replace(' ', '', $t);
+}
+
+/**
+ * The Authorization header values to try, best first. The SMS Works shows its
+ * generated token in the dashboard and its docs don't say whether the "JWT "
+ * part belongs in the header, so both forms are tried (a rejected key sends
+ * nothing, so a retry is safe) and the one that works is remembered.
+ */
+function sms_auth_candidates(string $token): array
+{
+    $bare  = sms_token_bare($token);
+    if ($bare === '') return [];
+    $forms = ['bare' => $bare, 'jwt' => 'JWT ' . $bare];
+    $pref  = pc_get('SMSWORKS_AUTH_STYLE', '') ?? '';
+    if (!isset($forms[$pref])) $pref = preg_match('/^jwt\s/i', trim($token)) ? 'jwt' : 'bare';
+    return [$pref => $forms[$pref]] + $forms;
+}
+
+/**
+ * What kind of value was pasted, for the Master Admin page (never shows it).
+ * 'token' = a generated JSON Web Token (eyJ….….…), which is right; 'key' =
+ * anything else, usually the API key or secret, which are only used to
+ * generate the token and are rejected if sent with a text.
+ */
+function sms_token_kind(string $token): string
+{
+    $b = sms_token_bare($token);
+    if ($b === '') return 'none';
+    return (str_starts_with($b, 'eyJ') && substr_count($b, '.') === 2) ? 'token' : 'key';
+}
+
 /**
  * Send one text through The SMS Works.
  * @return array{ok:bool, ref:?string, error:?string}
@@ -319,23 +356,34 @@ function sms_provider_send(string $sender, string $to, string $body): array
     ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
     // SMSWORKS_API_URL in .env points at a stand-in server for local testing.
-    $ch = curl_init((env('SMSWORKS_API_URL', '') ?: 'https://api.thesmsworks.co.uk/v1') . '/message/send');
-    curl_setopt_array($ch, [
-        CURLOPT_POST           => true,
-        CURLOPT_POSTFIELDS     => $payload,
-        CURLOPT_RETURNTRANSFER => true,
-        CURLOPT_CONNECTTIMEOUT => 5,
-        CURLOPT_TIMEOUT        => 15,
-        CURLOPT_HTTPHEADER     => [
-            'Content-Type: application/json',
-            'Accept: application/json',
-            'Authorization: ' . $token,
-        ],
-    ]);
-    $raw    = curl_exec($ch);
-    $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    $err    = curl_error($ch);
-    curl_close($ch);
+    $url = (env('SMSWORKS_API_URL', '') ?: 'https://api.thesmsworks.co.uk/v1') . '/message/send';
+    $raw = false; $status = 0; $err = '';
+    foreach (sms_auth_candidates($token) as $style => $auth) {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_POST           => true,
+            CURLOPT_POSTFIELDS     => $payload,
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CONNECTTIMEOUT => 5,
+            CURLOPT_TIMEOUT        => 15,
+            CURLOPT_HTTPHEADER     => [
+                'Content-Type: application/json',
+                'Accept: application/json',
+                'Authorization: ' . $auth,
+            ],
+        ]);
+        $raw    = curl_exec($ch);
+        $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err    = curl_error($ch);
+        curl_close($ch);
+        if ($raw === false || $status !== 401) {
+            // Remember the header form that was accepted, so later sends go first time.
+            if ($status >= 200 && $status < 300 && (pc_get('SMSWORKS_AUTH_STYLE', '') ?? '') !== $style) {
+                try { pc_set('SMSWORKS_AUTH_STYLE', $style); } catch (Throwable $e) { /* just retries next time */ }
+            }
+            break;
+        }
+    }
 
     if ($raw === false) return ['ok' => false, 'ref' => null, 'error' => 'Could not reach the text provider: ' . $err];
     $json = json_decode((string) $raw, true);
@@ -343,7 +391,10 @@ function sms_provider_send(string $sender, string $to, string $body): array
         $ref = is_array($json) ? (string) ($json['messageid'] ?? $json['messageId'] ?? '') : '';
         return ['ok' => true, 'ref' => $ref !== '' ? $ref : null, 'error' => null];
     }
-    $why = [401 => 'the text provider rejected our key', 402 => 'the text account is out of credit',
+    $why = [401 => sms_token_kind($token) === 'key'
+                ? 'the saved code is the API key or secret, not the JWT (Master Admin → Texts)'
+                : 'the text provider rejected our key',
+            402 => 'the text account is out of credit',
             403 => 'the text provider refused the send'][$status] ?? ('the text provider said ' . $status);
     $msg = is_array($json) ? (string) ($json['message'] ?? $json['error'] ?? '') : '';
     return ['ok' => false, 'ref' => null, 'error' => 'Not sent: ' . $why . ($msg !== '' ? ' (' . $msg . ')' : '') . '.'];
