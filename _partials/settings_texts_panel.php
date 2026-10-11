@@ -4,15 +4,20 @@
  * admin/texts_save.php). Expects $clientId and $client from the page.
  */
 require_once __DIR__ . '/sms.php';
+require_once __DIR__ . '/quote_follow_up.php';
 
 $smsOn       = sms_feature_enabled((int) $clientId);
+$qfu         = qfu_settings((int) $clientId);
 $smsSettings = sms_settings((int) $clientId);
 $smsUsed     = sms_used_this_month((int) $clientId);
 $smsLimit    = sms_monthly_limit((int) $clientId);
 $smsPct      = $smsLimit > 0 ? min(100, (int) round($smsUsed * 100 / $smsLimit)) : 100;
 $smsSender   = (string) ($smsSettings['sms_sender_name'] ?? '');
 $smsSuggest  = sms_suggest_sender((string) ($client['company_name'] ?? ''));
-$smsSample   = sms_sample_vars($client);
+$smsSample   = sms_sample_vars($client) + [
+    'quote_number' => 'Q1042',
+    'quote_link'   => qfu_quote_link(str_repeat('a', 64)),   // same length as a real link
+];
 $smsHint     = 'color:#6b7280;font-size:0.875rem;margin:0 0 1rem;max-width:44rem';
 ?>
 <div class="settings-panel" data-panel="texts" role="tabpanel" aria-labelledby="tab-texts">
@@ -95,6 +100,80 @@ $smsHint     = 'color:#6b7280;font-size:0.875rem;margin:0 0 1rem;max-width:44rem
 
             <div class="form-actions">
                 <button type="submit" class="btn btn-primary">Save text settings</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="section">
+        <div class="section-header"><h2 class="section-title">Quote follow-up</h2></div>
+        <form method="post" action="/admin/texts_save.php" class="form" novalidate>
+            <?= csrf_field() ?>
+            <input type="hidden" name="_action" value="follow_up">
+
+            <p style="<?= $smsHint ?>">
+                A friendly nudge to a customer whose quote is still waiting for an answer. It goes once,
+                a set number of days after the quote was sent, between 10am and 8pm. Only quotes to your
+                own (retail) customers that haven't been accepted or declined. Re-sending a quote starts the count again.
+            </p>
+
+            <label style="display:flex;align-items:center;gap:0.5rem;font-weight:600;cursor:pointer;margin-bottom:0.75rem">
+                <input type="checkbox" name="qfu_on" value="1" <?= $qfu['on'] ? 'checked' : '' ?>>
+                Send a quote follow-up
+            </label>
+
+            <div class="form-row" style="max-width:44rem">
+                <div class="form-group">
+                    <label for="qfu_days">Days after the quote is sent</label>
+                    <input id="qfu_days" name="qfu_days" type="number" min="1" max="25" step="1" value="<?= (int) $qfu['days'] ?>">
+                </div>
+                <div class="form-group">
+                    <span style="display:block;font-weight:600;margin-bottom:0.35rem">Send it by</span>
+                    <?php foreach (['sms' => 'Text', 'email' => 'Email', 'both' => 'Text and email'] as $mv => $ml): ?>
+                        <label style="display:inline-flex;align-items:center;gap:0.35rem;margin-right:1rem;font-weight:400;cursor:pointer">
+                            <input type="radio" name="qfu_method" value="<?= e($mv) ?>" <?= $qfu['method'] === $mv ? 'checked' : '' ?>> <?= e($ml) ?>
+                        </label>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+
+            <p style="<?= $smsHint ?>">
+                You can use:
+                <?php $first = true; foreach (qfu_placeholders() as $ph => $desc): ?><?= $first ? '' : ', ' ?><code title="<?= e($desc) ?>"><?= e($ph) ?></code><?php $first = false; endforeach; ?>.
+                The link is best kept to the email &mdash; in a text it makes it two texts long.
+            </p>
+
+            <div style="border:1px solid var(--border);border-radius:8px;padding:0.75rem 1rem;margin-bottom:0.75rem;background:var(--bg-card);max-width:44rem">
+                <div style="font-weight:600;margin-bottom:0.5rem">Text wording</div>
+                <textarea name="qfu_text" rows="3" maxlength="480" class="sms-tpl"
+                          data-default="<?= e(qfu_defaults()['text']) ?>"
+                          style="width:100%;font-family:inherit"><?= e($qfu['text']) ?></textarea>
+                <div style="display:flex;justify-content:space-between;gap:1rem;font-size:0.8125rem;color:#6b7280;margin-top:0.25rem">
+                    <span class="sms-preview" style="font-style:italic"></span>
+                    <span style="white-space:nowrap">
+                        <span class="sms-count"></span>
+                        &middot; <a href="#" class="sms-reset">Use the standard wording</a>
+                    </span>
+                </div>
+            </div>
+
+            <div style="border:1px solid var(--border);border-radius:8px;padding:0.75rem 1rem;margin-bottom:0.75rem;background:var(--bg-card);max-width:44rem">
+                <div style="font-weight:600;margin-bottom:0.5rem">Email wording</div>
+                <div class="form-group">
+                    <label for="qfu_subject">Subject</label>
+                    <input id="qfu_subject" name="qfu_subject" type="text" maxlength="150" value="<?= e($qfu['subject']) ?>">
+                </div>
+                <div class="form-group">
+                    <label for="qfu_email">Message</label>
+                    <textarea id="qfu_email" name="qfu_email" rows="9" maxlength="3000" style="width:100%;font-family:inherit"><?= e($qfu['email']) ?></textarea>
+                </div>
+                <p style="color:#6b7280;font-size:0.8125rem;margin:0">
+                    Sent from your company name; replies go to your reply-to address (Settings &rarr; Company).
+                    Leave a box empty to use the standard wording.
+                </p>
+            </div>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Save quote follow-up</button>
             </div>
         </form>
     </section>

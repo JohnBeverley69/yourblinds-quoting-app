@@ -99,7 +99,7 @@ $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
-$kindLabels = array_map(static fn ($k) => $k['label'], sms_kinds()) + ['test' => 'Test'];
+$kindLabels = array_map(static fn ($k) => $k['label'], sms_kinds()) + ['quote_follow_up' => 'Quote follow-up', 'test' => 'Test'];
 $activeNav  = 'texts';
 ?><!doctype html>
 <html lang="en">

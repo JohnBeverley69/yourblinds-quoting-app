@@ -2,11 +2,12 @@
 declare(strict_types=1);
 
 /**
- * Messages — every text this company has sent its customers, with what
- * happened to it (sent / delivered / failed / not sent and why).
+ * Messages — every text and automatic email this company has sent its
+ * customers, with what happened to it (sent / delivered / failed / not sent
+ * and why).
  *
- * Built on the `messages` table (see _partials/sms.php). Emails will appear
- * here too once they're logged into the same table (messages.channel).
+ * Built on the `messages` table (see _partials/sms.php); messages.channel says
+ * text or email. Emails so far: quote follow-ups (_partials/quote_follow_up.php).
  *
  * Who sees it: admins and staff who can see all customers' jobs (the texts
  * name customers and show their numbers). Paid plans only, like texting.
@@ -40,7 +41,7 @@ $statusGroups = [
 $status = (string) ($_GET['status'] ?? 'all');
 if (!isset($statusGroups[$status])) $status = 'all';
 
-$kindLabels = array_map(static fn ($k) => $k['label'], sms_kinds()) + ['test' => 'Test text'];
+$kindLabels = array_map(static fn ($k) => $k['label'], sms_kinds()) + ['quote_follow_up' => 'Quote follow-up', 'test' => 'Test text'];
 $kind = (string) ($_GET['kind'] ?? '');
 if (!isset($kindLabels[$kind])) $kind = '';
 
@@ -95,8 +96,7 @@ if (sms_ready()) {
     $total  = $counts[$status];
     $offset = ($page - 1) * $perPage;
     $st = db()->prepare(
-        "SELECT m.id, m.created_at, m.kind, m.to_addr, m.body, m.segments, m.status,
-                m.status_detail, m.delivered_at, m.customer_id, m.appointment_id,
+        "SELECT m.*,
                 c.name AS customer_name,
                 (SELECT u.full_name FROM client_users u WHERE u.id = m.user_id) AS sent_by
          $base$statusSql
@@ -144,8 +144,9 @@ $activeNav = 'messages';
         .msg-pill.failed { background: #fee2e2; color: #991b1b; }
         .msg-pill.blocked { background: #f3f4f6; color: #4b5563; }
         .msg-why { display: block; font-size: 0.75rem; color: var(--text-faint); margin-top: 0.15rem; max-width: 16rem; white-space: normal; }
-        .msg-body { max-width: 30rem; white-space: normal; font-size: 0.8125rem; color: var(--text-secondary, #4b5563); }
+        .msg-body { max-width: 30rem; white-space: normal; overflow-wrap: anywhere; font-size: 0.8125rem; color: var(--text-secondary, #4b5563); }
         .msg-muted { color: var(--text-faint); font-size: 0.8125rem; }
+        .msg-chan { display: inline-block; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-faint); border: 1px solid var(--border); border-radius: 4px; padding: 0 0.3rem; margin-right: 0.25rem; }
         .msg-table td { vertical-align: top; }
         .msg-pager { display: flex; gap: 0.75rem; align-items: center; margin-top: 1rem; font-size: 0.875rem; }
         @media (max-width: 720px) {
@@ -164,7 +165,7 @@ $activeNav = 'messages';
             <div>
                 <h1 class="page-title">Messages</h1>
                 <p class="page-subtitle">
-                    Texts sent to your customers, and whether they arrived.
+                    Texts and emails sent to your customers, and whether they arrived.
                     <?php if ($smsOn): ?>
                         &middot; <?= number_format($usedThisMonth) ?> of <?= number_format($limit) ?> texts used in <?= e(date('F')) ?>.
                     <?php endif; ?>
@@ -201,7 +202,7 @@ $activeNav = 'messages';
             <?php if ($customerId > 0): ?><input type="hidden" name="customer" value="<?= (int) $customerId ?>"><?php endif; ?>
             <input type="search" name="q" value="<?= e($q) ?>" placeholder="Search customer, number or wording" aria-label="Search messages">
             <select name="kind" aria-label="Type of text" onchange="this.form.submit()">
-                <option value="">All texts</option>
+                <option value="">All messages</option>
                 <?php foreach ($kindLabels as $k => $label): ?>
                     <option value="<?= e($k) ?>" <?= $k === $kind ? 'selected' : '' ?>><?= e($label) ?></option>
                 <?php endforeach; ?>
@@ -216,13 +217,13 @@ $activeNav = 'messages';
             <div class="table-empty" style="padding:2rem 1rem;text-align:center;border:1px dashed var(--border);border-radius:8px">
                 <?= ($q !== '' || $kind !== '' || $status !== 'all' || $customerId > 0)
                     ? 'No messages match.'
-                    : 'No texts yet. Once you switch texts on in Settings &rarr; Texts, every one sent appears here.' ?>
+                    : 'Nothing sent yet. Once you switch texts or quote follow-ups on in Settings &rarr; Texts, every one sent appears here.' ?>
             </div>
         <?php else: ?>
             <div class="table-wrap">
             <table class="table msg-table">
                 <thead><tr>
-                    <th>When</th><th>Customer</th><th>Text</th><th>Status</th>
+                    <th>When</th><th>Customer</th><th>Message</th><th>Status</th>
                 </tr></thead>
                 <tbody>
                 <?php foreach ($rows as $m):
@@ -244,12 +245,18 @@ $activeNav = 'messages';
                             <div class="msg-muted"><?= e(sms_display_number((string) $m['to_addr'])) ?></div>
                         </td>
                         <td>
+                            <?php $isEmail = (string) ($m['channel'] ?? 'sms') === 'email'; ?>
+                            <span class="msg-chan"><?= $isEmail ? 'Email' : 'Text' ?></span>
                             <strong style="font-size:0.875rem"><?= e($kindLabels[(string) $m['kind']] ?? (string) $m['kind']) ?></strong>
                             <?php if ((int) $m['segments'] > 1): ?><span class="msg-muted">(counts as <?= (int) $m['segments'] ?>)</span><?php endif; ?>
                             <?php if (!empty($m['appointment_id'])): ?>
                                 &middot; <a href="/calendar/view.php?id=<?= (int) $m['appointment_id'] ?>" class="msg-muted">appointment</a>
                             <?php endif; ?>
-                            <div class="msg-body"><?= e((string) $m['body']) ?></div>
+                            <?php if (!empty($m['quote_id'])): ?>
+                                &middot; <a href="/quote-builder/edit.php?id=<?= (int) $m['quote_id'] ?>" class="msg-muted">quote</a>
+                            <?php endif; ?>
+                            <?php $bodyTxt = (string) $m['body']; if ($isEmail && mb_strlen($bodyTxt) > 220) $bodyTxt = mb_substr($bodyTxt, 0, 220) . '…'; ?>
+                            <div class="msg-body"<?= $isEmail ? ' style="white-space:pre-line"' : '' ?>><?= e($bodyTxt) ?></div>
                         </td>
                         <td>
                             <span class="msg-pill <?= e($st) ?>"><?= e($statusLabel[$st] ?? ucfirst($st)) ?></span>

@@ -74,6 +74,14 @@ if ($colExists('messages', 'ref_key')) {
     echo "Added messages.ref_key.\n";
 }
 
+// Quote follow-up: which quote a message was about.
+if ($colExists('messages', 'quote_id')) {
+    echo "messages.quote_id already there.\n";
+} else {
+    $pdo->exec('ALTER TABLE messages ADD COLUMN quote_id INT NULL AFTER appointment_id, ADD KEY idx_msg_quote_kind (quote_id, kind)');
+    echo "Added messages.quote_id.\n";
+}
+
 $settingsCols = [
     'feature_sms'         => 'TINYINT(1) NOT NULL DEFAULT 0',
     'sms_sender_name'     => 'VARCHAR(11) NULL',
@@ -82,6 +90,10 @@ $settingsCols = [
     'sms_day_before'      => 'TINYINT(1) NOT NULL DEFAULT 0',
     'sms_on_the_way'      => 'TINYINT(1) NOT NULL DEFAULT 0',
     'sms_templates'       => 'TEXT NULL',
+    // Quote follow-up (_partials/quote_follow_up.php).
+    'qfu_on'              => 'TINYINT(1) NOT NULL DEFAULT 0',
+    'qfu_days'            => 'INT NOT NULL DEFAULT 7',
+    'qfu_method'          => "VARCHAR(10) NOT NULL DEFAULT 'email'",
 ];
 foreach ($settingsCols as $col => $def) {
     if ($colExists('client_settings', $col)) {

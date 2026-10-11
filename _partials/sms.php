@@ -408,8 +408,8 @@ function sms_provider_send(string $sender, string $to, string $body): array
  * Send (and log) one text for a company. Every check that stops a send is
  * logged too (status 'blocked'), so the Messages log can say why.
  *
- * $ctx: kind (booking_confirm | day_before | on_the_way | test),
- *       customer_id, appointment_id, user_id — all optional.
+ * $ctx: kind (booking_confirm | day_before | on_the_way | quote_follow_up | test),
+ *       customer_id, appointment_id, quote_id, user_id, ref_key — all optional.
  *
  * @return array{ok:bool, status:string, message:string, id:?int}
  */
@@ -420,6 +420,7 @@ function sms_send(int $clientId, string $toRaw, string $body, array $ctx = []): 
     $apptId = isset($ctx['appointment_id']) ? (int) $ctx['appointment_id'] : null;
     $userId = isset($ctx['user_id']) ? (int) $ctx['user_id'] : null;
     $refKey = isset($ctx['ref_key']) ? substr((string) $ctx['ref_key'], 0, 40) : null;
+    $quoteId = isset($ctx['quote_id']) ? (int) $ctx['quote_id'] : null;
 
     if (!sms_ready()) {
         return ['ok' => false, 'status' => 'blocked', 'message' => 'Texting is not set up yet.', 'id' => null];
@@ -454,17 +455,19 @@ function sms_send(int $clientId, string $toRaw, string $body, array $ctx = []): 
         $block = 'Texting is not connected yet.';
     }
 
+    // quote_id only when there is one, so other texts don't depend on that column.
+    $quoteCol = $quoteId !== null ? ', quote_id' : '';
     $ins = db()->prepare(
         "INSERT INTO messages
             (client_id, channel, direction, kind, customer_id, appointment_id, user_id,
-             to_addr, from_addr, body, segments, status, status_detail, provider, ref_key)
-         VALUES (?, 'sms', 'out', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'smsworks', ?)"
+             to_addr, from_addr, body, segments, status, status_detail, provider, ref_key{$quoteCol})
+         VALUES (?, 'sms', 'out', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'smsworks', ?" . ($quoteId !== null ? ', ?' : '') . ")"
     );
-    $ins->execute([
+    $ins->execute(array_merge([
         $clientId, $kind, $custId, $apptId, $userId,
         $to ?? substr(trim($toRaw), 0, 190), $sender, $body, $segments,
         $block === null ? 'queued' : 'blocked', $block, $refKey,
-    ]);
+    ], $quoteId !== null ? [$quoteId] : []));
     $id = (int) db()->lastInsertId();
     if ($block !== null) {
         return ['ok' => false, 'status' => 'blocked', 'message' => $block, 'id' => $id];

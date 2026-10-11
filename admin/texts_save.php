@@ -40,11 +40,13 @@ if ($action === 'save') {
     }
 
     // Wording: store only what differs from the default, so improving a
-    // default later reaches everyone who hasn't changed theirs.
-    $templates = [];
+    // default later reaches everyone who hasn't changed theirs. Other wording
+    // in the same JSON (the quote follow-up) is kept as it is.
+    $templates = sms_settings($clientId)['sms_templates'] ?? [];
     $ticks     = [];
     foreach (sms_kinds() as $kind => $k) {
         $ticks[$k['column']] = !empty($_POST[$k['column']]) ? 1 : 0;
+        unset($templates[$kind]);
         $txt = trim(str_replace("\r\n", "\n", (string) ($_POST['tpl_' . $kind] ?? '')));
         if ($txt !== '' && $txt !== $k['default']) $templates[$kind] = mb_substr($txt, 0, 480);
     }
@@ -58,6 +60,43 @@ if ($action === 'save') {
               . implode(', ', array_map(static fn ($c) => "$c = VALUES($c)", $cols));
         db()->prepare($sql)->execute(array_merge([$clientId], $vals));
         $_SESSION['flash_success'] = 'Text settings saved.';
+    } catch (Throwable $e) {
+        $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage() . ' — has migrate_messages.php been run?';
+    }
+    header('Location: ' . $back);
+    exit;
+}
+
+if ($action === 'follow_up') {
+    require_once __DIR__ . '/../_partials/quote_follow_up.php';
+    $on     = !empty($_POST['qfu_on']) ? 1 : 0;
+    $days   = max(1, min(25, (int) ($_POST['qfu_days'] ?? 7)));
+    $method = (string) ($_POST['qfu_method'] ?? 'email');
+    if (!in_array($method, ['sms', 'email', 'both'], true)) $method = 'email';
+
+    // Same rule as the texts: keep only wording that differs from the standard.
+    $templates = sms_settings($clientId)['sms_templates'] ?? [];
+    $limits    = ['text' => 480, 'subject' => 150, 'email' => 3000];
+    foreach (qfu_template_keys() as $part => $key) {
+        unset($templates[$key]);
+        $txt = trim(str_replace("\r\n", "\n", (string) ($_POST['qfu_' . $part] ?? '')));
+        if ($txt !== '' && $txt !== qfu_defaults()[$part]) $templates[$key] = mb_substr($txt, 0, $limits[$part]);
+    }
+
+    try {
+        db()->prepare(
+            'INSERT INTO client_settings (client_id, qfu_on, qfu_days, qfu_method, sms_templates)
+             VALUES (?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE qfu_on = VALUES(qfu_on), qfu_days = VALUES(qfu_days),
+                                     qfu_method = VALUES(qfu_method), sms_templates = VALUES(sms_templates)'
+        )->execute([$clientId, $on, $days, $method, $templates ? json_encode($templates, JSON_UNESCAPED_UNICODE) : null]);
+        $how = ['sms' => 'by text', 'email' => 'by email', 'both' => 'by text and email'][$method];
+        $_SESSION['flash_success'] = $on
+            ? "Quote follow-up is on: {$days} day" . ($days === 1 ? '' : 's') . " after a quote is sent, {$how}."
+            : 'Quote follow-up is off.';
+        if ($on && $method !== 'email' && sms_clean_sender(sms_settings($clientId, true)['sms_sender_name'] ?? '') === null) {
+            $_SESSION['flash_success'] .= ' Set a sender name above so the texts can go out.';
+        }
     } catch (Throwable $e) {
         $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage() . ' — has migrate_messages.php been run?';
     }
