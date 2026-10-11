@@ -219,6 +219,14 @@ $activeNav = 'quickbooks';
             </ol>
         </div>
 
+        <div class="qb-card">
+            <strong>Swap-over from Blind Matrix</strong>
+            <p style="margin:.4rem 0 0;color:var(--text-secondary);font-size:.875rem">
+                Bring every unpaid Blind Matrix invoice into YourBlinds from Blind Matrix's statements export, so balances and
+                the Bank screen carry on. <a href="/master-admin/bm-opening-balances.php">Swap-over: Blind Matrix balances &rarr;</a>
+            </p>
+        </div>
+
         <div class="qb-card" id="sending">
             <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
                 <strong>Sending to QuickBooks</strong>

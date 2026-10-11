@@ -121,9 +121,10 @@ function pc_table_exists(): bool
     return $has;
 }
 
-function pc_all(): array
+function pc_all(bool $refresh = false): array
 {
     static $cache = null;
+    if ($refresh) $cache = null;
     if ($cache !== null) return $cache;
     $cache = [];
     if (pc_table_exists()) {
@@ -158,8 +159,7 @@ function pc_set(string $name, ?string $value): void
          ON DUPLICATE KEY UPDATE value = VALUES(value)'
     )->execute([$name, $value]);
     // Bust the per-request cache so a save is visible immediately.
-    // (pc_all caches in a static; re-read by clearing via a fresh query next call
-    //  is simplest to reason about — force it by overwriting the static cache.)
+    pc_all(true);
 }
 
 /* ------------------------------------------------------------------ *
