@@ -44,13 +44,7 @@ function br_norm_math(string $s): string {
 // Master products (the "Bev …" catalogue) — the things rules attach to.
 $products = [];
 try {
-    $ps = $pdo->prepare(
-        "SELECT id, name FROM products
-          WHERE client_id = ?
-          ORDER BY name"
-    );
-    $ps->execute([$MASTER]);
-    $products = $ps->fetchAll(PDO::FETCH_ASSOC);
+    $products = factory_products($pdo, $MASTER);   // only what this factory makes
 } catch (Throwable $e) { /* handled in view */ }
 
 $productId = (int) ($_GET['product_id'] ?? $_POST['product_id'] ?? 0);
@@ -390,7 +384,7 @@ require __DIR__ . '/../_partials/factory_head.php';
 <?php if (!$hasTable): ?>
     <div class="br-flash err">The <code>build_variables</code> table isn't there yet — run <code>/setup/migrations/migrate_build_variables.php</code>.</div>
 <?php elseif (!$products): ?>
-    <div class="br-flash err">No products found for this factory.</div>
+    <div class="br-flash err">This factory doesn&rsquo;t make any products yet. Products copied from another factory&rsquo;s catalogue are made by that factory &mdash; to make one here, <a href="/admin/products/index.php">Duplicate it on Products</a> and use the copy.</div>
 <?php else: ?>
 <div class="br-grid">
     <!-- Editor -->

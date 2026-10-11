@@ -109,9 +109,7 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // ---- Load for display ------------------------------------------------------
-$products = $pdo->prepare("SELECT id, name FROM products WHERE client_id = ? ORDER BY name");
-$products->execute([$MASTER]);
-$products = $products->fetchAll(PDO::FETCH_ASSOC);
+$products = factory_products($pdo, $MASTER);   // only what this factory makes
 if ($productId === 0 && $products) $productId = (int) $products[0]['id'];
 
 $steps = [];
