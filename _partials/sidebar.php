@@ -312,6 +312,7 @@ if ($isFactoryConsole) {
                 'trade-accounts' => ['/master-admin/trade-accounts.php', 'Trade accounts', $isSuperAdmin],
                 'wholesale'      => ['/master-admin/wholesale.php',      'Invoices',       true],
                 'bank'           => ['/master-admin/bank.php',           'Bank',           true],
+                'quickbooks'     => ['/master-admin/quickbooks.php',     'QuickBooks',     $isSuperAdmin],
                 'statement-run'  => ['/master-admin/statement-run.php',  'Statements',     true],
                 'commissions'    => ['/master-admin/commissions.php',    'Commissions',    true],
                 // Real manufacturing cost → super-admin only (factory/profit.php requires it).

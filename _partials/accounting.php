@@ -311,10 +311,14 @@ function ac_delete_connection(int $clientId, string $provider): void
         ->execute([$clientId, $provider]);
 }
 
-/** True when the row is connected and its refresh token hasn't expired. */
+/**
+ * True when the row is connected and its refresh token hasn't expired.
+ * 'error' (a refresh that failed for a passing reason — network, outage)
+ * still counts, so the next call tries again; 'needs_reconnect' does not.
+ */
 function ac_is_connected(?array $row): bool
 {
-    if (!$row || ($row['status'] ?? '') !== 'connected') return false;
+    if (!$row || !in_array((string) ($row['status'] ?? ''), ['connected', 'error'], true)) return false;
     $rexp = $row['refresh_expires_at'] ?? null;
     if ($rexp && strtotime((string) $rexp) < time()) return false;
     return true;
@@ -326,13 +330,13 @@ function ac_is_connected(?array $row): bool
  * Returns null if not connected / refresh fails. This is what invoice-push code
  * calls before every API request.
  */
-function ac_valid_access_token(int $clientId, string $provider): ?string
+function ac_valid_access_token(int $clientId, string $provider, bool $forceRefresh = false): ?string
 {
     $row = ac_connection_plain($clientId, $provider);
     if (!ac_is_connected($row)) return null;
 
     $exp = isset($row['access_expires_at']) ? strtotime((string) $row['access_expires_at']) : 0;
-    if ($row['access_token'] && $exp > time() + 120) {
+    if (!$forceRefresh && $row['access_token'] && $exp > time() + 120) {
         return $row['access_token'];   // still good
     }
 
@@ -343,11 +347,16 @@ function ac_valid_access_token(int $clientId, string $provider): ?string
         ac_save_connection($clientId, $provider, $fresh + ['status' => 'connected', 'last_error' => null]);
         return $fresh['access_token'] ?? null;
     } catch (Throwable $e) {
+        // invalid_grant = the refresh token is dead (revoked, expired, or the
+        // company disconnected us from their end) — only a reconnect fixes it,
+        // so say so. Anything else (network, Intuit outage) may pass: one retry
+        // on the next call.
+        $dead = stripos($e->getMessage(), 'invalid_grant') !== false;
         ac_save_connection($clientId, $provider, [
-            'status'     => 'error',
-            'last_error' => 'Token refresh failed: ' . $e->getMessage(),
+            'status'     => $dead ? 'needs_reconnect' : 'error',
+            'last_error' => ($dead ? 'Please reconnect: ' : 'Token refresh failed: ') . $e->getMessage(),
         ]);
-        error_log("Accounting refresh failed (client $clientId, $provider): " . $e->getMessage());
+        ac_log($clientId, $provider, 'refresh_token', 'failed', $e->getMessage());
         return null;
     }
 }
@@ -359,12 +368,19 @@ function ac_valid_access_token(int $clientId, string $provider): ?string
 function ac_http(string $method, string $url, array $opts = []): array
 {
     $ch = curl_init($url);
+    $respHeaders = [];
     $curl = [
         CURLOPT_RETURNTRANSFER => true,
         CURLOPT_CUSTOMREQUEST  => strtoupper($method),
         CURLOPT_CONNECTTIMEOUT => 10,
         CURLOPT_TIMEOUT        => 30,
         CURLOPT_HTTPHEADER     => $opts['headers'] ?? [],
+        // Keep response headers: Intuit's intuit_tid identifies a call for their support.
+        CURLOPT_HEADERFUNCTION => static function ($c, string $line) use (&$respHeaders): int {
+            $p = strpos($line, ':');
+            if ($p !== false) $respHeaders[strtolower(trim(substr($line, 0, $p)))] = trim(substr($line, $p + 1));
+            return strlen($line);
+        },
     ];
     if (isset($opts['userpwd']))  $curl[CURLOPT_USERPWD]   = $opts['userpwd'];
     if (isset($opts['body']))     $curl[CURLOPT_POSTFIELDS] = $opts['body'];
@@ -379,5 +395,58 @@ function ac_http(string $method, string $url, array $opts = []): array
         throw new RuntimeException("$method $url network error: $err");
     }
     $data = $resp === '' ? [] : (json_decode((string) $resp, true) ?: []);
-    return ['status' => $code, 'data' => $data, 'raw' => (string) $resp];
+    return ['status' => $code, 'data' => $data, 'raw' => (string) $resp,
+            'headers' => $respHeaders, 'tid' => $respHeaders['intuit_tid'] ?? null];
+}
+
+/* ------------------------------------------------------------------ *
+ *  Accounting log — every failed call and every send, with the
+ *  provider's own reference (Intuit's intuit_tid) so a problem can be
+ *  shared with their support. Table: accounting_log
+ *  (setup/migrations/migrate_accounting_sync.php). Never throws.
+ * ------------------------------------------------------------------ */
+function ac_log(int $clientId, string $provider, string $action, string $result, ?string $message = null,
+                ?int $httpStatus = null, ?string $tid = null, ?string $ref = null): void
+{
+    try {
+        db()->prepare(
+            'INSERT INTO accounting_log (client_id, provider, action, result, message, http_status, provider_tid, ref)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+        )->execute([$clientId, $provider, mb_substr($action, 0, 60), $result,
+                    $message !== null ? mb_substr($message, 0, 2000) : null, $httpStatus,
+                    $tid !== null ? mb_substr($tid, 0, 80) : null, $ref !== null ? mb_substr($ref, 0, 80) : null]);
+    } catch (Throwable $e) {
+        error_log("ac_log ($clientId $provider $action $result): " . ($message ?? '') . ' / ' . $e->getMessage());
+    }
+}
+
+/**
+ * Whose accounting connection a page is working on. Normally the signed-in
+ * company's; a super-admin passing for=factory works on the platform's own
+ * books (the factory account) from Master Admin.
+ */
+function ac_target_client_id(?string $for = null): int
+{
+    $for = $for ?? (string) ($_REQUEST['for'] ?? '');
+    if ($for === 'factory' && function_exists('is_super_admin') && is_super_admin() && function_exists('factory_client_id')) {
+        return (int) factory_client_id();
+    }
+    $u = function_exists('current_user') ? current_user() : null;
+    return (int) ($u['client_id'] ?? 0);
+}
+
+/** Where to send the user back to after connect / disconnect / mapping. */
+function ac_return_url(?string $for = null): string
+{
+    $for = $for ?? (string) ($_REQUEST['for'] ?? '');
+    return $for === 'factory' ? '/master-admin/quickbooks.php' : '/admin/settings.php#accounting';
+}
+
+/** True when the provider has refused the stored keys for good (reconnect needed). */
+function ac_needs_reconnect(?array $row): bool
+{
+    if (!$row) return false;
+    if ((string) ($row['status'] ?? '') === 'needs_reconnect') return true;
+    $rexp = $row['refresh_expires_at'] ?? null;
+    return $rexp && strtotime((string) $rexp) < time();
 }

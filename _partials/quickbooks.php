@@ -17,13 +17,19 @@ declare(strict_types=1);
  * ?realmId (the company id, needed on every API call). Access token ~1h,
  * refresh token ~101 days (rolls forward on each refresh).
  *
- * Endpoints are stable and hard-coded (Intuit publishes a discovery doc, but
- * these have not changed in years):
+ * OAuth endpoints come from Intuit's discovery document (as Intuit asks),
+ * cached for a day in platform_config; the constants below are the fallback
+ * if it can't be fetched (they're what the document has said for years):
  *   authorize : https://appcenter.intuit.com/connect/oauth2
  *   token     : https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer
  *   revoke    : https://developer.api.intuit.com/v2/oauth2/tokens/revoke
  *   API base  : https://quickbooks.api.intuit.com  (prod)
  *               https://sandbox-quickbooks.api.intuit.com  (sandbox)
+ *
+ * All API calls go through qbo_request(): on a 401 it refreshes the token
+ * and retries once; a refresh token Intuit refuses (invalid_grant) marks the
+ * connection 'needs_reconnect' so the screens ask the company to reconnect;
+ * every failure is written to accounting_log with Intuit's intuit_tid.
  */
 
 require_once __DIR__ . '/accounting.php';
@@ -45,6 +51,46 @@ class QuickBooksProvider implements AccountingProvider
         return in_array($e, ['sandbox', 'production'], true) ? $e : 'sandbox';
     }
 
+    /**
+     * An endpoint from Intuit's discovery document (authorization_endpoint,
+     * token_endpoint, revocation_endpoint), fetched at most once a day and
+     * cached in platform_config. Falls back to $fallback if unavailable.
+     */
+    private function endpoint(string $key, string $fallback): string
+    {
+        // Local testing: the stand-in server named by QBO_API_BASE also issues tokens.
+        $test = (string) (env('QBO_API_BASE', '') ?? '');
+        if ($test !== '' && $key === 'token_endpoint' && $this->environment() !== 'production') {
+            return rtrim($test, '/') . '/token';
+        }
+        static $doc = null;
+        if ($doc === null) {
+            $doc = [];
+            $cacheKey = 'QBO_DISCOVERY_' . strtoupper($this->environment());
+            $cached = json_decode((string) (pc_get($cacheKey, '') ?? ''), true);
+            if (is_array($cached) && (int) ($cached['_fetched'] ?? 0) > time() - 86400) {
+                $doc = $cached;
+            } else {
+                try {
+                    $url = $this->environment() === 'production'
+                        ? 'https://developer.api.intuit.com/.well-known/openid_configuration'
+                        : 'https://developer.api.intuit.com/.well-known/openid_sandbox_configuration';
+                    $r = ac_http('GET', $url, ['headers' => ['Accept: application/json']]);
+                    if ($r['status'] === 200 && !empty($r['data']['token_endpoint'])) {
+                        $doc = $r['data'] + ['_fetched' => time()];
+                        try { pc_set($cacheKey, json_encode($doc)); } catch (Throwable $e) { /* cache optional */ }
+                    } elseif (is_array($cached)) {
+                        $doc = $cached;   // stale beats nothing
+                    }
+                } catch (Throwable $e) {
+                    if (is_array($cached)) $doc = $cached;
+                }
+            }
+        }
+        $v = (string) ($doc[$key] ?? '');
+        return str_starts_with($v, 'https://') ? $v : $fallback;
+    }
+
     private function clientId(): string     { return (string) (pc_get('QUICKBOOKS_CLIENT_ID', '') ?? ''); }
     private function clientSecret(): string { return (string) (pc_get('QUICKBOOKS_CLIENT_SECRET', '') ?? ''); }
 
@@ -60,6 +106,9 @@ class QuickBooksProvider implements AccountingProvider
     /** API host for the current environment. */
     public function apiBase(): string
     {
+        // QBO_API_BASE in .env points at a stand-in server for local testing.
+        $override = (string) (env('QBO_API_BASE', '') ?? '');
+        if ($override !== '' && $this->environment() !== 'production') return rtrim($override, '/');
         return $this->environment() === 'production'
             ? 'https://quickbooks.api.intuit.com'
             : 'https://sandbox-quickbooks.api.intuit.com';
@@ -79,7 +128,7 @@ class QuickBooksProvider implements AccountingProvider
             'redirect_uri'  => $this->redirectUri(),
             'state'         => $state,
         ]);
-        return self::AUTHORIZE_URL . '?' . $q;
+        return $this->endpoint('authorization_endpoint', self::AUTHORIZE_URL) . '?' . $q;
     }
 
     /**
@@ -125,7 +174,7 @@ class QuickBooksProvider implements AccountingProvider
         $rt = (string) ($connPlain['refresh_token'] ?? '');
         if ($rt === '' || !$this->isConfigured()) return;
         try {
-            ac_http('POST', self::REVOKE_URL, [
+            ac_http('POST', $this->endpoint('revocation_endpoint', self::REVOKE_URL), [
                 'userpwd' => $this->clientId() . ':' . $this->clientSecret(),
                 'headers' => ['Accept: application/json', 'Content-Type: application/json'],
                 'body'    => json_encode(['token' => $rt]),
@@ -145,7 +194,7 @@ class QuickBooksProvider implements AccountingProvider
         if (!$this->isConfigured()) {
             throw new RuntimeException('QuickBooks credentials missing (QUICKBOOKS_CLIENT_ID / QUICKBOOKS_CLIENT_SECRET).');
         }
-        $r = ac_http('POST', self::TOKEN_URL, [
+        $r = ac_http('POST', $this->endpoint('token_endpoint', self::TOKEN_URL), [
             'userpwd' => $this->clientId() . ':' . $this->clientSecret(),
             'headers' => [
                 'Accept: application/json',
@@ -215,26 +264,68 @@ class QuickBooksProvider implements AccountingProvider
  * calls the QBO API. Returns decoded ['status','data','raw']. Throws if the
  * client isn't connected. (Phase 2+ mapping/push will build on this.)
  */
-function qbo_api_get(int $clientId, string $path, array $params = []): array
+/**
+ * One QuickBooks API call for a connected company. GET/POST against
+ * /v3/company/{realm}{path}. On a 401 the token is refreshed and the call
+ * retried once (an expired token mid-session is normal); if Intuit then
+ * refuses the refresh, the connection is marked 'needs_reconnect' (see
+ * ac_valid_access_token) and this throws "please reconnect". Every failure
+ * is logged to accounting_log with Intuit's intuit_tid.
+ *
+ * @return array{status:int, data:array, raw:string, tid:?string}
+ */
+function qbo_request(int $clientId, string $method, string $path, array $params = [], ?array $body = null,
+                     string $action = ''): array
 {
-    $token = ac_valid_access_token($clientId, 'quickbooks');
-    if ($token === null) throw new RuntimeException('QuickBooks is not connected for this account.');
     $conn = ac_get_connection($clientId, 'quickbooks');
     $realmId = (string) ($conn['realm_id'] ?? '');
-    if ($realmId === '') throw new RuntimeException('QuickBooks connection has no company id.');
-
+    if ($realmId === '') throw new RuntimeException('QuickBooks is not connected for this account.');
     /** @var QuickBooksProvider $prov */
     $prov = ac_provider('quickbooks');
     $params['minorversion'] = '73';
-    $url = $prov->apiBase() . '/v3/company/' . rawurlencode($realmId) . $path
-         . '?' . http_build_query($params);
-    $r = ac_http('GET', $url, [
-        'headers' => ['Authorization: Bearer ' . $token, 'Accept: application/json'],
-    ]);
+    // RFC 3986 (%20, not +) — the query endpoint is fussy about spaces.
+    $url = $prov->apiBase() . '/v3/company/' . rawurlencode($realmId) . $path . '?' . http_build_query($params, '', '&', PHP_QUERY_RFC3986);
+    $action = $action !== '' ? $action : strtolower($method) . ' ' . strtok($path, '?');
+
+    $r = null;
+    for ($attempt = 0; $attempt < 2; $attempt++) {
+        $token = ac_valid_access_token($clientId, 'quickbooks', $attempt > 0);
+        if ($token === null) {
+            $why = ac_needs_reconnect(ac_get_connection($clientId, 'quickbooks'))
+                ? 'QuickBooks needs reconnecting — open the QuickBooks settings and click Reconnect.'
+                : 'QuickBooks is not connected for this account.';
+            ac_log($clientId, 'quickbooks', $action, 'failed', $why);
+            throw new RuntimeException($why);
+        }
+        $headers = ['Authorization: Bearer ' . $token, 'Accept: application/json'];
+        $opts = ['headers' => $headers];
+        if ($body !== null) {
+            $opts['headers'][] = 'Content-Type: application/json';
+            $opts['body'] = json_encode($body, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        }
+        $r = ac_http($method, $url, $opts);
+        if ($r['status'] !== 401) break;   // only an auth failure is worth a refresh + retry
+    }
+
     if ($r['status'] >= 400) {
-        throw new RuntimeException('QuickBooks API GET ' . $path . ' failed (' . $r['status'] . '): ' . $r['raw']);
+        $fault = $r['data']['Fault']['Error'][0] ?? null;
+        $msg   = $fault ? trim(($fault['Message'] ?? '') . ' — ' . ($fault['Detail'] ?? ''), ' —') : mb_substr($r['raw'], 0, 500);
+        ac_log($clientId, 'quickbooks', $action, 'failed', $msg, $r['status'], $r['tid']);
+        throw new RuntimeException('QuickBooks said: ' . $msg . ' (' . $r['status'] . ($r['tid'] ? ', ref ' . $r['tid'] : '') . ')');
     }
     return $r;
+}
+
+/** Connected API GET (kept for existing callers). */
+function qbo_api_get(int $clientId, string $path, array $params = []): array
+{
+    return qbo_request($clientId, 'GET', $path, $params);
+}
+
+/** Connected API POST of a JSON body, e.g. qbo_api_post($c, '/invoice', [...]). */
+function qbo_api_post(int $clientId, string $path, array $body, string $action = ''): array
+{
+    return qbo_request($clientId, 'POST', $path, [], $body, $action);
 }
 
 /**
@@ -243,22 +334,7 @@ function qbo_api_get(int $clientId, string $path, array $params = []): array
  */
 function qbo_query(int $clientId, string $sql): array
 {
-    $token = ac_valid_access_token($clientId, 'quickbooks');
-    if ($token === null) throw new RuntimeException('QuickBooks is not connected for this account.');
-    $conn = ac_get_connection($clientId, 'quickbooks');
-    $realmId = (string) ($conn['realm_id'] ?? '');
-    if ($realmId === '') throw new RuntimeException('QuickBooks connection has no company id.');
-
-    /** @var QuickBooksProvider $prov */
-    $prov = ac_provider('quickbooks');
-    $url = $prov->apiBase() . '/v3/company/' . rawurlencode($realmId) . '/query'
-         . '?query=' . rawurlencode($sql) . '&minorversion=73';
-    $r = ac_http('GET', $url, [
-        'headers' => ['Authorization: Bearer ' . $token, 'Accept: application/json'],
-    ]);
-    if ($r['status'] >= 400) {
-        throw new RuntimeException('QuickBooks query failed (' . $r['status'] . '): ' . $r['raw']);
-    }
+    $r = qbo_request($clientId, 'GET', '/query', ['query' => $sql], null, 'query');
     return $r['data']['QueryResponse'] ?? [];
 }
 

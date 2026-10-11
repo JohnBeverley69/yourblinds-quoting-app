@@ -2215,7 +2215,7 @@ $activeNav = 'settings';
         // to super-admins until it's proven on the platform's own books (Master
         // Admin) and opened to companies by setting platform_config
         // QBO_CLIENT_CONNECT = 1. A company that is already connected still sees it.
-        $qboShowConnect = $qboIsSuper || $qboLinked || pc_get('QBO_CLIENT_CONNECT', '') === '1';
+        $qboShowConnect = $qboIsSuper || $qboConn || pc_get('QBO_CLIENT_CONNECT', '') === '1';
         ?>
         <?php if ($qboShowConnect): ?>
         <section class="section">
@@ -2246,7 +2246,9 @@ $activeNav = 'settings';
                         <strong style="font-size:1.0625rem">QuickBooks Online</strong>
                         <span style="margin-left:.5rem;font-size:.75rem;padding:.1rem .45rem;border-radius:6px;background:var(--bg-subtle-2);color:var(--text-secondary)"><?= e($envLabel) ?></span>
                     </div>
-                    <?php if ($qboLinked): ?>
+                    <?php if ($qboConn && ac_needs_reconnect($qboConn)): ?>
+                        <span style="font-size:.8125rem;font-weight:600;color:#991b1b">● Needs reconnecting</span>
+                    <?php elseif ($qboLinked): ?>
                         <span style="font-size:.8125rem;font-weight:600;color:#065f46">● Connected</span>
                     <?php elseif ($qboReady): ?>
                         <span style="font-size:.8125rem;color:var(--text-faint)">Not connected</span>
@@ -2254,6 +2256,13 @@ $activeNav = 'settings';
                         <span style="font-size:.8125rem;color:var(--text-faint)">Not set up</span>
                     <?php endif; ?>
                 </div>
+
+                <?php if ($qboConn && ac_needs_reconnect($qboConn)): ?>
+                    <div class="alert alert-error" role="alert" style="margin:.75rem 0 0">
+                        QuickBooks has stopped accepting the link (it happens after about 100 days unused, or if it was
+                        disconnected inside QuickBooks). Click <strong>Connect to QuickBooks</strong> below to reconnect.
+                    </div>
+                <?php endif; ?>
 
                 <?php if ($qboLinked): ?>
                     <p style="margin:.75rem 0 0;color:var(--text-secondary);font-size:.9375rem">

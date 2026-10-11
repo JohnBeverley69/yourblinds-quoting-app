@@ -20,12 +20,15 @@ require __DIR__ . '/../../_partials/quickbooks.php';   // qbo_query / qbo_list_*
 
 requireAdmin();
 $user     = current_user();
-$clientId = (int) $user['client_id'];
+$for      = (string) ($_REQUEST['for'] ?? '') === 'factory' ? 'factory' : '';
+$clientId = ac_target_client_id($for);   // the company, or the platform's own books from Master Admin
+$back     = ac_return_url($for);
+$forQs    = $for !== '' ? '?for=' . $for : '';
 
 $conn = ac_get_connection($clientId, 'quickbooks');
 if (!ac_is_connected($conn)) {
     $_SESSION['flash_error'] = 'Connect QuickBooks first, then set up the mapping.';
-    header('Location: /admin/settings.php#accounting');
+    header('Location: ' . $back);
     exit;
 }
 
@@ -39,7 +42,9 @@ if (!empty($conn['mapping_json'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
 
-    $recordAs = (string) ($_POST['record_as'] ?? 'sales_receipt');
+    // The platform's own books always go on as Invoice + Payment (Annette's way:
+    // invoices only once paid, with the payment against them).
+    $recordAs = $for === 'factory' ? 'invoice_payment' : (string) ($_POST['record_as'] ?? 'sales_receipt');
     if (!in_array($recordAs, ['sales_receipt', 'invoice_payment'], true)) $recordAs = 'sales_receipt';
 
     // Keep the human-readable label alongside each id so Settings can show the
@@ -70,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ];
     ac_save_connection($clientId, 'quickbooks', ['mapping_json' => json_encode($newMapping)]);
     $_SESSION['flash_success'] = 'QuickBooks mapping saved.';
-    header('Location: /admin/accounting/quickbooks-mapping.php');
+    header('Location: /admin/accounting/quickbooks-mapping.php' . $forQs);
     exit;
 }
 
@@ -124,7 +129,7 @@ function map_select(string $name, array $opts, string $current, string $placehol
                 </p>
             </div>
             <div>
-                <a class="btn btn-secondary" href="/admin/settings.php#accounting">&larr; Back to Accounting</a>
+                <a class="btn btn-secondary" href="<?= e($back) ?>">&larr; Back</a>
             </div>
         </div>
 
@@ -139,12 +144,17 @@ function map_select(string $name, array $opts, string $current, string $placehol
                 </div>
             <?php endif; ?>
 
-            <form method="post" action="/admin/accounting/quickbooks-mapping.php">
+            <form method="post" action="/admin/accounting/quickbooks-mapping.php<?= e($forQs) ?>">
                 <?= csrf_field() ?>
                 <input type="hidden" name="items_json"   value='<?= e(json_encode($items)) ?>'>
                 <input type="hidden" name="tax_json"     value='<?= e(json_encode($taxCodes)) ?>'>
                 <input type="hidden" name="deposit_json" value='<?= e(json_encode($accounts["deposit"])) ?>'>
 
+                <?php if ($for === 'factory'): ?>
+                <p class="ui-hint" style="color:var(--text-secondary);font-size:.875rem;margin:0 0 1rem">
+                    Paid sales go on as an <strong>Invoice</strong> with a <strong>Payment</strong> against it, once the money is in.
+                </p>
+                <?php else: ?>
                 <div class="form-row">
                     <label for="record_as">How to record a paid sale</label>
                     <select name="record_as" id="record_as">
@@ -155,6 +165,7 @@ function map_select(string $name, array $opts, string $current, string $placehol
                         You only put paid sales on QuickBooks (cash accounting), so a Sales Receipt is usually the cleanest.
                     </p>
                 </div>
+                <?php endif; ?>
 
                 <div class="form-row">
                     <label for="sales_item_id">Sales item <span style="color:#b91c1c">*</span></label>
