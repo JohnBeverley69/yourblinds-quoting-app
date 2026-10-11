@@ -57,7 +57,9 @@ $swap = static fn (string $old, string $new, float $d): string =>
     '<span class="sw"><span class="a-out" style="--d:' . $d . 's">' . $old . '</span><span class="a-fade" style="--d:' . ($d + .1) . 's">' . $new . '</span></span>';
 
 return [
-        'aud'     => 'admin',
+        // Super-admins only until the live link is opened to companies
+        // (platform_config QBO_CLIENT_CONNECT = 1); companies get the downloads.
+        'aud'     => 'super',
         'section' => 'Settings',
         'title'   => 'Link your accounts package (QuickBooks Online)',
         'eyebrow' => 'Settings · Accounting',

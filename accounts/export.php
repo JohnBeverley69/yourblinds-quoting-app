@@ -10,6 +10,8 @@ declare(strict_types=1);
  *                     accounting package recomputes the tax from TaxType.
  *   ?type=quickbooks → the same invoices, shaped for QuickBooks Online's
  *                     Import data → Invoices (see accounts/_qbo_export.php).
+ *   ?type=sage      → a .zip of customers + one-row-per-invoice quick entries for
+ *                     Sage Accounting (see accounts/_sage_export.php).
  *   ?type=payments  → one row per payment received (the payments ledger).
  *
  *   ?from=YYYY-MM-DD&to=YYYY-MM-DD  → optional date window. Invoices filter on
@@ -42,7 +44,7 @@ acct_require_feature($clientId);
 
 $pdo  = db();
 $type = (string) ($_GET['type'] ?? 'invoices');
-if (!in_array($type, ['invoices', 'quickbooks', 'payments'], true)) $type = 'invoices';
+if (!in_array($type, ['invoices', 'quickbooks', 'sage', 'payments'], true)) $type = 'invoices';
 
 // Date window (optional). Bad/garbled dates are ignored rather than erroring.
 $validDate = static fn (string $s): bool => (bool) preg_match('/^\d{4}-\d{2}-\d{2}$/', $s);
@@ -75,7 +77,7 @@ $gbDate = static fn (?string $sqlDate): string =>
 // =====================================================================
 //  INVOICES — one row per order line item (Xero sales-invoice shape)
 // =====================================================================
-if ($type === 'invoices' || $type === 'quickbooks') {
+if ($type === 'invoices' || $type === 'quickbooks' || $type === 'sage') {
     $where  = ["q.client_id = ?", "q.status IN ('accepted','ordered','fitted','invoiced','paid')"];
     $params = [$clientId];
     $dateExpr = 'COALESCE(q.accepted_at, q.created_at)';
@@ -86,7 +88,14 @@ if ($type === 'invoices' || $type === 'quickbooks') {
     $orders = $pdo->prepare(
         "SELECT q.id, q.quote_number, q.vat_percent, q.total, q.subtotal, q.accepted_at, q.created_at,
                 COALESCE(c.name, q.end_customer_name, 'Customer') AS customer_name,
-                COALESCE(c.email, '')                              AS customer_email
+                COALESCE(c.email, '')                              AS customer_email,
+                q.customer_id,
+                COALESCE(c.address1, q.end_customer_address1, '')  AS addr1,
+                COALESCE(c.address2, q.end_customer_address2, '')  AS addr2,
+                COALESCE(c.town,     q.end_customer_town, '')      AS town,
+                COALESCE(c.county,   q.end_customer_county, '')    AS county,
+                COALESCE(c.postcode, q.end_customer_postcode, '')  AS postcode,
+                COALESCE(c.phone,    q.end_customer_phone, '')     AS phone
            FROM quotes q
            LEFT JOIN customers c ON c.id = q.customer_id
           WHERE $whereSql
@@ -111,6 +120,9 @@ if ($type === 'invoices' || $type === 'quickbooks') {
 
     if ($type === 'quickbooks') {
         require __DIR__ . '/_qbo_export.php';   // writes the file(s) and exits
+    }
+    if ($type === 'sage') {
+        require __DIR__ . '/_sage_export.php';  // customers + quick entries .zip, exits
     }
 
     $fh = $openCsv($slug . '-invoices-' . date('Y-m-d') . '.csv');

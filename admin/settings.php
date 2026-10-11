@@ -2207,15 +2207,31 @@ $activeNav = 'settings';
         </div><!-- /tab: suppliers -->
 
         <div class="settings-panel" data-panel="accounting" role="tabpanel" aria-labelledby="tab-accounting">
+
+        <?php require __DIR__ . '/../_partials/settings_accounting_exports.php'; ?>
+
+        <?php
+        // The live QuickBooks link: built and tested on Intuit's sandbox, but kept
+        // to super-admins until it's proven on the platform's own books (Master
+        // Admin) and opened to companies by setting platform_config
+        // QBO_CLIENT_CONNECT = 1. A company that is already connected still sees it.
+        $qboShowConnect = $qboIsSuper || $qboLinked || pc_get('QBO_CLIENT_CONNECT', '') === '1';
+        ?>
+        <?php if ($qboShowConnect): ?>
         <section class="section">
             <div class="section-header">
-                <h2 class="section-title">Accounting integration</h2>
+                <h2 class="section-title">Live link to QuickBooks</h2>
             </div>
+            <?php if ($qboIsSuper && pc_get('QBO_CLIENT_CONNECT', '') !== '1'): ?>
+                <p class="ui-hint" style="color:#92400e;margin:0 0 .75rem;max-width:44rem;font-size:.875rem">
+                    Only super-admins see this section for now &mdash; companies get the downloads above.
+                </p>
+            <?php endif; ?>
             <p class="ui-hint" style="color:var(--text-secondary);margin:0 0 1.25rem;max-width:44rem">
                 Connect your accounting package and set up the mapping now, so it's ready.
                 You connect on the provider's own site, so YourBlinds never sees your accounting
                 password. <strong>Sending sales across isn't switched on yet</strong> &mdash; until it
-                is, use the CSV exports on the <a href="/accounts/index.php">Payments</a> page.
+                is, use the downloads above.
                 When it is, nothing will be sent until an invoice is paid (cash accounting).
             </p>
 
@@ -2280,11 +2296,6 @@ $activeNav = 'settings';
                 <?php endif; ?>
             </div>
 
-            <div class="section" style="border:1px dashed var(--border);border-radius:10px;padding:.875rem 1.125rem;max-width:44rem;margin-top:1rem">
-                <strong style="color:var(--text-secondary)">Xero &amp; Sage</strong>
-                <span style="margin-left:.5rem;font-size:.8125rem;color:var(--text-faint)">Coming soon — same one-click connect.</span>
-            </div>
-
             <?php if ($qboIsSuper): ?>
             <details style="max-width:44rem;margin-top:1.5rem;border:1px solid var(--border);border-radius:10px;padding:.5rem .75rem" <?= $qboReady ? '' : 'open' ?>>
                 <summary style="cursor:pointer;font-weight:600;color:var(--text-secondary)">
@@ -2330,6 +2341,7 @@ $activeNav = 'settings';
             </details>
             <?php endif; ?>
         </section>
+        <?php endif; /* $qboShowConnect */ ?>
         </div><!-- /tab: accounting -->
 
         <?php require __DIR__ . '/../_partials/settings_texts_panel.php'; ?>

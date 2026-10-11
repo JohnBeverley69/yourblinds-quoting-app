@@ -456,6 +456,8 @@ $activeNav = 'accounts';
                        title="One row per order line — import as sales invoices">Export invoices (CSV)</a>
                     <a href="/accounts/export.php?type=quickbooks<?= $expQs ?>" class="btn btn-secondary"
                        title="The same invoices, ready for QuickBooks Online → Import data → Invoices">Export for QuickBooks (CSV)</a>
+                    <a href="/accounts/export.php?type=sage<?= $expQs ?>" class="btn btn-secondary"
+                       title="Customers + one row per invoice, for Sage Accounting → Quick entries → Import">Export for Sage (.zip)</a>
                     <a href="/accounts/export.php?type=payments<?= $expQs ?>" class="btn btn-secondary"
                        title="Payments received — for your bookkeeper / accounting software">Export payments (CSV)</a>
                 <?php endif; ?>
@@ -470,6 +472,7 @@ $activeNav = 'accounts';
                 remap on import if your chart of accounts differs.
                 <strong>QuickBooks Online?</strong> Use <em>Export for QuickBooks</em> — no minus lines,
                 QuickBooks' VAT codes, and split into files of 100 invoices if the period is bigger.
+                Step-by-step import instructions for each package: <a href="/admin/settings.php#accounting">Settings &rarr; Accounting</a>.
             </p>
         <?php endif; ?>
 
