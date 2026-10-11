@@ -542,6 +542,25 @@ $activeNav = 'calendar';
                     <a href="/quote-builder/new.php?appointment_id=<?= (int) $appt['id'] ?>"
                        class="btn btn-primary">Start quote</a>
                 <?php endif; ?>
+                <?php
+                    // "On my way" text — on the day, booked visits only (Settings → Texts).
+                    require_once __DIR__ . '/../_partials/sms.php';
+                    $otwShow = (string) ($appt['status'] ?? '') === 'booked'
+                        && (string) ($appt['appointment_date'] ?? '') === date('Y-m-d')
+                        && sms_kind_on((int) $clientId, 'on_the_way');
+                    $otwAt = $otwShow ? (sms_on_the_way_sent_at((int) $clientId, [(int) $appt['id']])[(int) $appt['id']] ?? null) : null;
+                ?>
+                <?php if ($otwShow && $otwAt !== null): ?>
+                    <span class="btn btn-secondary" aria-disabled="true" style="cursor:default">Texted &ldquo;on my way&rdquo; <?= e($otwAt) ?></span>
+                <?php elseif ($otwShow): ?>
+                    <form method="post" action="/calendar/on_my_way.php" style="display:inline;margin:0"
+                          onsubmit="return confirm('Text the customer that you are on your way?');">
+                        <?= csrf_field() ?>
+                        <input type="hidden" name="appointment_id" value="<?= (int) $appt['id'] ?>">
+                        <input type="hidden" name="return" value="/calendar/view.php?id=<?= (int) $appt['id'] ?>">
+                        <button type="submit" class="btn btn-success">&#128664; On my way</button>
+                    </form>
+                <?php endif; ?>
                 <a href="/calendar/edit.php?id=<?= (int) $appt['id'] ?>"
                    class="btn btn-secondary">Edit</a>
             </div>

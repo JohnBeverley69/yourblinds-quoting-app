@@ -115,6 +115,14 @@ foreach ($rows as $r) {
 
 $totalUpcoming = array_sum(array_map(static fn ($b) => count($b['items']), $buckets));
 
+// "On my way" text button on today's jobs (Settings → Texts, paid plans).
+require_once __DIR__ . '/../_partials/sms.php';
+$otwOn   = sms_kind_on((int) $clientId, 'on_the_way');
+$otwSent = $otwOn ? sms_on_the_way_sent_at((int) $clientId, array_column($buckets['today']['items'], 'id')) : [];
+$flashMsg = $_SESSION['flash_success'] ?? null;
+$flashErr = $_SESSION['flash_error']   ?? null;
+unset($_SESSION['flash_success'], $_SESSION['flash_error']);
+
 // Helpers — keep the template tidy.
 $fmtTime = static function (?string $time): string {
     if (!$time) return '';
@@ -231,6 +239,12 @@ $activeNav = 'my-schedule';
             text-decoration: none; color: var(--text-body); background: var(--bg-subtle);
         }
         .sched-card .actions a:hover { background: var(--bg-subtle-2); }
+        .otw-form { margin: 0; }
+        .otw-form button {
+            font: inherit; font-size: 0.8125rem; font-weight: 600; padding: 0.25rem 0.75rem;
+            border: 1px solid #15803d; border-radius: 999px; background: #16a34a; color: #fff; cursor: pointer;
+        }
+        .otw-sent { font-size: 0.8125rem; padding: 0.25rem 0.625rem; color: #166534; }
         .sched-card .status {
             display: inline-block;
             font-size: 0.6875rem; font-weight: 700;
@@ -276,6 +290,13 @@ $activeNav = 'my-schedule';
             </div>
         </div>
 
+        <?php if ($flashMsg !== null): ?>
+            <div class="alert alert-success" role="status"><?= e((string) $flashMsg) ?></div>
+        <?php endif; ?>
+        <?php if ($flashErr !== null): ?>
+            <div class="alert alert-error" role="alert"><?= e((string) $flashErr) ?></div>
+        <?php endif; ?>
+
         <div class="schedule-summary">
             <span><strong><?= $totalUpcoming ?></strong> job<?= $totalUpcoming === 1 ? '' : 's' ?> next 2 weeks</span>
             <?php if ($pendingCount > 0): ?>
@@ -288,7 +309,7 @@ $activeNav = 'my-schedule';
         </div>
 
         <?php
-        $renderCard = function (array $r) use ($fmtTime, $fmtAddress, $mapsLink, $telLink): void {
+        $renderCard = function (array $r) use ($fmtTime, $fmtAddress, $mapsLink, $telLink, $otwOn, $otwSent, $todayStr): void {
             $addr = $fmtAddress($r);
             $status = (string) ($r['status'] ?? 'booked');
             ?>
@@ -346,6 +367,19 @@ $activeNav = 'my-schedule';
                              on status=accepted), so it's always an
                              "order" by this point — never a draft quote. -->
                         <a href="/quote-builder/edit.php?id=<?= (int) $r['quote_id'] ?>">Open order</a>
+                    <?php endif; ?>
+                    <?php if ($otwOn && (string) $r['appointment_date'] === $todayStr && $status === 'booked'): ?>
+                        <?php if (isset($otwSent[(int) $r['id']])): ?>
+                            <span class="otw-sent">Texted &ldquo;on my way&rdquo; <?= e($otwSent[(int) $r['id']]) ?></span>
+                        <?php else: ?>
+                            <form method="post" action="/calendar/on_my_way.php" class="otw-form"
+                                  onsubmit="return confirm('Text the customer that you are on your way?');">
+                                <?= csrf_field() ?>
+                                <input type="hidden" name="appointment_id" value="<?= (int) $r['id'] ?>">
+                                <input type="hidden" name="return" value="/calendar/schedule.php">
+                                <button type="submit">&#128664; On my way</button>
+                            </form>
+                        <?php endif; ?>
                     <?php endif; ?>
                 </div>
             </div>
