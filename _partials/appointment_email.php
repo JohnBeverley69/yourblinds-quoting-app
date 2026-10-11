@@ -113,7 +113,7 @@ if (!function_exists('send_appointment_slot_email')) {
             return false;   // unrecognised window / bad date
         }
 
-        $opts = ['from_name' => $fromName];
+        $opts = ['from_name' => $fromName, 'log' => ['client_id' => $clientId, 'kind' => 'appointment']];
         if ($replyTo !== '') {
             $opts['reply_to_email'] = $replyTo;
             $opts['reply_to_name']  = $fromName;

@@ -7,16 +7,20 @@ declare(strict_types=1);
  * and why).
  *
  * Built on the `messages` table (see _partials/sms.php); messages.channel says
- * text or email. Emails so far: quote follow-ups (_partials/quote_follow_up.php).
+ * text or email. Emails are logged by mailer_send() when the sender passes
+ * $opts['log'] (_partials/email_log.php) — quotes, invoices, receipts,
+ * appointments, follow-ups, trade documents, supplier orders.
  *
- * Who sees it: admins and staff who can see all customers' jobs (the texts
- * name customers and show their numbers). Paid plans only, like texting.
+ * Who sees it: admins and staff who can see all customers' jobs (the messages
+ * name customers and show their numbers). Every plan — emails are logged for
+ * all; texts are the Silver/Gold extra.
  */
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require_once __DIR__ . '/../_partials/customer_access.php';
 require_once __DIR__ . '/../_partials/sms.php';
+require_once __DIR__ . '/../_partials/email_log.php';
 
 requireLogin();
 
@@ -41,9 +45,11 @@ $statusGroups = [
 $status = (string) ($_GET['status'] ?? 'all');
 if (!isset($statusGroups[$status])) $status = 'all';
 
-$kindLabels = array_map(static fn ($k) => $k['label'], sms_kinds()) + ['quote_follow_up' => 'Quote follow-up', 'test' => 'Test text'];
+$kindLabels = array_map(static fn ($k) => $k['label'], sms_kinds()) + email_log_kinds() + ['test' => 'Test text'];
 $kind = (string) ($_GET['kind'] ?? '');
 if (!isset($kindLabels[$kind])) $kind = '';
+$channel = (string) ($_GET['channel'] ?? '');
+if (!in_array($channel, ['sms', 'email'], true)) $channel = '';
 
 $q          = trim((string) ($_GET['q'] ?? ''));
 $customerId = (int) ($_GET['customer'] ?? 0);
@@ -59,11 +65,13 @@ if (sms_ready()) {
     $where  = ['m.client_id = ?'];
     $params = [$clientId];
     if ($kind !== '')     { $where[] = 'm.kind = ?';        $params[] = $kind; }
+    if ($channel !== '')  { $where[] = 'm.channel = ?';     $params[] = $channel; }
     if ($customerId > 0)  { $where[] = 'm.customer_id = ?'; $params[] = $customerId; }
     if ($q !== '') {
         $digits = preg_replace('/\D/', '', $q) ?? '';
         $like   = '%' . str_replace(['\\', '%', '_'], ['\\\\', '\\%', '\\_'], $q) . '%';
-        $or     = ['c.name LIKE ?', 'm.body LIKE ?'];
+        $or     = ['c.name LIKE ?', 'm.body LIKE ?', 'm.to_addr LIKE ?'];   // to_addr: email addresses
+        $params[] = $like;
         $params[] = $like;
         $params[] = $like;
         if (strlen($digits) >= 4) {
@@ -113,8 +121,8 @@ if (sms_ready()) {
 }
 
 $pages = max(1, (int) ceil($total / $perPage));
-$link = static function (array $over) use ($status, $kind, $q, $customerId): string {
-    $p = array_merge(['status' => $status, 'kind' => $kind, 'q' => $q, 'customer' => $customerId ?: '', 'page' => 1], $over);
+$link = static function (array $over) use ($status, $kind, $channel, $q, $customerId): string {
+    $p = array_merge(['status' => $status, 'channel' => $channel, 'kind' => $kind, 'q' => $q, 'customer' => $customerId ?: '', 'page' => 1], $over);
     if ((int) $p['page'] <= 1) unset($p['page']);
     $p = array_filter($p, static fn ($v) => $v !== '' && $v !== 'all' && $v !== null);
     return '/messages/index.php' . ($p ? '?' . http_build_query($p) : '');
@@ -178,7 +186,7 @@ $activeNav = 'messages';
 
         <?php if (!$smsOn): ?>
             <div class="alert alert-info" role="status">
-                Customer texts are included in the Silver and Gold plans. <a href="/billing/index.php">See plans</a>
+                Emails you send are logged here on every plan. Customer texts are included in the Silver and Gold plans. <a href="/billing/index.php">See plans</a>
             </div>
         <?php endif; ?>
 
@@ -200,22 +208,27 @@ $activeNav = 'messages';
         <form method="get" action="/messages/index.php" class="msg-filters" role="search">
             <?php if ($status !== 'all'): ?><input type="hidden" name="status" value="<?= e($status) ?>"><?php endif; ?>
             <?php if ($customerId > 0): ?><input type="hidden" name="customer" value="<?= (int) $customerId ?>"><?php endif; ?>
-            <input type="search" name="q" value="<?= e($q) ?>" placeholder="Search customer, number or wording" aria-label="Search messages">
-            <select name="kind" aria-label="Type of text" onchange="this.form.submit()">
+            <input type="search" name="q" value="<?= e($q) ?>" placeholder="Search customer, number, email or wording" aria-label="Search messages">
+            <select name="channel" aria-label="Texts or emails" onchange="this.form.submit()">
+                <option value="">Texts and emails</option>
+                <option value="sms" <?= $channel === 'sms' ? 'selected' : '' ?>>Texts only</option>
+                <option value="email" <?= $channel === 'email' ? 'selected' : '' ?>>Emails only</option>
+            </select>
+            <select name="kind" aria-label="Type of message" onchange="this.form.submit()">
                 <option value="">All messages</option>
                 <?php foreach ($kindLabels as $k => $label): ?>
                     <option value="<?= e($k) ?>" <?= $k === $kind ? 'selected' : '' ?>><?= e($label) ?></option>
                 <?php endforeach; ?>
             </select>
             <button type="submit" class="btn btn-secondary">Search</button>
-            <?php if ($q !== '' || $kind !== ''): ?>
-                <a href="<?= e($link(['q' => '', 'kind' => '', 'page' => 1])) ?>">Clear</a>
+            <?php if ($q !== '' || $kind !== '' || $channel !== ''): ?>
+                <a href="<?= e($link(['q' => '', 'kind' => '', 'channel' => '', 'page' => 1])) ?>">Clear</a>
             <?php endif; ?>
         </form>
 
         <?php if (!$rows): ?>
             <div class="table-empty" style="padding:2rem 1rem;text-align:center;border:1px dashed var(--border);border-radius:8px">
-                <?= ($q !== '' || $kind !== '' || $status !== 'all' || $customerId > 0)
+                <?= ($q !== '' || $kind !== '' || $channel !== '' || $status !== 'all' || $customerId > 0)
                     ? 'No messages match.'
                     : 'Nothing sent yet. Once you switch texts or quote follow-ups on in Settings &rarr; Texts, every one sent appears here.' ?>
             </div>

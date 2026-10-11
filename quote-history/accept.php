@@ -254,7 +254,8 @@ if ($action === 'accept') {
             require_once __DIR__ . '/../_partials/tenant_mail.php';
             // HTML copy shows {{quote_link}} as a short "View your quote" link.
             mailer_send($custEmail, $subject, $body, null, null,
-                tenant_mail_opts($pdo, (int) $quote['client_id']) + ['links' => [$viewUrl => 'View your quote']]);
+                tenant_mail_opts($pdo, (int) $quote['client_id']) + ['links' => [$viewUrl => 'View your quote'],
+                    'log' => ['client_id' => (int) $quote['client_id'], 'kind' => 'quote_accepted', 'quote_id' => (int) $quote['id']]]);
         }
     }
 

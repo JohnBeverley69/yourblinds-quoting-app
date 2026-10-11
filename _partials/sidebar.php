@@ -137,19 +137,6 @@ $hasAccountsFeature = $hasAccountsFeature ?? (function () use ($user) {
     }
 })();
 
-// Customer texts (paid plans, or the factory account) — gates the Messages log.
-$hasSmsFeature = $hasSmsFeature ?? (function () use ($user) {
-    $cid = (int) ($user['client_id'] ?? 0);
-    if (function_exists('is_factory_client') && is_factory_client($cid)) return true;
-    try {
-        $st = db()->prepare('SELECT COALESCE(feature_sms, 0) FROM client_settings WHERE client_id = ? LIMIT 1');
-        $st->execute([$cid]);
-        return ((int) $st->fetchColumn()) === 1;
-    } catch (Throwable $e) {
-        return false;   // migrate_messages.php not run yet
-    }
-})();
-
 // [href, label, visible]. Order = display order. Calendar is the de-facto
 // landing page (login redirects there); a separate "Dashboard" link was
 // just a placeholder pointing at /admin/index.php and got removed.
@@ -206,7 +193,7 @@ $navSections = [
         'name'  => 'Retail',
         'items' => [
             'customers'     => ['/customer-manager/index.php',                'Customers', $canSeeCustomers],
-            'messages'      => ['/messages/index.php',                        'Messages',  $hasSmsFeature && $canSeeAllJobs],
+            'messages'      => ['/messages/index.php',                        'Messages',  $canSeeAllJobs],   // email log on every plan; texts are paid
             'retail-quotes' => ['/orders/index.php?scope=quotes&type=retail', 'Quotes',    $hasQuotes && $canSeeQuoteHistory],
             'retail-orders' => ['/orders/index.php?scope=orders&type=retail', 'Orders',    $hasQuotes && $canSeeOrders],
             // The tenant's own customers' payments (retail A/R). Key/route stay

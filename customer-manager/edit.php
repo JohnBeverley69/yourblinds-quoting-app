@@ -197,7 +197,7 @@ $activeNav = 'customers';
                         ?>
                         <?php if ($custTexts > 0): ?>
                             <a href="/messages/index.php?customer=<?= (int) $id ?>" style="display:block;margin-top:0.35rem;font-size:0.875rem">
-                                <?= $custTexts ?> text<?= $custTexts === 1 ? '' : 's' ?> sent &rarr;
+                                <?= $custTexts ?> message<?= $custTexts === 1 ? "" : "s" ?> sent &rarr;
                             </a>
                         <?php endif; ?>
                     </div>

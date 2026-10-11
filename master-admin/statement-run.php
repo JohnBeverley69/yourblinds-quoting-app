@@ -87,7 +87,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['_action'] ?? '') === 'emai
 
         require_once __DIR__ . '/../_partials/tenant_mail.php';
         $ok = mailer_send($email, $subject, $body, ['content' => $pdf, 'filename' => $fname, 'mime' => 'application/pdf'],
-                          null, tenant_mail_opts($pdo, $factory));
+                          null, tenant_mail_opts($pdo, $factory)
+                              + ['log' => ['client_id' => $factory, 'kind' => 'statement', 'user_id' => $userId]]);
         ar_log_statement_email($pdo, $factory, $accId, $pAsAt, $email, $closing, $ok ? 'sent' : 'failed', $userId);
         $ok ? $sent++ : $fail++;
     }

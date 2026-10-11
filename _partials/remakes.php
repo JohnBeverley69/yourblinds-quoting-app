@@ -913,6 +913,7 @@ function rm_notify_account(PDO $pdo, int $factory, int $id): string
         require_once __DIR__ . '/tenant_mail.php';
         $opts = tenant_mail_opts($pdo, $factory);
         $opts['links'] = [$url => 'View your order'];
+        $opts['log']   = ['client_id' => $factory, 'kind' => 'remake', 'quote_id' => (int) $r['source_quote_id']];
         return mailer_send($email, $subject, $body, null, null, $opts) ? $email : '';
     } catch (Throwable $e) {
         error_log('rm_notify_account: ' . $e->getMessage());

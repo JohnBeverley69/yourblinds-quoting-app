@@ -1394,7 +1394,8 @@ function qb_send_receipt_if_due(PDO $pdo, int $quoteId, int $clientId): bool
 
     require_once __DIR__ . '/../_partials/tenant_mail.php';
     $ok = mailer_send($email, $subject, $body, ['content' => $pdf, 'filename' => $filename, 'mime' => 'application/pdf'],
-                      null, tenant_mail_opts($pdo, $clientId));
+                      null, tenant_mail_opts($pdo, $clientId)
+                          + ['log' => ['client_id' => $clientId, 'kind' => 'receipt', 'quote_id' => $quoteId]]);
     if (!$ok) {
         error_log("qb_send_receipt_if_due: email failed for quote $quoteId");
         return false;

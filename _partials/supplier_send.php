@@ -80,7 +80,9 @@ function supplier_send_group(PDO $pdo, array $ctx, array $pdfItems, string $emai
         implode("\n", $bodyLines),
         $attachment,
         null,
-        $mailOpts
+        $mailOpts + ['log' => ['client_id' => (int) ($logMeta['client_id'] ?? 0), 'kind' => 'supplier_order',
+                               'quote_id' => (int) ($logMeta['quote_id'] ?? 0),
+                               'user_id' => (int) ($logMeta['sent_by_user_id'] ?? 0)]]
     );
 
     if ($ok) {
