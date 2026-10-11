@@ -88,6 +88,7 @@ pl_head(
   <tr><th>Provider</th><th>What they do</th><th>What they receive</th></tr>
   <tr><td>Cloudways (DigitalOcean Holdings)</td><td>Hosts the servers the service and its database run on</td><td>All data held in the service</td></tr>
   <tr><td>AuthSMTP</td><td>Sends the service&rsquo;s emails (quotes, notifications, password resets)</td><td>Email addresses and message content</td></tr>
+  <tr><td>The SMS Works</td><td>Sends customer text messages (appointment confirmations and reminders), only for businesses that switch texts on</td><td>Mobile numbers and message content</td></tr>
   <tr><td>PayPal</td><td>Takes subscription payments</td><td>Billing contact and payment details (entered directly with PayPal)</td></tr>
   <tr><td>Google (Maps Platform)</td><td>Maps, directions and address search</td><td>Addresses and locations being looked up</td></tr>
   <tr><td>Postcoder (Allies Computing)</td><td>UK postcode-to-address look-up</td><td>Postcodes being looked up</td></tr>
