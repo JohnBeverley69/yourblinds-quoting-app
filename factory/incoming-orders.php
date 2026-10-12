@@ -260,9 +260,10 @@ foreach ($orders as $o) {
     } else {
         $ls = ['open'];
         // A new order's only job is Process order (it sends the POs too).
-        if ($fj === '') $ls[] = 'new';
-        if ($fj !== '' && $t['make']['made'] < $t['make']['units']) $ls[] = 'make';
-        foreach ($fj !== '' ? $t['buy'] : [] as $b) {
+        $np = ot_needs_process($fj, $t);   // new, or taken in the old way and never floored
+        if ($np) $ls[] = 'new';
+        if (!$np && $t['make']['made'] < $t['make']['units']) $ls[] = 'make';
+        foreach (!$np ? $t['buy'] : [] as $b) {
             if ($b['state'] === 'to_order') $ls[] = $b['problem'] === 'failed' ? 'problem' : 'order';
             if ($b['state'] === 'ordered')  $ls[] = 'awaiting';
         }
@@ -271,6 +272,7 @@ foreach ($orders as $o) {
     $lanesOf[$qid] = array_values(array_unique($ls));
     foreach ($lanesOf[$qid] as $l) $laneCount[$l]++;
 }
+$newCount = $laneCount['new'];   // includes old Received orders that still need Process
 $orders = array_values(array_filter($orders, static fn ($o) => in_array($lane, $lanesOf[(int) $o['id']] ?? [], true)));
 
 /**
@@ -292,7 +294,7 @@ unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 // the previous stage (for a one-step rewind).
 $STAGE_META = [
     'new'           => ['New',           '#b91c1c', '#fee2e2'],   // not yet received — stands out
-    'received'      => ['Received',     '#1e40af', '#dbeafe'],
+    'received'      => ['Taken in',     '#1e40af', '#dbeafe'],
     'in_production' => ['In production', '#92600a', '#fef3c7'],
     'made'          => ['Made',          '#166534', '#dcfce7'],
     'dispatched'    => ['Dispatched',    '#334155', '#e2e8f0'],
@@ -598,23 +600,31 @@ require __DIR__ . '/../_partials/factory_head.php';
                             $fjNow = (string) ($o['factory_status'] ?? '');
                             $stCols = [
                                 'new'           => ['#b91c1c', '#fee2e2'],
-                                'confirmed'     => ['#1e40af', '#dbeafe'],
+                                'awaiting_supplier' => ['#7c3aed', '#ede9fe'],
                                 'in_production' => ['#b5730f', '#f7ecd6'],
                                 'ready'         => ['#245ea3', '#dde8f6'],
                                 'dispatched'    => ['#0d7a67', '#d6ece6'],
                             ];
-                            $stKey = ($fjNow === '' && $fs !== 'dispatched') ? 'new' : (string) $fs;
+                            // No Received stage any more (Process order): an order still needing
+                            // Process is New; the old 'confirmed' is whatever its parts say.
+                            $stKey = ($fs !== 'dispatched' && ot_needs_process($fjNow, $t)) ? 'new' : (string) $fs;
+                            if ($stKey === 'confirmed') $stKey = $t['make']['made'] < $t['make']['units'] ? 'in_production' : 'awaiting_supplier';
+                            // This tab's part only (John, 2026-10-12: every tab showing the whole
+                            // order made switching tabs pointless). All open etc. show everything.
+                            $showMake = !in_array($lane, ['awaiting', 'problem', 'order'], true);
+                            $showBuy  = $lane !== 'make';
+                            $partLane = in_array($lane, ['make', 'awaiting', 'problem', 'order'], true);
                             $stLabel = [
-                                'new' => 'New', 'confirmed' => 'Received', 'in_production' => 'In production',
+                                'new' => 'New', 'in_production' => 'In production', 'awaiting_supplier' => 'Awaiting supplier',
                                 'ready' => 'Ready', 'dispatched' => 'Dispatched',
                             ][$stKey] ?? ($status !== '' ? ucfirst($status) : 'New');
                             $sc = $stCols[$stKey] ?? ['#5b6b7f', '#eef1f4'];
                         ?>
-                        <span class="io-stage" style="color:<?= $sc[0] ?>;background:<?= $sc[1] ?>;font-weight:700"><?= e($stLabel) ?></span>
+                        <?php if (!$partLane): ?><span class="io-stage" style="color:<?= $sc[0] ?>;background:<?= $sc[1] ?>;font-weight:700"><?= e($stLabel) ?></span><?php endif; ?>
                         <?php
                             // MAKE track — the blinds we make, linked to the floor.
                             $mk = $t['make'];
-                            if ($showLanes && $mk['units'] > 0):
+                            if ($showLanes && $showMake && $mk['units'] > 0):
                                 $mkCls = $mk['made'] >= $mk['units'] ? 't-done' : ($mk['released'] ? 't-prog' : 't-idle');
                                 $mkTxt = $mk['released'] || $mk['made'] > 0
                                     ? $mk['made'] . '/' . $mk['units'] . ' made'
@@ -624,7 +634,7 @@ require __DIR__ . '/../_partials/factory_head.php';
                         <?php endif; ?>
                         <?php
                             // BUY-IN track — one chip per supplier.
-                            foreach ($showLanes ? $t['buy'] : [] as $supName => $b):
+                            foreach ($showLanes && $showBuy ? $t['buy'] : [] as $supName => $b):
                                 $bCls = $b['state'] === 'received' ? 't-done' : ($b['state'] === 'ordered' ? 't-wait' : 't-todo');
                                 $bTxt = $b['state'] === 'received' ? 'received'
                                       : ($b['state'] === 'ordered' ? 'ordered ' . date('j M', strtotime((string) $b['sent_at']))
@@ -635,7 +645,7 @@ require __DIR__ . '/../_partials/factory_head.php';
                         ?>
                             <span class="io-track <?= $bCls ?>" title="<?= (int) $b['units'] ?> bought in from <?= e($supName) ?><?= $noMail ? ' — no valid order email set for this supplier (Settings › Suppliers), so it can\'t be ordered' : '' ?>"><span class="k">BUY</span> <?= e($supName) ?> · <?= e($bTxt) ?><?php if ($noMail && $b['problem'] !== 'failed'): ?> <span class="warn">· no email set</span><?php endif; ?></span>
                         <?php endforeach; ?>
-                        <?php foreach ($showLanes && $fjNow !== '' ? $t['buy'] : [] as $supName => $b): if ($b['problem'] !== 'failed') continue; ?>
+                        <?php foreach ($showLanes && $showBuy && !ot_needs_process($fjNow, $t) ? $t['buy'] : [] as $supName => $b): if ($b['problem'] !== 'failed') continue; ?>
                             <span class="io-problem">&#9888; Couldn't order from <?= e($supName) ?>: <?= e($b['reason']) ?></span>
                         <?php endforeach; ?>
                         <?php
@@ -649,10 +659,10 @@ require __DIR__ . '/../_partials/factory_head.php';
                                 $parts[] = e((int) $cnt . ' ' . $lbl);   // escaped, then wrapped in <b> below
                             }
                         ?>
-                        <?php if ($parts): ?>
+                        <?php if ($parts && $showMake): ?>
                             <span class="io-waiting" title="Parts still to make on the floor">Floor: <b><?= implode('</b> · <b>', $parts) ?></b></span>
                         <?php endif; ?>
-                        <?php if ($showLanes && $fs !== 'dispatched' && $t['total_units'] > 0): ?>
+                        <?php if ($showLanes && !$partLane && $fs !== 'dispatched' && $t['total_units'] > 0): ?>
                             <span class="io-ready">
                                 <b><?= (int) $t['ready_units'] ?> of <?= (int) $t['total_units'] ?> ready</b><?php if ($t['waiting_on']): ?> · waiting on <?= e(implode(' · ', $t['waiting_on'])) ?><?php endif; ?>
                             </span>
@@ -666,11 +676,21 @@ require __DIR__ . '/../_partials/factory_head.php';
                             // button is the first one belonging to this tab (in All open,
                             // simply the first); the others go under "⋯".
                             $jobs = $jobsFor($o, $t, (string) $fs);
-                            $main = null;
+                            // In a supplier tab every supplier in it gets its own button (two
+                            // suppliers never queue behind one), elsewhere just the first.
+                            $mains = [];
                             foreach ($jobs as $i => $j) {
-                                if ($lane === 'open' || $j['lane'] === $lane) { $main = $j; unset($jobs[$i]); break; }
+                                if ($lane === 'open' || $j['lane'] === $lane) {
+                                    $mains[] = $j; unset($jobs[$i]);
+                                    if (!in_array($lane, ['awaiting', 'problem', 'order'], true)) break;
+                                }
                             }
                             $backQ = '&back=' . rawurlencode($lane);
+                            // A part tab keeps to its part in the "⋯" menu too.
+                            if ($partLane) {
+                                $grp = $lane === 'make' ? ['make'] : ['awaiting', 'problem', 'order'];
+                                $jobs = array_filter($jobs, static fn ($j) => in_array($j['lane'], $grp, true));
+                            }
                             // Render one job as a button (main) or a menu item.
                             $jobHtml = static function (array $j, int $qid, string $lane, string $cls, string $backQ) use ($ref, $t): string {
                                 $h  = csrf_field() . '<input type="hidden" name="quote_id" value="' . $qid . '">'
@@ -708,7 +728,7 @@ require __DIR__ . '/../_partials/factory_head.php';
                             $floorOpen = ($fjNow === 'in_production' && $prog !== null && $prog['total'] > 0 && $prog['done'] < $prog['total'])
                                 ? (int) $prog['total'] - (int) $prog['done'] : 0;
                         ?>
-                            <?php if ($main !== null): ?><?= $jobHtml($main, $qid, $lane, 'io-btn advance', $backQ) ?><?php endif; ?>
+                            <?php foreach ($mains as $mj): ?><?= $jobHtml($mj, $qid, $lane, 'io-btn advance', $backQ) ?><?php endforeach; ?>
                             <details class="io-more">
                                 <summary aria-label="More actions for <?= e($ref) ?>" title="More actions">&middot;&middot;&middot;</summary>
                                 <div class="io-menu">
@@ -716,9 +736,9 @@ require __DIR__ . '/../_partials/factory_head.php';
                                     <?php if ($jobs): ?><hr><?php endif; ?>
                                     <a href="/factory/worksheet-print.php?order=<?= $qid ?>" target="_blank" rel="noopener">Worksheet</a>
                                     <a href="/factory/edit-order.php?order=<?= $qid ?>">Edit order</a>
-                                    <?php if ($t['make']['released']): ?><a href="/factory/order-areas.php?order=<?= $qid ?>">See progress</a><?php endif; ?>
-                                    <?php if ($fjNow !== '' && $t['buy']): /* the backstop: re-send a supplier's whole PO by hand */ ?><a href="/factory/order-suppliers.php?id=<?= $qid ?><?= e($backQ) ?>">Re-send to a supplier&hellip;</a><?php endif; ?>
-                                    <?php if ($fjNow === 'in_production'): ?>
+                                    <?php if ($showMake && $t['make']['released']): ?><a href="/factory/order-areas.php?order=<?= $qid ?>">See progress</a><?php endif; ?>
+                                    <?php if ($showBuy && $fjNow !== '' && $t['buy']): /* the backstop: re-send a supplier's whole PO by hand */ ?><a href="/factory/order-suppliers.php?id=<?= $qid ?><?= e($backQ) ?>">Re-send to a supplier&hellip;</a><?php endif; ?>
+                                    <?php if ($showMake && $fjNow === 'in_production'): ?>
                                         <form method="post" action="/factory/set-status.php"<?php if ($floorOpen > 0): ?> onsubmit="return confirm(<?= e(json_encode('The floor still has ' . $floorOpen . ' of ' . (int) $prog['total'] . ' blind' . ((int) $prog['total'] === 1 ? '' : 's') . ' to finish. Mark the order made anyway? The remaining blinds will be marked complete on the floor.')) ?>)"<?php endif; ?>>
                                             <?= csrf_field() ?>
                                             <input type="hidden" name="quote_id" value="<?= $qid ?>">
@@ -750,6 +770,8 @@ require __DIR__ . '/../_partials/factory_head.php';
                         </thead>
                         <tbody>
                             <?php foreach ($lines as $ln):
+                                $ltk = $t['lines'][(int) $ln['id']]['track'] ?? '';
+                                if ((!$showMake && $ltk === 'make') || (!$showBuy && $ltk === 'buy')) continue;   // this tab's part only
                                 $fab = trim((string) ($ln['fabric_name_snapshot'] ?? ''));
                                 $col = trim((string) ($ln['fabric_colour_snapshot'] ?? ''));
                                 $sys = trim((string) ($ln['system_name_snapshot'] ?? ''));

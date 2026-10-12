@@ -28,7 +28,6 @@ function fc_stage_meta(): array
     return [
         'notplaced'     => ['Quotes',         '#475569', '#e2e8f0'],
         'new'           => ['New',            '#b91c1c', '#fee2e2'],
-        'confirmed'     => ['Received',       '#5b6b7f', '#e6ebf1'],
         'in_production' => ['In production',  '#b5730f', '#f7ecd6'],
         'awaiting_supplier' => ['Awaiting supplier', '#7c3aed', '#ede9fe'],
         'ready'         => ['Ready',          '#245ea3', '#dde8f6'],
@@ -47,7 +46,7 @@ function fc_stage_pill(string $key): string
  * An order's status is two separate things, shown side by side (John, 2026-10-11):
  *
  *   MAKING — where the blinds are: fc_stage_meta() above, the same words as
- *            Incoming orders (New / Received / In production / Ready / Dispatched).
+ *            Incoming orders (New / In production / Awaiting supplier / Ready / Dispatched).
  *   MONEY  — where the bill is, from the factory's own invoices:
  *            Not invoiced → Needs invoicing (dispatched, no invoice yet) →
  *            Invoiced · awaiting payment / Part paid / Overdue → Paid.
@@ -83,7 +82,7 @@ function fc_filter_groups(): array
 {
     $g = [
         ''          => ['open' => 'Open'],
-        'To make'   => ['new' => 'New', 'confirmed' => 'Received', 'in_production' => 'In production', 'awaiting_supplier' => 'Awaiting supplier', 'ready' => 'Ready to go'],
+        'To make'   => ['new' => 'New', 'in_production' => 'In production', 'awaiting_supplier' => 'Awaiting supplier', 'ready' => 'Ready to go'],
         'To bill'   => ['needs_invoicing' => 'Needs invoicing', 'awaiting' => 'Awaiting payment', 'overdue' => 'Overdue'],
         'Finished'  => ['done' => 'Done'],
         'Not placed'=> ['notplaced' => 'Quotes'],
@@ -115,6 +114,7 @@ function fc_filter_match(array $r, string $key): bool
         case 'needs_invoicing':
         case 'overdue':  return $r['money'] === $key;
         case 'dispatched': return $r['stage'] === 'dispatched';   // old links
+        case 'confirmed':  return $r['stage'] === 'new';          // old links: Received is gone, those are New now
         default:         return $r['stage'] === $key;
     }
 }
@@ -217,7 +217,6 @@ function fc_next_action(array $r): array
         // Process order takes the order in, puts it on the floor and emails its
         // suppliers — same words as the Incoming orders and Pipeline buttons.
         case 'new':           return ['Process order',    '/factory/incoming-orders.php?lane=new', false];
-        case 'confirmed':     return ['Start production', '/factory/incoming-orders.php', false];
         case 'in_production':
         case 'awaiting_supplier': return fc_making_next($r['tracks'] ?? null);
         case 'ready':         return ['Dispatch', $acct ? '/master-admin/dispatch.php' : '/factory/incoming-orders.php', false];
@@ -259,13 +258,21 @@ function fc_making_next(?array $t): array
  * (e.g. 20/20 verticals made, Forest Wood with Home Creations): call it
  * "Awaiting supplier", the same name as the Incoming orders tab.
  * fulfilment_stage itself stays 'in_production'; this is display only.
+ *
+ * There is no Received stage on the console any more (John, 2026-10-12: Process
+ * order makes it redundant). fc_making_stage()'s internal 'confirmed' becomes
+ * New when the order still needs Process (ot_needs_process), else whatever its
+ * parts say: being made, or waiting on a supplier (e.g. an all-bought-in order
+ * whose purchase order couldn't go).
  */
-function fc_supplier_stage(string $stage, ?array $t): string
+function fc_supplier_stage(string $stage, ?array $t, string $fj = ''): string
 {
-    if (!in_array($stage, ['confirmed', 'in_production'], true) || !$t) return $stage;
-    if ($t['make']['made'] < $t['make']['units']) return $stage;
+    if (!in_array($stage, ['confirmed', 'in_production'], true)) return $stage;
+    if (!$t) return $stage === 'confirmed' ? 'new' : $stage;
+    if (ot_needs_process($fj, $t)) return 'new';
+    if ($t['make']['made'] < $t['make']['units']) return 'in_production';
     foreach ($t['buy'] as $b) if ($b['state'] !== 'received') return 'awaiting_supplier';
-    return $stage;
+    return 'in_production';
 }
 
 /** fc_stage_meta() key from a quote's status, fulfilment_stage and factory_jobs.status. */
@@ -301,7 +308,7 @@ function fc_order_status(PDO $pdo, int $factoryId, array $quote): array
         'tracks'      => ot_order_tracks($pdo, [$id], $factoryId)[$id] ?? null,
         'account_key' => (int) ($quote['account_client_id'] ?? 0) > 0 ? (int) $quote['account_client_id'] : ($own ? 0 : (int) ($quote['client_id'] ?? 0)),
     ];
-    $r['stage'] = fc_supplier_stage($r['stage'], $r['tracks']);
+    $r['stage'] = fc_supplier_stage($r['stage'], $r['tracks'], $fj);
     $r['billed_here'] = !($own && $r['account_key'] === 0);
     $r['money'] = fc_money_state($r);
     $r['done']  = $r['stage'] === 'dispatched' && in_array($r['money'], ['paid', 'none'], true);
@@ -351,7 +358,7 @@ function fc_orders(PDO $pdo, int $factoryId): array
     // The 400-row cap below is ordered so it can only ever drop FINISHED
     // orders. It used to be a plain created_at DESC cap, and both consumers
     // count the truncated set in PHP rather than asking the database:
-    // factory/dashboard.php loops the rows into the New / Received / In
+    // factory/dashboard.php loops the rows into the New / In
     // production / Ready tiles, and factory/orders.php builds its stage chips
     // the same way. So past 400 orders the rows discarded were the OLDEST —
     // exactly where a job stuck in production for three months sits. The tile
@@ -429,7 +436,7 @@ function fc_orders(PDO $pdo, int $factoryId): array
         $r['tracks']    = $tracks[$id] ?? null;
         $own = (int) $r['client_id'] === $factoryId;
         $stage = fc_making_stage((string) $r['status'], (string) ($r['fulfilment_stage'] ?? ''), (string) ($r['factory_status'] ?? ''));
-        $stage = fc_supplier_stage($stage, $r['tracks']);
+        $stage = fc_supplier_stage($stage, $r['tracks'], (string) ($r['factory_status'] ?? ''));
         $r['stage']   = $stage;
         $r['account'] = trim((string) ($r['account_name'] ?? '')) !== ''
             ? (string) $r['account_name']

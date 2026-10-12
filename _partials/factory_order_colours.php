@@ -73,7 +73,6 @@ function fpc_default_columns(): array
 {
     return [
         'pl_new'               => ['label' => 'New',                     'color' => '#b91c1c'],
-        'pl_confirmed'         => ['label' => 'Received',                'color' => '#5b6b7f'],
         'pl_in_production'     => ['label' => 'In production',           'color' => '#b5730f'],
         'pl_awaiting_supplier' => ['label' => 'Awaiting supplier',       'color' => '#7c3aed'],
         'pl_ready'             => ['label' => 'Ready to go',             'color' => '#245ea3'],

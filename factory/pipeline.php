@@ -12,6 +12,11 @@ declare(strict_types=1);
  * order-suppliers) with back=pipeline, and the job rules are ot_next_jobs() —
  * the same ones Incoming orders uses — so nothing can skip a check.
  *
+ * No Received column (Process order made it redundant). While an order is being
+ * made it's split by part ($partsFor): its made part in In production and its
+ * bought-in part in Awaiting supplier, which lists each supplier with its own
+ * Received / Retry button. Once everything is in it's one card in Ready to go.
+ *
  * Cards move only by their buttons (no dragging). Paid cards drop off after 7
  * days and stay on Orders. The money columns are the accounts side, main
  * factory only (fc_money_visible, #1063). Built on fc_orders().
@@ -36,10 +41,9 @@ $account = (int) ($_GET['account'] ?? -1);
 
 // The columns, in order: key => [title, hint, colour].
 $COLS = [
-    'new'               => ['New',               'Placed, not taken in yet',                     '#b91c1c'],
-    'confirmed'         => ['Received',          'In, not started on the floor',                 '#5b6b7f'],
-    'in_production'     => ['In production',     'Being made on the floor',                      '#b5730f'],
-    'awaiting_supplier' => ['Awaiting supplier', 'Our part is made, waiting on a bought-in item', '#7c3aed'],
+    'new'               => ['New',               'Placed, not processed yet',                    '#b91c1c'],
+    'in_production'     => ['In production',     'The blinds we make, on the floor',             '#b5730f'],
+    'awaiting_supplier' => ['Awaiting supplier', 'The bought-in items, ordered from suppliers',  '#7c3aed'],
     'ready'             => ['Ready to go',       'Everything made and in',                       '#245ea3'],
 ];
 if ($money) {
@@ -109,10 +113,37 @@ if ($ids) {
     } catch (Throwable $e) { /* pre due-date schema */ }
 }
 
-$board = array_fill_keys(array_keys($COLS), []);
-foreach ($shown as $r) {
+// An order's PARTS while it's being made (John, 2026-10-12): the blinds we make
+// sit in In production and the bought-in items in Awaiting supplier, each as its
+// own card, so a venetian on order with Hunter Douglas isn't shown as "in
+// production". Each part leaves its column when it's done (the floor finishes /
+// every supplier is received); once everything is in, the order is one card again.
+// Returns [[column, part]], part = all | make | buy.
+$partsFor = static function (array $r) use ($colFor): array {
     $c = $colFor($r);
-    if ($c !== null && isset($board[$c])) $board[$c][] = $r;
+    if ($c === null) return [];
+    $t = $r['tracks'] ?? null;
+    if (!$t || !in_array($c, ['in_production', 'awaiting_supplier'], true)) return [[$c, 'all']];
+    $hasMake  = $t['make']['units'] > 0;
+    $hasBuy   = !empty($t['buy']);
+    $makeOpen = $hasMake && $t['make']['made'] < $t['make']['units'];
+    $buyOpen  = false;
+    foreach ($t['buy'] as $b) if ($b['state'] !== 'received') $buyOpen = true;
+    $out = [];
+    if ($makeOpen) $out[] = ['in_production', $hasBuy ? 'make' : 'all'];
+    if ($buyOpen)  $out[] = ['awaiting_supplier', $hasMake ? 'buy' : 'all'];
+    return $out ?: [[$c, 'all']];
+};
+
+$board = array_fill_keys(array_keys($COLS), []);
+$openIds = [];
+foreach ($shown as $r) {
+    $parts = $partsFor($r);
+    foreach ($parts as [$c, $part]) {
+        if (!isset($board[$c])) continue;
+        $board[$c][] = $r + ['_part' => $part, '_split' => count($parts) > 1];
+        if ($c !== 'paid' && $c !== 'dispatched') $openIds[(int) $r['id']] = true;
+    }
 }
 // Oldest first inside a column: the one waiting longest is at the top.
 foreach ($board as &$cards) usort($cards, static fn ($a, $b) => strcmp((string) $a['created_at'], (string) $b['created_at']));
@@ -197,6 +228,44 @@ $action = static function (array $r) use ($money, $csrf): string {
     return '';
 };
 
+// The bought-in part of a card: one line per supplier, with its items, where
+// it's up to and its OWN button (Received from / Retry / Order new item), so
+// two suppliers never queue behind one button.
+$buyBlock = static function (array $r, array $lines) use ($csrf): string {
+    $qid = (int) $r['id'];
+    $t   = $r['tracks'];
+    $h   = $csrf . '<input type="hidden" name="quote_id" value="' . $qid . '"><input type="hidden" name="back" value="pipeline">';
+    $out = '<ul class="pl-lines pl-sups">';
+    foreach ($t['buy'] as $sup => $b) {
+        $sup = (string) $sup;
+        $items = [];
+        foreach ($lines as $l) {
+            $lt = $t['lines'][(int) $l['id']] ?? null;
+            if ($lt && $lt['track'] === 'buy' && $lt['supplier'] === $sup) $items[] = $l['product_name_snapshot'] . ' × ' . (int) $l['quantity'];
+        }
+        $btn = '';
+        if ($b['state'] === 'received') {
+            [$txt, $tone] = ['✓ Received' . ($b['received_at'] ? ' ' . date('j M', strtotime((string) $b['received_at'])) : ''), 'ok'];
+        } elseif ($b['problem'] === 'failed') {
+            [$txt, $tone] = ["Couldn't order · " . $b['reason'], 'bad'];
+            $btn = po_button($qid, (string) $r['quote_number'], $t, 'pipeline', 'pl-btn bad', 'Retry ' . $sup, $sup, $b['reason']);
+        } elseif ($b['problem'] === 'new_item') {
+            [$txt, $tone] = ['New item to order', 'bad'];
+            $btn = po_button($qid, (string) $r['quote_number'], $t, 'pipeline', 'pl-btn bad', 'Order new item from ' . $sup, $sup);
+        } elseif ($b['state'] === 'ordered') {
+            [$txt, $tone] = ['Ordered ' . date('j M', strtotime((string) $b['sent_at'])), 'amber'];
+            $btn = '<form method="post" action="/factory/boughtin-received.php">' . $h
+                 . '<input type="hidden" name="supplier_name" value="' . e($sup) . '">'
+                 . '<button type="submit" class="pl-btn purple">Received from ' . e($sup) . '</button></form>';
+        } else {
+            [$txt, $tone] = ['Not ordered yet', 'bad'];
+        }
+        $out .= '<li><span class="what"><b>' . e($sup) . '</b>' . ($items ? ' &middot; ' . e(implode(', ', $items)) : '') . '</span>'
+              . '<span class="' . $tone . '">' . e($txt) . '</span>' . $btn . '</li>';
+    }
+    return $out . '</ul>';
+};
+
 $qs = static function (array $over) use ($q, $account): string {
     $p = array_merge(['q' => $q, 'account' => $account], $over);
     if ($p['q'] === '') unset($p['q']);
@@ -208,8 +277,7 @@ $flashOk  = (string) ($_SESSION['flash_success'] ?? ''); unset($_SESSION['flash_
 $flashErr = (string) ($_SESSION['flash_error']   ?? ''); unset($_SESSION['flash_error']);
 
 $counts = array_map('count', $board);
-$open   = 0;
-foreach ($board as $k => $cards) if ($k !== 'paid' && $k !== 'dispatched') $open += count($cards);
+$open   = count($openIds);   // orders, not cards: a split order is two cards
 
 $activeNav = 'factory-pipeline';
 ?><!doctype html>
@@ -265,6 +333,11 @@ $activeNav = 'factory-pipeline';
       .pl-lines .bad { color:#b91c1c; font-weight:700; }
       .pl-lines .amber { color:#9a5b00; font-weight:600; }
       .pl-lines .muted { color:var(--text-faint); }
+      /* A split order: its made part and its bought-in part are separate cards. */
+      .pl-part { font-size:.72rem; font-weight:700; color:var(--text-muted); background:var(--bg-subtle-2); border-radius:6px; padding:.15rem .4rem; }
+      .pl-ptag { flex:none; font-size:.6rem; font-weight:800; letter-spacing:.03em; text-transform:uppercase; border-radius:4px; padding:.1rem .3rem; background:var(--bg-subtle-2); color:var(--text-muted); }
+      .pl-sups li { gap:.2rem; }
+      .pl-sups li form, .pl-sups li .po-form { margin-top:.15rem; }
       .pl-money { font-size:.78rem; }
       .pl-card form { margin:0; }
       .pl-btn { display:block; width:100%; box-sizing:border-box; text-align:center; font:inherit; font-size:.8125rem; font-weight:600;
@@ -329,13 +402,35 @@ $activeNav = 'factory-pipeline';
           <?php if (!$cards): ?><p class="pl-empty">Nothing here.</p><?php endif; ?>
           <?php foreach ($cards as $r): $qid = (int) $r['id']; $due = $dueBy[$qid] ?? ''; ?>
             <?php
+              // Which part of the order this card is (see $partsFor). A made
+              // part lists only the blinds we make; a bought-in part lists the
+              // suppliers, each with its own button.
+              $part    = (string) $r['_part'];
+              $tk      = $r['tracks'] ?? null;
+              $buyView = $tk && !empty($tk['buy']) && ($part === 'buy' || ($part === 'all' && $key === 'awaiting_supplier'));
+              $cardLines = $linesBy[$qid] ?? [];
+              if ($part === 'make') {
+                  $cardLines = array_values(array_filter($cardLines, static fn ($l) => ($tk['lines'][(int) $l['id']]['track'] ?? '') === 'make'));
+              }
+              $partNote = ''; $partTip = '';
+              if ($part === 'make') {
+                  $partNote = 'Made part' . ($r['_split'] ? ' · 1 of 2' : ' · bought-in all in');
+                  $partTip  = $r['_split'] ? 'The bought-in items are a separate card in Awaiting supplier' : 'Every bought-in item has arrived';
+              } elseif ($part === 'buy') {
+                  $partNote = 'Bought-in part' . ($r['_split'] ? ' · 2 of 2' : ' · ours all made');
+                  $partTip  = $r['_split'] ? 'The blinds we make are a separate card in In production' : 'Every blind we make is finished';
+              }
               // Red dot on the collapsed line when something needs chasing: a
               // supplier item not ordered / not in yet, or money that's due.
               $urgent = in_array($r['money'], ['needs_invoicing', 'overdue'], true);
-              foreach ($linesBy[$qid] ?? [] as $l) if ($lineStatus($r, $l)[1] === 'bad') { $urgent = true; break; }
+              if ($buyView) {
+                  foreach ($tk['buy'] as $b) if ($b['state'] !== 'received') { $urgent = true; break; }
+              } else {
+                  foreach ($cardLines as $l) if ($lineStatus($r, $l)[1] === 'bad') { $urgent = true; break; }
+              }
             ?>
             <details class="pl-card"<?= ($q !== '' || $account >= 0) ? ' open' : '' ?>>
-              <summary title="<?= e($r['account']) ?>"><span class="pl-sn"><?= e((string) $r['quote_number']) ?></span><?php if ($r['remake_of'] !== ''): ?><span class="pl-rm" title="Remake of <?= e($r['remake_of']) ?>">R</span><?php endif; ?><?php if ($urgent): ?><span class="pl-dot" aria-label="Needs attention"></span><?php endif; ?></summary>
+              <summary title="<?= e($r['account']) ?>"><span class="pl-sn"><?= e((string) $r['quote_number']) ?></span><?php if ($part === 'make'): ?><span class="pl-ptag" title="The blinds we make">made</span><?php elseif ($part === 'buy'): ?><span class="pl-ptag" title="The bought-in items">bought-in</span><?php endif; ?><?php if ($r['remake_of'] !== ''): ?><span class="pl-rm" title="Remake of <?= e($r['remake_of']) ?>">R</span><?php endif; ?><?php if ($urgent): ?><span class="pl-dot" aria-label="Needs attention"></span><?php endif; ?></summary>
               <div class="pl-body">
               <div class="pl-row">
                 <a class="pl-num" href="<?= e($r['open_url']) ?>">Open order &rarr;</a>
@@ -344,9 +439,12 @@ $activeNav = 'factory-pipeline';
               <div class="pl-acc"><?= e($r['account']) ?><?php if (trim((string) ($r['customer_reference'] ?? '')) !== ''): ?> <span class="pl-meta">&middot; <?= e((string) $r['customer_reference']) ?></span><?php endif; ?>
                 <?php if ($r['remake_of'] !== ''): ?> <?= rm_badge($r['remake_of']) ?><?php endif; ?></div>
               <?php if ($due !== '' && $r['stage'] !== 'dispatched'): ?><div class="pl-meta">Due <?= e(date('j M', strtotime($due))) ?></div><?php endif; ?>
-              <?php if (!empty($linesBy[$qid])): ?>
+              <?php if ($partNote !== ''): ?><div class="pl-part pl-part-<?= e($part) ?>" title="<?= e($partTip) ?>"><?= e($partNote) ?></div><?php endif; ?>
+              <?php if ($buyView): ?>
+                <?= $buyBlock($r, $linesBy[$qid] ?? []) ?>
+              <?php elseif ($cardLines): ?>
                 <ul class="pl-lines">
-                  <?php foreach ($linesBy[$qid] as $l): [$st, $tone] = $lineStatus($r, $l); ?>
+                  <?php foreach ($cardLines as $l): [$st, $tone] = $lineStatus($r, $l); ?>
                     <li><span class="what"><?= e((string) $l['product_name_snapshot']) ?> &times; <?= (int) $l['quantity'] ?></span>
                         <?php if ($st !== ''): ?><span class="<?= e($tone) ?>"><?= e($st) ?></span><?php endif; ?></li>
                   <?php endforeach; ?>
@@ -361,7 +459,11 @@ $activeNav = 'factory-pipeline';
               <?php elseif ($money && $key === 'to_invoice'): ?>
                 <div class="pl-money"><?= fc_money_pill($r['money']) ?></div>
               <?php endif; ?>
-              <?= $action($r) ?>
+              <?php
+                // A bought-in card's buttons are on its supplier lines. A made
+                // part offers only the floor's step (See progress).
+                if (!$buyView) echo $action($part === 'make' && $tk ? (['tracks' => ['buy' => []] + $tk] + $r) : $r);
+              ?>
               </div>
             </details>
           <?php endforeach; ?>

@@ -18,7 +18,8 @@ declare(strict_types=1);
  *     Due, lines, money pill + invoices), each line's status ($lineStatus), the
  *     one button ($action), the footer;
  *   - _partials/order_tracks.php — ot_next_jobs(): the order the jobs come in
- *     (process, retry, order_new, order, start, receive, dispatch, floor);
+ *     (process, retry, order_new, order, start, receive, dispatch, floor); $partsFor splits a
+ *     mixed order into a made card and a bought-in card;
  *   - _partials/factory_console.php — fc_money_meta() pills, fc_money_visible();
  *   - _partials/process_order.php + factory/process-order.php — Process order,
  *     its summary, Retry, Order new item from;
@@ -34,16 +35,16 @@ declare(strict_types=1);
 // ── The voice-over first: scene timings are read from it ───────────────
 $S = [
     ['1', 'What the Pipeline is for', 'The Pipeline is the quickest way to answer the question, where\'s my order? Open it from the Work menu. It shows every open order in columns, from left to right. New is on the left, and Paid is on the right. Each order is one short line. Click it to open its card, which says what the order is waiting on, and gives you the one next step to take.', 1],
-    ['2', 'The making columns', 'The first five columns follow the making. New means placed, but not taken in yet. Received means it is in, but not started on the floor. In production means it is being made. Awaiting supplier means our part is made, but a bought-in item has not arrived yet. And Ready to go means everything is made and in.', 2],
+    ['2', 'The making columns', 'The first four columns follow the making. New means placed, but not processed yet. In production holds the blinds we make, while the floor makes them. Awaiting supplier holds the bought-in items, until each supplier\'s goods arrive. So an order with both is split into two cards, one in each column, marked made and bought-in. And Ready to go means everything is made and in, so the order is one card again.', 2],
     ['3', 'The money columns', 'Then come the money columns. Dispatched, to invoice, means it has gone out, with no invoice yet. Awaiting payment means it is invoiced, but not paid. Paid shows the last seven days, then the card leaves the board, though it stays on the Orders list. These columns only show for the main factory\'s accounts staff. Everyone else sees one Dispatched column instead.', 3],
     ['4', 'Counts and order', 'Each column has a count at the top, and a short line saying what it holds. The oldest card sits at the top, so the order that has waited longest comes first. Above the board, a row of totals says how many orders are open, how many are waiting on suppliers, and how many are ready to go. Overdue invoices show there too, in red.', 4],
     ['5', 'One line per order', 'To keep the board tidy, each order is one line, showing just its order number. A red dot means something needs chasing: a bought-in item not ordered or not in yet, or money that needs invoicing or is overdue. Click the number to open its card, and click again to close it. Open all and Close all, at the top right, do every card at once.', 5],
     ['6', 'What an open card shows', 'Now look at an open card. At the top is Open order. Click it to open the order itself. Next to it is the value. Under that is the account, and their reference. A purple REMAKE badge marks a remake of an earlier order. Then comes the due date, so you can see at a glance when it has to go out.', 6],
-    ['7', 'Each line has its own status', 'Under that, every line on the order has its own status. A blind made here says Not started, then Being made, three of five, then a tick and Made. A bought-in item says the supplier, not ordered yet, then Waiting on the supplier, with the date it was ordered. So on a mixed order, you can see exactly which part is holding it up.', 7],
+    ['7', 'Each line has its own status', 'Under that, every line on the order has its own status. A blind made here says Not started, then Being made, three of five, then a tick and Made. A bought-in item says the supplier, not ordered yet, then Waiting on the supplier, with the date it was ordered. So on a mixed order, the made part and the bought-in part each have their own card, and you can see exactly which part is holding it up.', 7],
     ['8', 'The money on a card', 'Once an order has an invoice, its card shows the money pill. Invoiced, awaiting payment, Part paid, Overdue, or Paid. Under the pill is each invoice number, what is still owed, and when it is due. Once it is paid, it shows the date it was paid instead.', 8],
     ['9', 'Remakes on the board', 'Remakes show up too. A remake\'s line has a purple R after the order number. Hover over the R to see which order it is a remake of. Above the board, the totals say how many remakes are in progress. If any are waiting for approval, a purple link takes you to the Remakes page. Those are not orders yet, so they have no card.', 9],
     ['10', 'One button: taking it in', 'Each card has one button, and it is always the next step. The same rules as Incoming orders decide it, so the two never disagree. A new order shows Process order. First, a summary says what will happen: which blinds go to the floor, and which suppliers are emailed their purchase order. Click Process order, and it does all of that in one go. While the floor is making it, the button says See progress, so you can see how far each blind has got.', 10],
-    ['11', 'Bought-in items', 'Bought-in items are ordered by Process order, so there is nothing more to click. If a purchase order cannot go, say the supplier has no order email, the card says Couldn\'t order from, and the supplier\'s name, in red, with the reason. Fix it, then click Retry. An item added after processing shows New item to order. When the goods arrive, click Received from, and the supplier\'s name. Once everything is made and in, the card moves on to Ready to go.', 11],
+    ['11', 'Bought-in items', 'Bought-in items are ordered by Process order, so there is nothing more to click. If a purchase order cannot go, say the supplier has no order email, the card says Couldn\'t order from, and the supplier\'s name, in red, with the reason. Fix it, then click Retry. An item added after processing shows New item to order. On the bought-in card, each supplier has its own line and its own button. When the goods arrive, click Received from, and the supplier\'s name. Once everything is made and in, the order moves on to Ready to go as one card.', 11],
     ['12', 'Sending it out', 'On a ready order, the button says Add to today\'s run. It takes you to the Dispatch tray, where the van run is ticked and printed, just as before. Once it has gone out, the card moves on to Dispatched, to invoice. If you do not see the money columns, the button simply says Dispatch.', 12],
     ['13', 'Getting paid', 'In the money columns, the button follows the bill. Raise invoice, in green, when it has gone out with no invoice. Record payment, while it is waiting to be paid, or part paid. And Chase payment, in red, once it is overdue. That opens the account, so you can see everything they owe.', 13],
     ['14', 'Cards move by their buttons', 'You cannot drag a card from one column to another. Cards move with their buttons, and with the work itself, like the floor finishing the blinds. That way nothing skips a check. For example, an order cannot be dispatched until every blind is made, and every bought-in item has been received.', 14],
@@ -63,10 +64,9 @@ $ptr = '<span class="gd-ptr"><svg viewBox="0 0 16 22" aria-hidden="true"><path d
 
 // ── The columns, as factory/pipeline.php $COLS: key => [title, hint, colour] ──
 $COLS = [
-    'new'               => ['New',                     'Placed, not taken in yet',                      '#b91c1c'],
-    'confirmed'         => ['Received',                'In, not started on the floor',                  '#5b6b7f'],
-    'in_production'     => ['In production',           'Being made on the floor',                       '#b5730f'],
-    'awaiting_supplier' => ['Awaiting supplier',       'Our part is made, waiting on a bought-in item', '#7c3aed'],
+    'new'               => ['New',                     'Placed, not processed yet',                     '#b91c1c'],
+    'in_production'     => ['In production',           'The blinds we make, on the floor',              '#b5730f'],
+    'awaiting_supplier' => ['Awaiting supplier',       'The bought-in items, ordered from suppliers',   '#7c3aed'],
     'ready'             => ['Ready to go',             'Everything made and in',                        '#245ea3'],
     'to_invoice'        => ['Dispatched &middot; to invoice', 'Gone out, no invoice yet',               '#0d7a67'],
     'to_pay'            => ['Awaiting payment',        'Invoiced, not paid yet',                        '#1d4f8c'],
@@ -88,25 +88,29 @@ $rmb = '<span class="rmb">REMAKE</span>';
 
 /**
  * The cards. Each: number, value, account, their ref, remake?, due, lines
- * [[what, status, tone]], money pill key|'' , invoice lines, button [label, colour class].
+ * [[what, status, tone]], money pill key|'' , invoice lines, button [label, colour class],
+ * and optionally the part note of a split order ("Made part · 1 of 2").
+ *
+ * CST-2026-0009 is a mixed order: rollers made here (C, In production) and a PF
+ * Venetian from Hunter Douglas (CB, Awaiting supplier) — two cards, as
+ * factory/pipeline.php's $partsFor splits it.
  */
 $CARDS = [
     'A' => ['ABC-2026-0041', '&pound;412.80', 'ABC Blinds', 'PO 4471', false, 'Due 16 Oct',
             [['Roller Blind &times; 4', 'Not started', 'muted'], ['Vertical Blind &times; 2', 'Not started', 'muted']],
             '', [], ['Process order', '']],
-    'B' => ['HUG-2026-0012', '&pound;101.15', 'Hughes Interiors', 'Kitchen', false, 'Due 15 Oct',
-            [['Roller Blind &times; 2', 'Not started', 'muted']],
-            '', [], ['Start production', '']],
     'C' => ['CST-2026-0009', '&pound;318.60', 'Coastal Shutters', 'CS-120', false, 'Due 14 Oct',
-            [['Roller Blind &times; 3', 'Being made &middot; 1 of 3', 'amber'], ['PF Venetian &times; 1', 'Couldn&rsquo;t order from Hunter Douglas &middot; No order email is set for Hunter Douglas (Settings &rsaquo; Suppliers).', 'bad']],
-            '', [], ['Retry Hunter Douglas', 'bad']],
-    // C once the Hunter Douglas item is in: the floor is still making the rollers.
+            [['Roller Blind &times; 3', 'Being made &middot; 1 of 3', 'amber']],
+            '', [], ['See progress', 'ghost'], 'Made part &middot; 1 of 2'],
     'C2' => ['CST-2026-0009', '&pound;318.60', 'Coastal Shutters', 'CS-120', false, 'Due 14 Oct',
-            [['Roller Blind &times; 3', 'Being made &middot; 1 of 3', 'amber'], ['PF Venetian &times; 1', '&#10003; Received from Hunter Douglas', 'ok']],
-            '', [], ['See progress', 'ghost']],
+            [['Roller Blind &times; 3', 'Being made &middot; 1 of 3', 'amber']],
+            '', [], ['See progress', 'ghost'], 'Made part &middot; 1 of 2'],
+    'CB' => ['CST-2026-0009', '&pound;318.60', 'Coastal Shutters', 'CS-120', false, 'Due 14 Oct',
+            [['<b>Hunter Douglas</b> &middot; PF Venetian &times; 1', 'Couldn&rsquo;t order &middot; No order email is set for Hunter Douglas (Settings &rsaquo; Suppliers).', 'bad']],
+            '', [], ['Retry Hunter Douglas', 'bad'], 'Bought-in part &middot; 2 of 2'],
     'D' => ['ABC-2026-0039', '&pound;530.00', 'ABC Blinds', 'PO 4420', false, 'Due 13 Oct',
-            [['Vertical Blind &times; 20', '&#10003; Made', 'ok'], ['Forest Wood &times; 2', 'Waiting on Home Creations &middot; ordered 9 Oct', 'bad']],
-            '', [], ['Received from Home Creations', 'purple']],
+            [['<b>Home Creations</b> &middot; Forest Wood &times; 2', 'Ordered 9 Oct', 'amber']],
+            '', [], ['Received from Home Creations', 'purple'], 'Bought-in part &middot; ours all made'],
     'E' => ['ABC-2026-0038-R1', '&pound;0.00', 'ABC Blinds', 'PO 4402', true, 'Due 12 Oct',
             [['Roller Blind &times; 1', '&#10003; Made', 'ok']],
             '', [], ['Add to today&rsquo;s run &rarr;', 'blue']],
@@ -134,14 +138,18 @@ $CARDS = [
  */
 $card = static function (string $k, array $o = [], bool $noMoney = false, bool $open = true) use ($CARDS, $mpill, $rmb): string {
     [$num, $val, $acc, $ref, $rm, $due, $lines, $mon, $invs, $btn] = $CARDS[$k];
+    $partNote = $CARDS[$k][10] ?? '';
+    $buyPart  = str_starts_with($partNote, 'Bought-in');
     $a = static function (string $part) use ($o): array { return $o[$part] ?? ['', '']; };
-    // The red dot: a line whose status is red, or money needing invoicing / overdue.
+    // The red dot: a line whose status is red, a bought-in item not in yet, or
+    // money needing invoicing / overdue.
     $urgent = !$noMoney && in_array($mon, ['needs_invoicing', 'overdue'], true);
-    foreach ($lines as [, , $tone]) if ($tone === 'bad') $urgent = true;
+    foreach ($lines as [, , $tone]) if ($tone === 'bad' || ($buyPart && $tone !== 'ok')) $urgent = true;
     [$c, $s] = $a('card');
     $h = '<div class="pcd' . ($open ? ' open' : '') . ' ' . $c . '" style="' . $s . '">';
     [$c, $s] = $a('num'); [$c2, $s2] = $a('dot');
     $h .= '<div class="psm"><span class="car">' . ($open ? '&#9662;' : '&#9656;') . '</span><b class="pnum ' . $c . '" style="' . $s . '">' . $num . '</b>'
+        . ($partNote !== '' ? '<span class="ptag">' . ($buyPart ? 'bought-in' : 'made') . '</span>' : '')
         . ($rm ? '<span class="prm ' . ($o['r'][0] ?? '') . '" style="' . ($o['r'][1] ?? '') . '" title="Remake of ABC-2026-0038">R</span>' : '')
         . ($urgent ? '<span class="pdot ' . $c2 . '" style="' . $s2 . '"></span>' : '') . '</div>';
     if (!$open) return $h . '</div>';
@@ -153,6 +161,7 @@ $card = static function (string $k, array $o = [], bool $noMoney = false, bool $
     $h .= '<div class="pacc"><span class="' . $c . '" style="' . $s . '">' . $acc . ' <span class="pmeta">&middot; ' . $ref . '</span></span>'
         . ($rm ? ' <span class="' . $c2 . '" style="' . $s2 . '">' . $rmb . '</span>' : '') . '</div>';
     if ($due !== '') { [$c, $s] = $a('due'); $h .= '<div class="pmeta"><span class="' . $c . '" style="' . $s . '">' . $due . '</span></div>'; }
+    if ($partNote !== '') { [$c, $s] = $a('part'); $h .= '<div class="ppart ' . $c . '" style="' . $s . '">' . $partNote . '</div>'; }
     $h .= '<ul class="plns">';
     foreach ($lines as $i => [$what, $st, $tone]) {
         [$c, $s] = $a('line' . $i);
@@ -214,7 +223,7 @@ $head = '<div class="ph"><div><div class="pt">Pipeline</div>'
 
 // The whole board at rest (poster), compact.
 $fullBoard = '<div class="pbd sm">'
-    . $col('new', ['A']) . $col('confirmed', ['B']) . $col('in_production', ['C']) . $col('awaiting_supplier', ['D'])
+    . $col('new', ['A']) . $col('in_production', ['C']) . $col('awaiting_supplier', ['CB', 'D'])
     . $col('ready', ['E']) . $col('to_invoice', ['F']) . $col('to_pay', ['G', 'H']) . $col('paid', ['I'])
     . '</div>';
 
@@ -286,6 +295,8 @@ return [
           .gd .pval{ font-size:.95em; font-weight:600; color:var(--soft); white-space:nowrap; border-radius:4px; }
           .gd .pacc{ font-size:.95em; color:var(--ink); } .gd .pacc > span{ border-radius:4px; }
           .gd .pmeta{ font-size:.88em; color:var(--faint); } .gd .pmeta span{ border-radius:4px; }
+          .gd .ppart{ font-size:.8em; font-weight:700; color:var(--soft); background:rgba(100,116,139,.12); border-radius:4px; padding:.1em .35em; }
+          .gd .psm .ptag{ flex:none; font-size:.7em; font-weight:800; text-transform:uppercase; letter-spacing:.03em; color:var(--soft); background:rgba(100,116,139,.14); border-radius:3px; padding:0 .3em; }
           .gd .plns{ list-style:none; margin:0; padding:.35em 0 0; border-top:1px solid var(--line); display:flex; flex-direction:column; gap:.3em; }
           .gd .plns li{ display:flex; flex-direction:column; line-height:1.3; font-size:.92em; border-radius:4px; }
           .gd .plns .what{ color:var(--ink); font-weight:500; }
@@ -375,11 +386,12 @@ return [
                   <div class="sct a-fade" style="--d:.2s">The making columns</div>
                   <div class="pbd">'
                     . $col('new', ['A'], ['col' => ['a-drop', $d(2, 'New means')], 'head' => ['a-ring', $d(2, 'New means')]])
-                    . $col('confirmed', ['B'], ['col' => ['a-drop', $d(2, 'Received means')], 'head' => ['a-ring', $d(2, 'Received means')]])
-                    . $col('in_production', ['C'], ['col' => ['a-drop', $d(2, 'In production means')], 'head' => ['a-ring', $d(2, 'In production means')]])
-                    . $col('awaiting_supplier', ['D'], ['col' => ['a-drop', $d(2, 'Awaiting supplier means')], 'head' => ['a-ring', $d(2, 'Awaiting supplier means')]])
+                    . $col('in_production', [$card('C', ['card' => ['a-ring', $d(2, 'split into two cards')], 'part' => ['a-ring', $d(2, 'marked made')]])], ['col' => ['a-drop', $d(2, 'In production holds')], 'head' => ['a-ring', $d(2, 'In production holds')]])
+                    . $col('awaiting_supplier', [$card('CB', ['card' => ['a-ring', $d(2, 'split into two cards', .6)], 'part' => ['a-ring', $d(2, 'and bought-in')]])], ['col' => ['a-drop', $d(2, 'Awaiting supplier holds')], 'head' => ['a-ring', $d(2, 'Awaiting supplier holds')]])
                     . $col('ready', ['E'], ['col' => ['a-drop', $d(2, 'And Ready to go')], 'head' => ['a-ring', $d(2, 'And Ready to go')]]) . '
                   </div>
+                  <div class="chips"><span class="chip a-pop" style="' . $d(2, 'split into two cards') . '">One order, two cards: <b>CST-2026-0009</b> made part + bought-in part</span>
+                    <span class="chip ok a-pop" style="' . $d(2, 'one card again') . '">All in &rarr; one card in <b>Ready to go</b></span></div>
                 </div>
 
                 <!-- 3 — the money columns -->
@@ -464,10 +476,11 @@ return [
                 <div class="sc" data-scene="7" data-len="' . $len(7) . '">
                   <div class="sct a-fade" style="--d:.2s">Each line has its own status</div>
                   <div class="cw" style="margin-top:.5rem">
-                    ' . $card('C', [
+                    <div style="display:flex;flex-direction:column;gap:.4rem">' . $card('C', [
                         'line0' => ['a-ring', $d(7, 'A blind made here')],
-                        'line1' => ['a-ring', $d(7, 'A bought-in item')],
-                    ]) . '
+                    ]) . $card('CB', [
+                        'line0' => ['a-ring', $d(7, 'A bought-in item')],
+                    ]) . '</div>
                     <div class="notes">
                       <div class="card a-rise" style="' . $d(7, 'A blind made here') . '"><h4>Made here</h4>
                         <ul class="plns" style="border:0;padding:0;font-size:.72rem">
@@ -536,7 +549,7 @@ return [
                 <div class="sc" data-scene="11" data-len="' . $len(11) . '">
                   <div class="sct a-fade" style="--d:.2s">Bought-in items</div>
                   <div class="two" style="margin-top:.4rem">
-                    <div style="font-size:.74rem">' . $card('C', ['btn' => ['a-press', $d(11, 'click Retry')], 'line1' => ['a-ring', $d(11, 'If a purchase order')]]) . '</div>
+                    <div style="font-size:.74rem">' . $card('CB', ['btn' => ['a-press', $d(11, 'click Retry')], 'line0' => ['a-ring', $d(11, 'If a purchase order')]]) . '</div>
                     <div class="scr a-rise" style="' . $d(11, 'If a purchase order') . '"><b class="h">Couldn&rsquo;t order</b>
                       <div style="margin:.2rem 0 .35rem">A supplier&rsquo;s purchase order didn&rsquo;t go, so the order sits in <b>Couldn&rsquo;t order</b> on Incoming orders, in red, until it does. Nothing fails quietly.</div>
                       <span class="tk a-pop" style="' . $d(11, 'with the reason') . '">No order email is set for Hunter Douglas (Settings &rsaquo; Suppliers).</span>
@@ -546,8 +559,9 @@ return [
                   <div class="two" style="margin-top:.6rem">
                     <div class="a-rise" style="font-size:.74rem;' . $d(11, 'When the goods') . '">' . $card('D', ['btn' => ['a-press', $d(11, 'click Received from', 1)]]) . '</div>
                     <div class="notes">
+                      <span class="chip a-pop" style="' . $d(11, 'each supplier has its own line') . '">One <b>Received from &hellip;</b> button per supplier</span>
                       <span class="chip a-pop" style="' . $d(11, 'When the goods') . '">Goods arrived? <b>Received from &hellip;</b></span>
-                      <span class="chip ok a-pop" style="' . $d(11, 'Once everything') . '">&rarr; <b>Ready to go</b></span>
+                      <span class="chip ok a-pop" style="' . $d(11, 'Once everything') . '">&rarr; one card in <b>Ready to go</b></span>
                     </div>
                   </div>
                 </div>
@@ -600,7 +614,7 @@ return [
                       <div class="phn" style="font-size:.6rem;margin:0 0 .4rem">The colour of each column on the <b>Pipeline</b> board: its top bar, its count and a faint tint behind the column. Pick any colour you like for each one.</div>'
                       . (static function () use ($COLS, $d): string {
                           $h = '';
-                          foreach (['new', 'confirmed', 'in_production', 'awaiting_supplier', 'ready', 'to_invoice', 'to_pay', 'paid', 'dispatched'] as $k) {
+                          foreach (['new', 'in_production', 'awaiting_supplier', 'ready', 'to_invoice', 'to_pay', 'paid', 'dispatched'] as $k) {
                               [$t, , $c] = $COLS[$k]; if ($k === 'dispatched') $t = 'Dispatched (white-label factories)';
                               $row = static fn (string $hex, string $cls = '', string $st = ''): string =>
                                   '<div class="focr ' . $cls . '" style="grid-area:1/1;border-top:3px solid ' . $hex . ';background:rgba(' . implode(',', array_map('hexdec', str_split(ltrim($hex, '#'), 2))) . ',.10);' . $st . '">'
@@ -654,15 +668,25 @@ return [
 
           <p><b>The columns</b> (each with a count and a short hint; the oldest card is at the top):</p>
           <ul class="steps">
-            <li><b>New</b> &mdash; <em>Placed, not taken in yet</em>.</li>
-            <li><b>Received</b> &mdash; <em>In, not started on the floor</em>.</li>
-            <li><b>In production</b> &mdash; <em>Being made on the floor</em>.</li>
-            <li><b>Awaiting supplier</b> &mdash; <em>Our part is made, waiting on a bought-in item</em>.</li>
+            <li><b>New</b> &mdash; <em>Placed, not processed yet</em>. An order taken in the old way (before <b>Process order</b>)
+                whose blinds never went to the floor is here too, with <b>Process order</b> to finish it.</li>
+            <li><b>In production</b> &mdash; <em>The blinds we make, on the floor</em>.</li>
+            <li><b>Awaiting supplier</b> &mdash; <em>The bought-in items, ordered from suppliers</em>. One line per supplier with its
+                items, <em>Ordered 9 Oct</em>, and its own <b>Received from &lt;supplier&gt;</b> button; a purchase order that
+                couldn&rsquo;t go shows in red with the reason and <b>Retry</b>.</li>
             <li><b>Ready to go</b> &mdash; <em>Everything made and in</em>.</li>
             <li><b>Dispatched &middot; to invoice</b> &mdash; <em>Gone out, no invoice yet</em>.</li>
             <li><b>Awaiting payment</b> &mdash; <em>Invoiced, not paid yet</em> (part paid and overdue too).</li>
             <li><b>Paid</b> &mdash; <em>Last 7 days, then it leaves the board</em>. Paid orders stay on <b>Orders</b> (the Done chip).</li>
           </ul>
+
+          <p><b>One order, two cards.</b> While an order has both blinds we make and bought-in items, it is split: its <b>made
+             part</b> is a card in <b>In production</b> (tagged <em>made</em>, <em>Made part &middot; 1 of 2</em>) and its
+             <b>bought-in part</b> a card in <b>Awaiting supplier</b> (tagged <em>bought-in</em>, <em>Bought-in part &middot; 2 of 2</em>).
+             Both keep the order number, value, account and due date. Each part leaves its column when it&rsquo;s done &mdash; the
+             floor finishes, or every supplier is received &mdash; and once everything is in, the order is one card in
+             <b>Ready to go</b>. An order that is all bought in only has the Awaiting supplier card; one that is all made here only
+             has the In production card.</p>
           <p>The three money columns, the values on the cards and the money pills show <b>only for the main factory&rsquo;s accounts
              users</b>. Everyone else sees one <b>Dispatched</b> column instead &mdash; <em>Gone out in the last 7 days</em> &mdash; and
              dispatched orders then stay on <b>Orders</b>.</p>
@@ -708,8 +732,7 @@ return [
                 failed). The line says <b>Couldn&rsquo;t order from &lt;supplier&gt;</b> and why; fix it, then retry.</li>
             <li><b>Order new item from &lt;supplier&gt;</b> (red) &mdash; a bought-in item added after the order was processed. Only
                 the new item is sent, marked as additional to the first purchase order.</li>
-            <li><b>Start production</b> &mdash; only on an order taken in before <b>Process order</b>: sends its blinds to the floor.</li>
-            <li><b>Received from &lt;supplier&gt;</b> (purple) &mdash; the bought-in goods have arrived.</li>
+            <li><b>Received from &lt;supplier&gt;</b> (purple) &mdash; on the bought-in card, one per supplier: that supplier&rsquo;s goods have arrived.</li>
             <li><b>Add to today&rsquo;s run &rarr;</b> (blue) &mdash; opens the <b>Dispatch tray</b>, where the van run is ticked and
                 printed. Without the money columns the button is <b>Dispatch</b>.</li>
             <li><b>See progress</b> &mdash; the floor is making it: opens the order&rsquo;s blinds with the stage each one is at.</li>

@@ -72,7 +72,7 @@ function ot_order_tracks(PDO $pdo, array $quoteIds, int $factoryId): array
     } catch (Throwable $e) { return $out; }
 
     // Processed = taken in (factory_jobs row); its time is the cut-off for "added later".
-    $processedAt = [];
+    $processedAt = []; $fjStatus = [];
     try {
         try {
             $fj = $pdo->prepare("SELECT quote_id, status, COALESCE(received_at, status_at) AS at FROM factory_jobs WHERE quote_id IN ($ph)");
@@ -85,6 +85,7 @@ function ot_order_tracks(PDO $pdo, array $quoteIds, int $factoryId): array
             if ((string) $r['status'] === '') continue;
             $out[(int) $r['quote_id']]['processed'] = true;
             $processedAt[(int) $r['quote_id']] = (string) ($r['at'] ?? '');
+            $fjStatus[(int) $r['quote_id']] = (string) $r['status'];
         }
     } catch (Throwable $e) { /* factory_jobs not migrated — nothing processed */ }
 
@@ -201,7 +202,19 @@ function ot_order_tracks(PDO $pdo, array $quoteIds, int $factoryId): array
     }
 
     foreach ($out as $q => &$o) {
+        // Still waiting for Process (new, or taken in the old way and never
+        // floored): its suppliers are simply "to order", not problems yet.
+        $o['needs_process'] = ot_needs_process($fjStatus[$q] ?? '', $o);
+        if ($o['needs_process']) {
+            foreach ($o['buy'] as &$b) { $b['problem'] = ''; $b['reason'] = ''; $b['new_units'] = 0; }
+            unset($b);
+            foreach ($o['lines'] as &$ol) {
+                if ($ol['track'] === 'buy' && in_array($ol['status'], ['Not ordered', 'New item to order'], true)) $ol['status'] = 'To order';
+            }
+            unset($ol);
+        }
         foreach ($o['buy'] as $sup => &$b) {
+            if ($o['needs_process']) break;
             if ($b['new_units'] > 0) {
                 $b['state']   = 'to_order';
                 $b['problem'] = 'new_item';
@@ -263,6 +276,20 @@ function ot_back_url(?string $lane): string
 }
 
 /**
+ * Does the order still need Process order? A new order (no factory_jobs row),
+ * or one taken in the old way ("Received") whose blinds never went to the floor
+ * — the Received stage is gone (John, 2026-10-12), so those go back to New and
+ * Process finishes the job: floor + any purchase orders still outstanding.
+ * $t may be null when the tracks weren't loaded.
+ */
+function ot_needs_process(string $fj, ?array $t): bool
+{
+    if ($fj === '') return true;
+    if ($fj !== 'received' || !$t) return false;
+    return $t['make']['units'] > 0 && !$t['make']['released'] && $t['make']['made'] === 0;
+}
+
+/**
  * The jobs an order still has, in doing order — what Incoming orders offers as
  * its buttons and what the Factory Pipeline cards offer (one rule for both).
  *   $fj = factory_jobs.status ('' = not processed), $t = ot_order_tracks() entry,
@@ -275,7 +302,7 @@ function ot_back_url(?string $lane): string
  */
 function ot_next_jobs(string $fj, array $t, string $fs): array
 {
-    if ($fj === '') return [['lane' => 'new', 'kind' => 'process']];
+    if (ot_needs_process($fj, $t)) return [['lane' => 'new', 'kind' => 'process']];
     $jobs = [];
     foreach ($t['buy'] as $sup => $b) {
         if ($b['state'] !== 'to_order') continue;
