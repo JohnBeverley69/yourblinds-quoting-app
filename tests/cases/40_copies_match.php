@@ -63,7 +63,7 @@ function cp_structural(string $col): bool
 function cp_columns(string $table): array
 {
     return t_rows("SELECT column_name AS name, data_type AS type, column_type AS ctype, column_default AS def,
-                          is_nullable AS nullable, character_maximum_length AS len, numeric_precision AS prec, numeric_scale AS scale, extra
+                          is_nullable AS nullable, character_maximum_length AS len, numeric_precision AS prec, numeric_scale AS scale, extra AS extra
                      FROM information_schema.columns
                     WHERE table_schema = DATABASE() AND table_name = ?
                       AND extra NOT LIKE '%GENERATED%' AND extra NOT IN ('VIRTUAL','PERSISTENT','STORED')
