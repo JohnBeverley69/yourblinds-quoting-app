@@ -147,7 +147,7 @@ $activeNav  = 'texts';
         <?php endif; ?>
 
         <section class="section">
-            <div class="section-header"><h2 class="section-title">Text account (The SMS Works)</h2></div>
+            <div class="section-header"><h2 class="section-title">Text account (<a href="https://thesmsworks.co.uk" target="_blank" rel="noopener">The SMS Works</a>)</h2></div>
             <form method="post" action="/master-admin/texts.php" class="form" novalidate>
                 <?= csrf_field() ?>
                 <input type="hidden" name="_action" value="provider">
