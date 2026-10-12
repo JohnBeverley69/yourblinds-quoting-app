@@ -71,7 +71,10 @@ try {
 
 $said = [];
 if ($supplier === '') {
-    if ($fjStatus !== '') {
+    // A new order, or one taken in the old way (Received) whose blinds never
+    // reached the floor: Process finishes it. Anything further on is done.
+    $tracksNow = ot_order_tracks($pdo, [$quoteId], $factoryId)[$quoteId] ?? null;
+    if (!ot_needs_process($fjStatus, $tracksNow)) {
         try { $pdo->query("SELECT RELEASE_LOCK(" . $pdo->quote($lockName) . ")"); } catch (Throwable $e) {}
         $fail($ref . ' has already been processed.');
     }

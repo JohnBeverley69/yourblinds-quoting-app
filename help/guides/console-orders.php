@@ -44,7 +44,7 @@ $S = [
     ['2', 'Signing in', 'The console is for the office staff of the factory. When you sign in, you land straight on the console Dashboard, and the menu says Factory Console under the logo. If you open one of the old screens, like the sales dashboard, the sales Pipeline or the old orders list, it simply takes you to the console version instead.', 2],
     ['3', 'The Work menu', 'The menu has its own sections. Work comes first. Dashboard is your home page. Pipeline shows every open order as a card, from New to Paid, and has its own guide. Orders is the one list of everything placed with us, and Quotes is our own quotes not placed yet. Remakes is for faults and remakes, and Calendar is the office\'s shared calendar. When something needs you, the menu says so, like Remakes, two to approve.', 3],
     ['4', 'Production and Accounts', 'Under Production are the factory screens you already know: Incoming orders, the Floor, and Dispatch. Under Accounts are Invoices, Bank, Statements and Commissions. Trade accounts and The Numbers are there too, but only for the super admin. Setup and Platform sit at the bottom, for the people allowed to use them.', 4],
-    ['5', 'The stage tiles', 'The top row counts orders by stage. New means it has come in, but is not received on the floor yet. Received means it is in, but not started. In production means it is being made. Awaiting supplier means our part is made, but a bought-in item has not arrived. Ready to dispatch means everything is made and in. Click a tile to open it. New opens Incoming orders, and Ready to dispatch opens Dispatch.', 5],
+    ['5', 'The stage tiles', 'The top row counts orders by stage. New means it has come in, but is not processed yet. In production means it is being made. Awaiting supplier means our part is made, but a bought-in item has not arrived. Ready to dispatch means everything is made and in. Click a tile to open it. New opens Incoming orders, and Ready to dispatch opens Dispatch.', 5],
     ['6', 'Waiting on suppliers', 'Orders that are awaiting a supplier are listed on the Dispatch tray too, under Waiting on suppliers. Each row shows the account, the order, their reference, how many are made, and which supplier it is waiting on, with the date it was ordered, or not ordered yet. When the item arrives, mark it received on Incoming orders, and the order moves up to Ready to go out.', 6],
     ['7', 'The money tiles', 'The second row counts the money. Needs invoicing means an order has been dispatched, but has no invoice yet. Awaiting payment means it is invoiced, but not paid yet. Overdue means it is past the invoice due date. Click a tile to see those orders in the Orders list. The money tiles, and the Money column, only show on the main factory account.', 7],
     ['8', 'Quotes not placed yet', 'Just under those tiles, you may see a line saying how many of our own quotes are not placed yet. These are quotes the office has keyed in, which have not been turned into orders. Click the line, and you see them in the Orders list, under Quotes.', 8],
@@ -52,7 +52,7 @@ $S = [
     ['10', 'This week so far', 'Two more tiles look at the week so far. Orders this week counts the orders placed since Monday. Invoiced this week is the net value of the invoices raised since Monday. Underneath it, owed is everything still unpaid on our invoices. Click it to open Invoices. Like the money tiles, it is only on the main factory account.', 10],
     ['11', 'Latest orders and busiest accounts', 'Below the tiles are two panels. Latest orders shows the eight newest orders, with the account, the number of blinds, where the making is up to, and the money. Click an order number to open it, or See all for the whole list. Busiest accounts shows who has ordered the most over the last thirty days, by value.', 11],
     ['12', 'One Orders list', 'Orders, in the Work menu, is the heart of the console. It is one list of every order placed with us, whoever placed it. From their portal, as a direct order, or keyed in here by the office. To key one in yourself, use the New order button at the top right.', 12],
-    ['13', 'The filter chips', 'Across the top are the filter chips, in groups, each with a count. Open is everything not yet both dispatched and paid, and that is where the list starts. To make has New, Received, In production, Awaiting supplier and Ready to go. To bill has Needs invoicing, Awaiting payment and Overdue. Finished has Done. Not placed has Quotes. And All shows every order.', 13],
+    ['13', 'The filter chips', 'Across the top are the filter chips, in groups, each with a count. Open is everything not yet both dispatched and paid, and that is where the list starts. To make has New, In production, Awaiting supplier and Ready to go. To bill has Needs invoicing, Awaiting payment and Overdue. Finished has Done. Not placed has Quotes. And All shows every order.', 13],
     ['14', 'Finding an order', 'To find one order, use the account picker and the search box. Choose an account, and you see only their orders. Or type in the search box. An order number, the account, their reference, the name for the labels, or an invoice number all work. Then click Search.', 14],
     ['15', 'Making and Money', 'Each row shows the order number, the account, their reference, the date, how many of our blinds are on it, and its value. Then Making is where the blinds are, and Money is where the bill is. Under the money pill is each invoice number, what is still owed, and when it is due. A purple REMAKE badge marks a remake of an earlier order.', 15],
     ['16', 'What to do next', 'The Next column tells you the one thing to do next. While it is being made, that is Process order, Being made, or Waiting on a supplier, then Dispatch. If a purchase order to a supplier did not go, it says Couldn\'t order from that supplier, in red, and that comes first. After that comes the money. Raise invoice, Wait for payment, or Wait for the rest. If a payment is late, Chase payment comes first, in red. Done means dispatched and paid. Click it to go to the right screen.', 16],
@@ -73,7 +73,6 @@ $ptr = '<span class="gd-ptr"><svg viewBox="0 0 16 22" aria-hidden="true"><path d
 $PILL = [
     'notplaced'     => ['Quotes',        '#475569', '#e2e8f0'],
     'new'           => ['New',           '#b91c1c', '#fee2e2'],
-    'confirmed'     => ['Received',      '#5b6b7f', '#e6ebf1'],
     'in_production' => ['In production', '#b5730f', '#f7ecd6'],
     'awaiting_supplier' => ['Awaiting supplier', '#7c3aed', '#ede9fe'],
     'ready'         => ['Ready',         '#245ea3', '#dde8f6'],
@@ -167,7 +166,7 @@ $thead = '<div class="orow th"><span>Order</span><span>Account</span><span class
  */
 $CHIPS = [
     ''           => ['open' => ['Open', 34]],
-    'To make'    => ['new' => ['New', 3], 'confirmed' => ['Received', 5], 'in_production' => ['In production', 12], 'awaiting_supplier' => ['Awaiting supplier', 1], 'ready' => ['Ready to go', 6]],
+    'To make'    => ['new' => ['New', 3], 'in_production' => ['In production', 12], 'awaiting_supplier' => ['Awaiting supplier', 1], 'ready' => ['Ready to go', 6]],
     'To bill'    => ['needs_invoicing' => ['Needs invoicing', 2], 'awaiting' => ['Awaiting payment', 5], 'overdue' => ['Overdue', 1]],
     'Finished'   => ['done' => ['Done', 140]],
     'Not placed' => ['notplaced' => ['Quotes', 1]],
@@ -198,7 +197,7 @@ $filters = static fn (string $acct, string $q, string $btn = '') =>
 $ph = static fn (string $t): string => '<span class="gph">' . $t . '</span>';
 
 /** The four stage tiles and the three money tiles, at rest. */
-$stageTiles = $tile('New', '3', 'Not received on the floor yet', '#b91c1c') . $tile('Received', '5', 'In, not started', '#5b6b7f')
+$stageTiles = $tile('New', '3', 'Not processed yet', '#b91c1c')
             . $tile('In production', '12', 'Being made', '#b5730f') . $tile('Awaiting supplier', '1', 'Made, waiting on a bought-in item', '#7c3aed')
             . $tile('Ready to dispatch', '6', 'Everything made and in', '#245ea3');
 $moneyTiles = $tile('Needs invoicing', '2', 'Dispatched, no invoice yet', '#b91c1c') . $tile('Awaiting payment', '5', 'Invoiced, not paid yet', '#245ea3')
@@ -358,7 +357,7 @@ return [
                 <!-- 0 — poster -->
                 <div class="sc" data-scene="0">
                   ' . $dashHead . '
-                  <div class="fgrid g5">' . $stageTiles . '</div>
+                  <div class="fgrid">' . $stageTiles . '</div>
                   <div class="fgrid g3">' . $moneyTiles . '</div>
                   <div class="otab">' . $thead . $row($ROWS[0]) . $row($ROWS[3]) . $row($ROWS[5]) . '</div>
                   <p class="scs" style="margin-top:.8rem">Press <b>&#9654; Play</b> below &mdash; sixteen short chapters, at an easy pace.</p>
@@ -456,9 +455,8 @@ return [
                 <div class="sc" data-scene="5" data-len="' . $len(5) . '">
                   <div class="sct a-fade" style="--d:.2s">The stage tiles</div>
                   ' . $dashHead . '
-                  <div class="fgrid g5">
-                    <div class="a-drop" style="' . $d(5, 'New means') . '">' . $tile('New', '3', 'Not received on the floor yet', '#b91c1c') . '<span class="goes a-fade" style="' . $d(5, 'New opens') . '">&rarr; Incoming orders</span></div>
-                    <div class="a-drop" style="' . $d(5, 'Received means') . '">' . $tile('Received', '5', 'In, not started', '#5b6b7f') . '<span class="goes a-fade" style="' . $d(5, 'Click a tile') . '">&rarr; Orders &middot; Received</span></div>
+                  <div class="fgrid">
+                    <div class="a-drop" style="' . $d(5, 'New means') . '">' . $tile('New', '3', 'Not processed yet', '#b91c1c') . '<span class="goes a-fade" style="' . $d(5, 'New opens') . '">&rarr; Incoming orders</span></div>
                     <div class="a-drop" style="' . $d(5, 'In production means') . '">' . $tile('In production', '12', 'Being made', '#b5730f') . '<span class="goes a-fade" style="' . $d(5, 'Click a tile') . '">&rarr; Orders &middot; In production</span></div>
                     <div class="a-drop" style="' . $d(5, 'Awaiting supplier means') . '">' . $tile('Awaiting supplier', '1', 'Made, waiting on a bought-in item', '#7c3aed') . '<span class="goes a-fade" style="' . $d(5, 'Click a tile') . '">&rarr; Orders &middot; Awaiting supplier</span></div>
                     <div class="a-drop" style="' . $d(5, 'Ready to dispatch means') . '">' . $tile('Ready to dispatch', '6', 'Everything made and in', '#245ea3') . '<span class="goes a-fade" style="' . $d(5, 'Ready to dispatch opens') . '">&rarr; Dispatch</span></div>
@@ -487,7 +485,7 @@ return [
                 <div class="sc" data-scene="7" data-len="' . $len(7) . '">
                   <div class="sct a-fade" style="--d:.2s">The money tiles</div>
                   ' . $dashHead . '
-                  <div class="fgrid g5">' . $stageTiles . '</div>
+                  <div class="fgrid">' . $stageTiles . '</div>
                   <div class="fgrid g3">
                     <div class="a-drop" style="' . $d(7, 'Needs invoicing means') . '">' . $tile('Needs invoicing', '2', 'Dispatched, no invoice yet', '#b91c1c') . '<span class="goes a-fade" style="' . $d(7, 'Click a tile') . '">&rarr; Orders &middot; Needs invoicing</span></div>
                     <div class="a-drop" style="' . $d(7, 'Awaiting payment means') . '">' . $tile('Awaiting payment', '5', 'Invoiced, not paid yet', '#245ea3') . '<span class="goes a-fade" style="' . $d(7, 'Click a tile', .4) . '">&rarr; Orders &middot; Awaiting payment</span></div>
@@ -501,7 +499,7 @@ return [
                 <div class="sc" data-scene="8" data-len="' . $len(8) . '">
                   <div class="sct a-fade" style="--d:.2s">Quotes not placed yet</div>
                   ' . $dashHead . '
-                  <div class="fgrid g5">' . $stageTiles . '</div>
+                  <div class="fgrid">' . $stageTiles . '</div>
                   <div class="fgrid g3">' . $moneyTiles . '</div>
                   <p class="npl a-rise" style="' . $d(8, 'you may see') . '"><b class="a-ring" style="' . $d(8, 'Click the line') . '">1 of our own quote</b> not placed yet.</p>
                   <div class="a-rise" style="' . $d(8, 'you see them') . '">
@@ -579,8 +577,7 @@ return [
                   <div class="sct a-fade" style="--d:.2s">The filter chips</div>
                   <p class="scs a-fade" style="--d:.6s">In groups, each with its own count. The list starts on <b>Open</b>.</p>
                   ' . $chips('open', [
-                        'new'             => $at(13, 'New, Received'),
-                        'confirmed'       => $at(13, 'Received, In'),
+                        'new'             => $at(13, 'New, In'),
                         'in_production'   => $at(13, 'In production, Awaiting'),
                         'awaiting_supplier' => $at(13, 'Awaiting supplier and'),
                         'ready'           => $at(13, 'Ready to go'),
@@ -631,7 +628,7 @@ return [
                     <span class="chip a-pop" style="' . $d(15, 'A purple REMAKE') . ';border-color:#7c3aed">REMAKE &mdash; a remake of an earlier order</span>
                   </div>
                   <div class="legend a-rise" style="' . $d(15, 'Then Making is') . '"><b>Making</b> &mdash; where the blinds are
-                    <div class="chips" style="margin-top:.25rem">' . $pill('new', 'a-pop', $d(15, 'Then Making is', .3)) . $pill('confirmed', 'a-pop', $d(15, 'Then Making is', .6)) . $pill('in_production', 'a-pop', $d(15, 'Then Making is', .9)) . $pill('awaiting_supplier', 'a-pop', $d(15, 'Then Making is', 1.2)) . $pill('ready', 'a-pop', $d(15, 'Then Making is', 1.5)) . $pill('dispatched', 'a-pop', $d(15, 'Then Making is', 1.8)) . '</div></div>
+                    <div class="chips" style="margin-top:.25rem">' . $pill('new', 'a-pop', $d(15, 'Then Making is', .3)) . $pill('in_production', 'a-pop', $d(15, 'Then Making is', .9)) . $pill('awaiting_supplier', 'a-pop', $d(15, 'Then Making is', 1.2)) . $pill('ready', 'a-pop', $d(15, 'Then Making is', 1.5)) . $pill('dispatched', 'a-pop', $d(15, 'Then Making is', 1.8)) . '</div></div>
                   <div class="legend a-rise" style="' . $d(15, 'and Money is') . '"><b>Money</b> &mdash; where the bill is
                     <div class="chips" style="margin-top:.25rem">' . $mpill('not_invoiced', 'a-pop', $d(15, 'and Money is', .3)) . $mpill('needs_invoicing', 'a-pop', $d(15, 'and Money is', .6)) . $mpill('awaiting', 'a-pop', $d(15, 'and Money is', .9)) . $mpill('part_paid', 'a-pop', $d(15, 'and Money is', 1.2)) . $mpill('overdue', 'a-pop', $d(15, 'and Money is', 1.5)) . $mpill('paid', 'a-pop', $d(15, 'and Money is', 1.8)) . '</div></div>
                 </div>
@@ -702,9 +699,9 @@ return [
 
           <p><b>The Dashboard.</b> A greeting and today&rsquo;s date, an <b>All orders</b> button, then the tiles:</p>
           <ul class="steps">
-            <li><b>New</b> &mdash; <em>Not received on the floor yet</em> (opens <b>Incoming orders</b>). <b>Received</b> &mdash; <em>In, not
-                started</em>. <b>In production</b> &mdash; <em>Being made</em>. <b>Awaiting supplier</b> &mdash; <em>Made, waiting on a bought-in item</em>. <b>Ready to dispatch</b> &mdash; <em>Everything made and in</em>
-                (opens <b>Dispatch</b>). Received, In production and Awaiting supplier open the Orders list on that chip.</li>
+            <li><b>New</b> &mdash; <em>Not processed yet</em> (opens <b>Incoming orders</b>, on <b>New to process</b>).
+                <b>In production</b> &mdash; <em>Being made</em>. <b>Awaiting supplier</b> &mdash; <em>Made, waiting on a bought-in item</em>. <b>Ready to dispatch</b> &mdash; <em>Everything made and in</em>
+                (opens <b>Dispatch</b>). In production and Awaiting supplier open the Orders list on that chip.</li>
             <li>The money tiles: <b>Needs invoicing</b> &mdash; <em>Dispatched, no invoice yet</em>. <b>Awaiting payment</b> &mdash;
                 <em>Invoiced, not paid yet</em>. <b>Overdue</b> &mdash; <em>Past the invoice due date</em>. Each opens the Orders list on
                 that chip.</li>
@@ -726,7 +723,7 @@ return [
              direct order, or keyed in here.</em> <b>+ New order</b> (top right) keys one in.</p>
           <ul class="steps">
             <li><b>Chips</b>, in groups, each with a count: <b>Open</b> (anything not yet both dispatched and paid &mdash; where the
-                list starts); <b>To make</b> &mdash; <b>New</b>, <b>Received</b>, <b>In production</b>, <b>Awaiting supplier</b>, <b>Ready to go</b>;
+                list starts); <b>To make</b> &mdash; <b>New</b>, <b>In production</b>, <b>Awaiting supplier</b>, <b>Ready to go</b>;
                 <b>To bill</b> &mdash; <b>Needs invoicing</b>, <b>Awaiting payment</b> (part paid too), <b>Overdue</b> (these two
                 show red while they have any); <b>Finished</b> &mdash; <b>Done</b> (dispatched and paid); <b>Not placed</b> &mdash;
                 <b>Quotes</b>; and <b>All</b>.</li>
@@ -736,7 +733,7 @@ return [
             <li>Columns: <b>Order</b> (with the label name under it), <b>Account</b>, <b>Their ref</b>, <b>Date</b>, <b>Blinds</b> (ours on
                 it), <b>Value</b> (what the invoice bills), <b>Making</b>, <b>Money</b>, <b>Next</b>. On a narrower screen Their ref
                 and Date are hidden, and on a phone Value too.</li>
-            <li><b>Making</b> &mdash; where the blinds are: <b>Quotes</b>, <b>New</b>, <b>Received</b>, <b>In production</b>, <b>Awaiting supplier</b> (our part made, a bought-in item still to come),
+            <li><b>Making</b> &mdash; where the blinds are: <b>Quotes</b>, <b>New</b>, <b>In production</b>, <b>Awaiting supplier</b> (our part made, a bought-in item still to come),
                 <b>Ready</b>, <b>Dispatched</b>.</li>
             <li><b>Money</b> &mdash; where the bill is: <b>Not invoiced</b>, <b>Needs invoicing</b> (dispatched, no invoice yet),
                 <b>Invoiced &middot; awaiting payment</b>, <b>Part paid</b>, <b>Overdue</b>, <b>Paid</b>. Under it, each invoice number

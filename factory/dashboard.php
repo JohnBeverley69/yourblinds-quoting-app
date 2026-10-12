@@ -33,7 +33,7 @@ $toBill = ['needs_invoicing' => 0, 'awaiting' => 0, 'overdue' => 0];
 foreach ($orders as $o) {
     foreach ($toBill as $k => $_) if (fc_filter_match($o, $k)) $toBill[$k]++;
     $byStage[$o['stage']]++;
-    if (in_array($o['stage'], ['new', 'confirmed', 'in_production'], true)) $blindsIn += (int) $o['blinds'];
+    if (in_array($o['stage'], ['new', 'in_production'], true)) $blindsIn += (int) $o['blinds'];
     $day = substr((string) $o['created_at'], 0, 10);
     if ($o['stage'] !== 'notplaced') {
         if ($day >= $weekStart) $inThisWeek++;
@@ -110,8 +110,7 @@ $calDue    = oc_due_count($pdo, $factory);
 
 $money = static fn ($n) => $n === null ? '—' : '£' . number_format((float) $n, 2);
 $tiles = [
-    'new'           => ['New',              'Not received on the floor yet',     '/factory/incoming-orders.php'],
-    'confirmed'     => ['Received',         'In, not started',                    '/factory/orders.php?stage=confirmed'],
+    'new'           => ['New',              'Not processed yet',                  '/factory/incoming-orders.php?lane=new'],
     'in_production' => ['In production',    'Being made',                         '/factory/orders.php?stage=in_production'],
     'awaiting_supplier' => ['Awaiting supplier', 'Made, waiting on a bought-in item', '/factory/orders.php?stage=awaiting_supplier'],
     'ready'         => ['Ready to dispatch','Everything made and in',             '/master-admin/dispatch.php'],
