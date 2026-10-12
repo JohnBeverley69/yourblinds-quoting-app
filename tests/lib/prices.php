@@ -91,7 +91,7 @@ function price_random_lines(int $n, int $seed): array
 {
     mt_srand($seed);
     $pick = static fn (array $a) => $a ? $a[mt_rand(0, count($a) - 1)] : null;
-    $products = array_map('intval', array_column(t_rows('SELECT id FROM products WHERE client_id = 3 AND active = 1 ORDER BY id'), 'id'));
+    $products = array_map('intval', array_column(t_rows("SELECT id FROM products WHERE client_id = 3 AND active = 1 AND name NOT LIKE 'Bev ZZ%' ORDER BY id"), 'id'));
     $out = [];
     for ($i = 0; $i < $n; $i++) {
         $pid = $pick($products);

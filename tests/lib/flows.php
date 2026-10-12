@@ -69,3 +69,34 @@ function flow_place_order(YbHttp $h, int $quoteId): void
     $now = (string) t_val('SELECT status FROM quotes WHERE id = ?', [$quoteId]);
     if ($now !== 'ordered') fail("the order was not placed (status $now)");
 }
+
+/**
+ * A placed Alpha order for one made-in-house roller, processed by the factory
+ * and finished on the floor — i.e. READY to dispatch. Returns the quote id.
+ */
+function flow_ready_order(string $ref): int
+{
+    $a = as_user('alpha.admin');
+    $qid = flow_new_quote($a, fx('customer_alpha'), $ref);
+    flow_add_line($a, $qid, 101, price_scenarios()['Roller, side winder, 1200 × 1600']);
+    flow_place_order($a, $qid);
+    $f = as_user('factory.office');
+    t_submit($f, '/factory/process-order.php', ['quote_id' => $qid, 'back' => '/factory/pipeline.php']);
+    t_submit($f, '/factory/set-status.php', ['quote_id' => $qid, 'status' => 'made', 'force_made' => 1, 'back' => '/factory/pipeline.php']);
+    $stage = (string) t_val('SELECT fulfilment_stage FROM quotes WHERE id = ?', [$qid]);
+    if ($stage !== 'ready') fail("set-up: order $ref is '$stage', not ready");
+    return $qid;
+}
+
+/** Make one kind of database write fail for a while (a MySQL trigger), as a lost connection would. */
+function t_break_writes(string $table, string $when, string $name): void
+{
+    db()->exec("DROP TRIGGER IF EXISTS `$name`");
+    db()->exec("CREATE TRIGGER `$name` BEFORE $when ON `$table` FOR EACH ROW "
+        . "SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'test: write deliberately refused'");
+}
+
+function t_unbreak_writes(string $name): void
+{
+    db()->exec("DROP TRIGGER IF EXISTS `$name`");
+}
