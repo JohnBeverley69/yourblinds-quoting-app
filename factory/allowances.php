@@ -48,6 +48,9 @@ if ($hasTable) {
 // LOOKUP("t",…) — so each product's charts live on its own Build Rules page and can't
 // drift apart from the rules that use them.
 $productId   = (int) ($_GET['product_id'] ?? $_POST['product_id'] ?? 0);
+// Only a product THIS factory makes (white-label isolation): another factory's id
+// would show its build-rule chart names. Not ours → no product filter.
+if ($productId > 0 && !factory_owns_product($pdo, $productId, $MASTER)) $productId = 0;
 $productName = '';
 if ($productId > 0 && $hasTable) {
     try {
