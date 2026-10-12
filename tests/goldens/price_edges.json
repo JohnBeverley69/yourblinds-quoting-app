@@ -1,0 +1,32 @@
+{
+    "rounding_line": {
+        "base_price": 27.45,
+        "cost_price_per_blind": 0.0,
+        "discount_percent": 10.0,
+        "drop_mm": 1000.0,
+        "extras_applied.0.amount_applied": 3.43,
+        "extras_applied.0.cost_snapshot": 0.0,
+        "extras_applied.0.face_value": true,
+        "extras_applied.0.joined_pieces": 1.0,
+        "extras_applied.0.promo_discount_amount": 0.0,
+        "extras_applied.0.promo_discount_percent": 0.0,
+        "extras_applied.0.trade_amount": 3.43,
+        "extras_cost_total": 0.0,
+        "extras_total": 3.43,
+        "line_charge": 4.99,
+        "line_total": 114.07,
+        "markup_percent": 33.3,
+        "matrix_drop_mm": 1000.0,
+        "matrix_width_mm": 1500.0,
+        "options_sell_total": 3.43,
+        "panels": 1.0,
+        "quantity": 3.0,
+        "rounded_up": false,
+        "sell_price": 36.36,
+        "subtotal_per_blind": 30.88,
+        "trade_discount_amount": 0.0,
+        "trade_discount_percent": 0.0,
+        "trade_price_per_blind": 27.45,
+        "width_mm": 1500.0
+    }
+}

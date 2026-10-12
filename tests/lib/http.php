@@ -45,6 +45,12 @@ final class YbHttp
         ]);
     }
 
+    /** The cookie jar, one Netscape-format line per cookie. */
+    public function cookies(): array
+    {
+        return (array) curl_getinfo($this->ch, CURLINFO_COOKIELIST);
+    }
+
     public function get(string $path): TResponse
     {
         return $this->request('GET', $path, null);
@@ -159,4 +165,30 @@ function t_token(YbHttp $h): string
 function t_submit(YbHttp $h, string $path, array $fields): TResponse
 {
     return $h->post($path, ['_csrf' => t_token($h)] + $fields);
+}
+
+/** This person's PHP session id (the PHPSESSID cookie in their jar). */
+function t_session_id(YbHttp $h): string
+{
+    foreach ($h->cookies() as $line) {
+        $f = explode("\t", $line);
+        if (($f[5] ?? '') === session_name() || ($f[5] ?? '') === 'PHPSESSID') return (string) ($f[6] ?? '');
+    }
+    fail('no session cookie');
+    return '';
+}
+
+/**
+ * Make the server re-check this person's account on their next request, as it
+ * does every 30 seconds (session_still_valid), without waiting 30 seconds:
+ * winds auth_checked_at back in their session file.
+ */
+function t_expire_auth_check(YbHttp $h): void
+{
+    $file = sys_get_temp_dir() . DIRECTORY_SEPARATOR . 'yb_sessions' . DIRECTORY_SEPARATOR . 'sess_' . t_session_id($h);
+    if (!is_file($file)) fail("session file not found: $file");
+    $data = (string) file_get_contents($file);
+    $new = preg_replace('/auth_checked_at\|i:\d+;/', 'auth_checked_at|i:0;', $data, 1, $n);
+    if ($n !== 1) fail('auth_checked_at not in the session');
+    file_put_contents($file, $new);
 }
