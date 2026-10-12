@@ -65,6 +65,7 @@ $ORDER = [
     'products-price-import',
     'products-import-fabrics',
     'products-options',
+    'products-start-defaults',
     'products-combine',
     // The job itself.
     'customers-add',

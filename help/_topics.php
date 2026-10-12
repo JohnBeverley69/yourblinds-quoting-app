@@ -480,6 +480,16 @@ return [
       <p><strong>Adding one later:</strong> tick the existing master <em>first</em>, then the new single-size product, and Combine again — it is appended as an extra system and the master keeps everything it already had.</p>
       <p>Two refusals to expect: products <strong>priced differently</strong> (per-slat versus a normal grid) cannot be combined, and only the first product may already have more than one system.</p>'],
 
+    ['admin', 'Products & pricing', 'Why does the order page start on All bands, or with no fabric?', 'default band fabric start first band all bands order of bands make default option default choice preselected before size instaprice quote builder empty',
+     '<p>What the quote builder and InstaPrice fill in first is set on the product, across four of its pages:</p>
+      <ul>
+      <li><strong>Band order</strong> &mdash; <strong>Price tables</strong> tile, open a system, drag the <strong>&#8942;&#8942;</strong> handle. The Band box lists bands in this order. Each system has its own list, so set every system.</li>
+      <li><strong>Start on the first band</strong> &mdash; on the product&rsquo;s own page, under <strong>Band label</strong>, tick <em>Start on the first band instead of All bands</em> and press <strong>Save changes</strong>. Unticked, the Band box starts on <em>All bands</em> (a system with only one band picks it anyway).</li>
+      <li><strong>Default fabric</strong> &mdash; <strong>Fabrics</strong> tile, <strong>Make default</strong> on a row. One per band; it fills in when the product is picked, the system is changed or the band is changed. A band without one borrows the default with the same name and colour from another band.</li>
+      <li><strong>Options</strong> &mdash; <strong>Options</strong> tile: drag to set their order; tick <strong>Default</strong> on a choice so it comes already picked (none = <em>&mdash; Select &mdash;</em>); <strong>Edit</strong> &rarr; <em>Show above the size fields</em> puts an option above Width / Drop.</li>
+      </ul>
+      <p>Another company&rsquo;s copy of the product only picks these up after a catalogue push. The <strong>Live preview</strong> on the product page ignores the band tick and the default fabric &mdash; check in InstaPrice instead. The guide <strong>Setting what the order page starts on</strong> walks through it.</p>'],
+
     ['admin', 'Products & pricing', 'How do I reorder, group or delete several products?', 'reorder drag drop sort order products list multi select bulk delete move group folder checkbox tick all at once category',
      '<p>All of it happens on <strong>Setup &rsaquo; Products</strong>.</p>
       <p><strong>Reordering:</strong> drag a row by its <strong>⋮⋮</strong> handle. The order sticks and is the order products appear in when you build a quote, so put your best sellers at the top. Drag a row <em>onto a group heading</em> to file it there, and drag the headings themselves to reorder the groups.</p>
