@@ -131,6 +131,11 @@ function fc_order_invoices(PDO $pdo, int $factoryId, array $quoteIds): array
     $quoteIds = array_values(array_unique(array_filter(array_map('intval', $quoteIds))));
     if (!$quoteIds || !ar_table_ready($pdo, 'factory_ar_invoice_orders') || !ar_table_ready($pdo, 'factory_ar_invoices')) return [];
     $ph   = implode(',', array_fill(0, count($quoteIds), '?'));
+    // Last payment against the invoice (the Pipeline drops Paid cards after 7 days).
+    $paidAt = ar_table_ready($pdo, 'factory_ar_payment_allocations') && ar_table_ready($pdo, 'factory_ar_payments')
+        ? "(SELECT MAX(p.payment_date) FROM factory_ar_payment_allocations a JOIN factory_ar_payments p ON p.id = a.payment_id
+             WHERE a.invoice_id = i.id AND p.voided_at IS NULL)"
+        : 'NULL';
     $cred = ar_table_ready($pdo, 'factory_ar_credit_notes')
         ? "COALESCE((SELECT SUM(cn.total) FROM factory_ar_credit_notes cn
                       WHERE cn.against_invoice_id = i.id AND cn.status <> 'void'), 0)"
@@ -138,7 +143,7 @@ function fc_order_invoices(PDO $pdo, int $factoryId, array $quoteIds): array
     try {
         $st = $pdo->prepare(
             "SELECT io.quote_id, i.id, i.inv_number, i.status, i.issue_date, i.due_date, i.total,
-                    i.total - i.amount_paid - $cred AS outstanding
+                    i.total - i.amount_paid - $cred AS outstanding, $paidAt AS paid_at
                FROM factory_ar_invoice_orders io
                JOIN factory_ar_invoices i ON i.id = io.invoice_id
               WHERE io.quote_id IN ($ph) AND i.factory_client_id = ? AND i.status <> 'void'
@@ -166,6 +171,7 @@ function fc_order_invoices(PDO $pdo, int $factoryId, array $quoteIds): array
             'paid_some'   => $owed < round((float) $r['total'], 2) - 0.004,
             'due'         => $due,
             'overdue'     => $owed > 0.004 && $due !== '' && $due < $today,
+            'paid_at'     => (string) ($r['paid_at'] ?? ''),
         ];
     }
     return $out;

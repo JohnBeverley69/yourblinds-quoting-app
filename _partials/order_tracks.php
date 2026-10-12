@@ -167,7 +167,34 @@ function ot_order_tracks(PDO $pdo, array $quoteIds, int $factoryId): array
  */
 function ot_back_url(?string $lane): string
 {
+    if ($lane === 'pipeline') return '/factory/pipeline.php';   // Factory Pipeline cards
     $lanes = ['new', 'make', 'order', 'awaiting', 'ready', 'open', 'dispatched'];
     $lane  = (string) $lane;
     return '/factory/incoming-orders.php' . (in_array($lane, $lanes, true) && $lane !== 'open' ? '?lane=' . $lane : '');
+}
+
+/**
+ * The jobs an order still has, in doing order — what Incoming orders offers as
+ * its buttons and what the Factory Pipeline cards offer (one rule for both).
+ *   $fj = factory_jobs.status ('' = not accepted), $t = ot_order_tracks() entry,
+ *   $fs = quotes.fulfilment_stage.
+ * Each job: ['lane' => Incoming orders tab, 'kind' => accept|order|start|receive|
+ * dispatch|floor, 'supplier' => for order/receive].
+ */
+function ot_next_jobs(string $fj, array $t, string $fs): array
+{
+    $jobs = [];
+    if ($fj === '') $jobs[] = ['lane' => 'new', 'kind' => 'accept'];
+    foreach ($t['buy'] as $sup => $b) {
+        if ($b['state'] === 'to_order') $jobs[] = ['lane' => 'order', 'kind' => 'order', 'supplier' => $sup];
+    }
+    if ($fj === 'received' && $t['make']['units'] > 0) $jobs[] = ['lane' => 'make', 'kind' => 'start'];
+    foreach ($t['buy'] as $sup => $b) {
+        if ($b['state'] === 'ordered') $jobs[] = ['lane' => 'awaiting', 'kind' => 'receive', 'supplier' => $sup];
+    }
+    if ($fs === 'ready' && $fj !== 'dispatched') $jobs[] = ['lane' => 'ready', 'kind' => 'dispatch'];
+    if ($fj === 'in_production' && $t['make']['made'] < $t['make']['units']) {
+        $jobs[] = ['lane' => 'make', 'kind' => 'floor'];   // the floor is doing it; nothing to click but a look
+    }
+    return $jobs;
 }

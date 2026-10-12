@@ -294,6 +294,8 @@ if ($isFactoryConsole) {
             'name'  => 'Work',
             'items' => [
                 'factory-dashboard' => ['/factory/dashboard.php', 'Dashboard', true],
+                // Every open order as a card, New → Paid (factory/pipeline.php).
+                'factory-pipeline'  => ['/factory/pipeline.php',  'Pipeline',  true],
                 'factory-orders'    => ['/factory/orders.php',    'Orders',    true],
                 // Straight to the Quotes stage of the same list — our own trade and
                 // retail quotes that haven't been placed as orders yet.

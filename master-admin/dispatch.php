@@ -600,7 +600,7 @@ $money     = static fn ($n) => '£' . number_format((float) $n, 2);
     </div></div>
     <?php endif; ?>
 
-    <h2 class="section-title" style="margin:1.6rem 0 .5rem">To invoice</h2>
+    <h2 class="section-title" id="to-invoice" style="margin:1.6rem 0 .5rem">To invoice</h2>
     <p class="ui-hint" style="margin:0 0 .6rem">
       Gone out on a delivery note, not invoiced yet. One invoice per order. Raising it does not send
       it — send from <a href="/master-admin/wholesale.php">Invoices</a> when you are ready.

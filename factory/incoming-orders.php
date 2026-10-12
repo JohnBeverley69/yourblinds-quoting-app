@@ -272,23 +272,9 @@ $orders = array_values(array_filter($orders, static fn ($o) => in_array($lane, $
  * book the supplier's goods in, dispatch. The first one that fits the tab is the
  * row's main button; the rest go under "⋯".
  */
-$jobsFor = static function (array $o, array $t, string $fs): array {
-    $fj   = (string) ($o['factory_status'] ?? '');
-    $jobs = [];
-    if ($fj === '') $jobs[] = ['lane' => 'new', 'kind' => 'accept'];
-    foreach ($t['buy'] as $sup => $b) {
-        if ($b['state'] === 'to_order') $jobs[] = ['lane' => 'order', 'kind' => 'order', 'supplier' => $sup];
-    }
-    if ($fj === 'received' && $t['make']['units'] > 0) $jobs[] = ['lane' => 'make', 'kind' => 'start'];
-    foreach ($t['buy'] as $sup => $b) {
-        if ($b['state'] === 'ordered') $jobs[] = ['lane' => 'awaiting', 'kind' => 'receive', 'supplier' => $sup];
-    }
-    if ($fs === 'ready' && $fj !== 'dispatched') $jobs[] = ['lane' => 'ready', 'kind' => 'dispatch'];
-    if ($fj === 'in_production' && $t['make']['made'] < $t['make']['units']) {
-        $jobs[] = ['lane' => 'make', 'kind' => 'floor'];   // the floor is doing it; nothing to click but a look
-    }
-    return $jobs;
-};
+// One rule for both screens: ot_next_jobs() in _partials/order_tracks.php (the
+// Factory Pipeline cards offer the same buttons).
+$jobsFor = static fn (array $o, array $t, string $fs): array => ot_next_jobs((string) ($o['factory_status'] ?? ''), $t, $fs);
 
 // One-shot flash from a status action.
 $flashOk  = (string) ($_SESSION['flash_success'] ?? '');
