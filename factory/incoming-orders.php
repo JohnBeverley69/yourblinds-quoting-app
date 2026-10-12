@@ -13,10 +13,14 @@ declare(strict_types=1);
  * go to the floor, and lines we BUY IN from a supplier, which are ordered then
  * received. The tabs are the next jobs (New to process · To make · Couldn't
  * order · New items to order · Awaiting supplier · Ready to dispatch), and an
- * order sits in every tab where it still has work. Each row has one main button
- * for that tab; the rest are under "⋯". Route A of the factory order-flow
- * rethink (John, 2026-10-12). A new order's one button is Process order
- * (_partials/process_order.php): take it in, floor, supplier POs, in one go.
+ * order sits in every tab where it still has work. Route A of the factory
+ * order-flow rethink (John, 2026-10-12).
+ *
+ * The WORKSHOP's view, with no action buttons (John, 2026-10-12): the office
+ * moves orders on in one place, the Pipeline (factory/pipeline.php). Where a
+ * step is due (Process order, Received from …, Dispatch …) the row names it and
+ * links to that order's Pipeline card. See progress, Worksheet, Edit order and
+ * the office fix-ups (Re-send to a supplier, Mark made, step back) stay.
  */
 
 require __DIR__ . '/../bootstrap.php';
@@ -24,7 +28,6 @@ require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/blind_jobs.php';
 require __DIR__ . '/../_partials/factory_poll.php';
 require __DIR__ . '/../_partials/order_tracks.php';
-require __DIR__ . '/../_partials/process_order.php';
 
 requireFactory();
 
@@ -278,11 +281,11 @@ $orders = array_values(array_filter($orders, static fn ($o) => in_array($lane, $
 /**
  * The jobs this order has outstanding, in the order the office should do them:
  * accept it, order its bought-in items (suppliers take days), start production,
- * book the supplier's goods in, dispatch. The first one that fits the tab is the
- * row's main button; the rest go under "⋯".
+ * book the supplier's goods in, dispatch. The first one that fits the tab is
+ * what the row says is due, with a link to do it on the Pipeline.
  */
 // One rule for both screens: ot_next_jobs() in _partials/order_tracks.php (the
-// Factory Pipeline cards offer the same buttons).
+// Factory Pipeline cards carry the buttons).
 $jobsFor = static fn (array $o, array $t, string $fs): array => ot_next_jobs((string) ($o['factory_status'] ?? ''), $t, $fs);
 
 // One-shot flash from a status action.
@@ -452,6 +455,10 @@ require __DIR__ . '/../_partials/factory_head.php';
     .io-menu form { margin: 0; }
     .io-menu hr { border: 0; border-top: 1px solid var(--border, #e5e7eb); margin: 0.25rem 0; }
     .io-btn.floor { background: var(--bg-subtle, #f1f5f9); color: #334155; text-decoration: none; border: 1px solid var(--border, #e5e7eb); }
+    /* A step that's due: done on the Pipeline, not here. */
+    .io-pl { display: inline-flex; flex-direction: column; align-items: flex-end; font-size: 0.8125rem; font-weight: 600; color: var(--link, #2563eb); text-decoration: none; line-height: 1.25; text-align: right; }
+    .io-pl:hover { text-decoration: underline; }
+    .io-pl-what { font-size: 0.75rem; font-weight: 700; color: var(--text-primary, #1f2a37); }
     .io-lines .track { font-size: 0.75rem; font-weight: 700; white-space: nowrap; }
     .io-actions form { margin: 0; }
     /* The "⋯" menu drops out of its row, so the list can't clip its overflow;
@@ -672,68 +679,51 @@ require __DIR__ . '/../_partials/factory_head.php';
                         <?php if (!$ioOffice): /* floor logins: read and print tickets only, as before */ ?>
                             <a class="io-btn worksheet" href="/factory/worksheet-print.php?order=<?= $qid ?>" target="_blank" rel="noopener">Worksheet</a>
                         <?php else:
-                            // Every job this order still has, in doing order. The main
-                            // button is the first one belonging to this tab (in All open,
-                            // simply the first); the others go under "⋯".
+                            // Every job this order still has, in doing order; the one
+                            // that's due is the first belonging to this tab (in All open,
+                            // simply the first).
+                            //
+                            // No action buttons here (John, 2026-10-12): this is the
+                            // workshop's view, and the office moves orders on in ONE
+                            // place, the Pipeline. Where a step is due the row says what
+                            // it is and links to the order's Pipeline card. The floor's
+                            // own step (See progress) is a link and stays.
                             $jobs = $jobsFor($o, $t, (string) $fs);
-                            // In a supplier tab every supplier in it gets its own button (two
-                            // suppliers never queue behind one), elsewhere just the first.
-                            $mains = [];
-                            foreach ($jobs as $i => $j) {
-                                if ($lane === 'open' || $j['lane'] === $lane) {
-                                    $mains[] = $j; unset($jobs[$i]);
-                                    if (!in_array($lane, ['awaiting', 'problem', 'order'], true)) break;
-                                }
+                            $due = null;
+                            foreach ($jobs as $j) {
+                                if ($lane === 'open' || $j['lane'] === $lane) { $due = $j; break; }
                             }
                             $backQ = '&back=' . rawurlencode($lane);
-                            // A part tab keeps to its part in the "⋯" menu too.
-                            if ($partLane) {
-                                $grp = $lane === 'make' ? ['make'] : ['awaiting', 'problem', 'order'];
-                                $jobs = array_filter($jobs, static fn ($j) => in_array($j['lane'], $grp, true));
-                            }
-                            // Render one job as a button (main) or a menu item.
-                            $jobHtml = static function (array $j, int $qid, string $lane, string $cls, string $backQ) use ($ref, $t): string {
-                                $h  = csrf_field() . '<input type="hidden" name="quote_id" value="' . $qid . '">'
-                                    . '<input type="hidden" name="back" value="' . e($lane) . '">';
-                                $sup = (string) ($j['supplier'] ?? '');
-                                switch ($j['kind']) {
-                                    case 'process':
-                                        // Take it in, blinds on the floor, POs to suppliers —
-                                        // after a summary (or straight away, per the setting).
-                                        return po_button($qid, $ref, $t, $lane, $cls, 'Process order', null, 'Take the order in, put its blinds on the floor and email its suppliers');
-                                    case 'retry':
-                                        return po_button($qid, $ref, $t, $lane, $cls === '' ? '' : 'io-btn retry', 'Retry ' . $sup, $sup, $t['buy'][$sup]['reason'] ?? '');
-                                    case 'order_new':
-                                        return po_button($qid, $ref, $t, $lane, $cls, 'Order new item from ' . $sup, $sup, 'A bought-in item was added after the order was processed');
-                                    case 'start':
-                                        return '<form method="post" action="/factory/set-status.php">' . $h
-                                             . '<button type="submit" name="status" value="in_production" class="' . $cls . '" title="Put the blinds we make on the floor">Start production</button></form>';
-                                    case 'order':
-                                        return '<a class="' . $cls . '" href="/factory/order-suppliers.php?id=' . $qid . $backQ . '" title="Send the bought-in lines to ' . e($sup) . '">Order from ' . e($sup) . '</a>';
-                                    case 'receive':
-                                        return '<form method="post" action="/factory/boughtin-received.php">' . $h
-                                             . '<input type="hidden" name="supplier_name" value="' . e($sup) . '">'
-                                             . '<button type="submit" class="' . $cls . '" title="The goods from ' . e($sup) . ' have arrived">Received from ' . e($sup) . '</button></form>';
-                                    case 'dispatch':
-                                        return '<form method="post" action="/factory/set-status.php">' . $h
-                                             . '<button type="submit" name="status" value="dispatched" class="' . $cls . '" title="Everything is made and received">Dispatch</button></form>';
-                                    case 'floor':
-                                        return '<a class="' . ($cls === 'io-btn advance' ? 'io-btn floor' : $cls) . '" href="/factory/order-areas.php?order=' . $qid . '" title="The floor is making these — see how far each blind has got">See progress</a>';
-                                }
-                                return '';
-                            };
+                            $dueSup = (string) ($due['supplier'] ?? '');
+                            $dueTxt = [
+                                'process'   => 'Process order',
+                                'retry'     => 'Retry ' . $dueSup,
+                                'order_new' => 'Order new item from ' . $dueSup,
+                                'start'     => 'Start production',
+                                'order'     => 'Order from ' . $dueSup,
+                                'receive'   => 'Received from ' . $dueSup,
+                                'dispatch'  => 'Dispatch',
+                            ][$due['kind'] ?? ''] ?? '';
+                            $dueCol = [
+                                'process' => 'new', 'start' => 'new', 'dispatch' => 'ready',
+                                'retry' => 'awaiting_supplier', 'order_new' => 'awaiting_supplier',
+                                'order' => 'awaiting_supplier', 'receive' => 'awaiting_supplier',
+                            ][$due['kind'] ?? ''] ?? '';
+                            $plUrl = '/factory/pipeline.php?q=' . rawurlencode($ref) . ($dueCol !== '' ? '#col-' . $dueCol : '');
                             // "Mark made" overrides the floor: say so and finish its blinds
                             // (force_made) rather than letting the order read made while the
                             // floor says 0 of 2.
                             $floorOpen = ($fjNow === 'in_production' && $prog !== null && $prog['total'] > 0 && $prog['done'] < $prog['total'])
                                 ? (int) $prog['total'] - (int) $prog['done'] : 0;
                         ?>
-                            <?php foreach ($mains as $mj): ?><?= $jobHtml($mj, $qid, $lane, 'io-btn advance', $backQ) ?><?php endforeach; ?>
+                            <?php if (($due['kind'] ?? '') === 'floor'): ?>
+                                <a class="io-btn floor" href="/factory/order-areas.php?order=<?= $qid ?>" title="The floor is making these — see how far each blind has got">See progress</a>
+                            <?php elseif ($dueTxt !== ''): ?>
+                                <a class="io-pl" href="<?= e($plUrl) ?>" title="<?= e($dueTxt) ?> is done on the Pipeline"><span class="io-pl-what"><?= e($dueTxt) ?></span>Do this on the Pipeline &rarr;</a>
+                            <?php endif; ?>
                             <details class="io-more">
-                                <summary aria-label="More actions for <?= e($ref) ?>" title="More actions">&middot;&middot;&middot;</summary>
+                                <summary aria-label="More for <?= e($ref) ?>" title="More">&middot;&middot;&middot;</summary>
                                 <div class="io-menu">
-                                    <?php foreach ($jobs as $j): ?><?= $jobHtml($j, $qid, $lane, '', $backQ) ?><?php endforeach; ?>
-                                    <?php if ($jobs): ?><hr><?php endif; ?>
                                     <a href="/factory/worksheet-print.php?order=<?= $qid ?>" target="_blank" rel="noopener">Worksheet</a>
                                     <a href="/factory/edit-order.php?order=<?= $qid ?>">Edit order</a>
                                     <?php if ($showMake && $t['make']['released']): ?><a href="/factory/order-areas.php?order=<?= $qid ?>">See progress</a><?php endif; ?>
@@ -901,5 +891,4 @@ require __DIR__ . '/../_partials/factory_head.php';
 })();
 </script>
 
-<?php if ($ioOffice) echo po_modal(po_skip_summary($pdo, $MASTER)); ?>
 <?php require __DIR__ . '/../_partials/factory_foot.php'; ?>
