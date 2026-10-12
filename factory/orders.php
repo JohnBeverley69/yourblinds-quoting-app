@@ -20,27 +20,28 @@ $user    = current_user();
 $pdo     = db();
 $factory = ar_factory_id();
 
-$all  = fc_orders($pdo, $factory);
-$meta = fc_stage_meta();
+$all    = fc_orders($pdo, $factory);
+$groups = fc_filter_groups();
+$keys   = array_merge(...array_values(array_map('array_keys', $groups)));
 
+// ?stage= keeps its old name so existing links (dashboard tiles, the Quotes menu
+// item) still land; 'dispatched' is still understood though it has no chip now.
 $stage   = (string) ($_GET['stage'] ?? 'open');
 $account = (int) ($_GET['account'] ?? -1);
 $q       = trim((string) ($_GET['q'] ?? ''));
-if ($stage !== 'open' && $stage !== 'all' && !isset($meta[$stage])) $stage = 'open';
+if (!in_array($stage, $keys, true) && $stage !== 'dispatched') $stage = 'open';
 
 // Chip counts across the whole set (before account/search filters).
-$counts = ['open' => 0, 'all' => count($all)] + array_fill_keys(array_keys($meta), 0);
+$counts = array_fill_keys($keys, 0);
 $accounts = [];
 foreach ($all as $r) {
-    $counts[$r['stage']]++;
-    if ($r['stage'] !== 'dispatched') $counts['open']++;
+    foreach ($keys as $k) if (fc_filter_match($r, $k)) $counts[$k]++;
     $accounts[$r['account_key']] = $r['account'];
 }
 asort($accounts, SORT_NATURAL | SORT_FLAG_CASE);
 
 $rows = array_values(array_filter($all, static function (array $r) use ($stage, $account, $q): bool {
-    if ($stage === 'open' && $r['stage'] === 'dispatched') return false;
-    if ($stage !== 'open' && $stage !== 'all' && $r['stage'] !== $stage) return false;
+    if (!fc_filter_match($r, $stage)) return false;
     if ($account >= 0 && (int) $r['account_key'] !== $account) return false;
     if ($q !== '') {
         $hay = mb_strtolower($r['quote_number'] . ' ' . $r['account'] . ' ' . ($r['customer_reference'] ?? '')
@@ -58,6 +59,8 @@ $qs = static function (array $over) use ($stage, $account, $q): string {
     return '/factory/orders.php' . ($p ? '?' . http_build_query($p) : '');
 };
 $money = static fn ($n) => $n === null ? '' : '£' . number_format((float) $n, 2);
+// Invoice numbers link to the PDF only for someone allowed on the accounts pages (#1057).
+$canAccounts = !function_exists('factory_accounts_user') || factory_accounts_user();
 
 // Highlight Quotes in the sidebar when that is the stage being shown, so the
 // new tab lights up rather than Orders staying lit for both.
@@ -77,6 +80,16 @@ $activeNav = $stage === 'notplaced' ? 'factory-quotes' : 'factory-orders';
       .fc-chips a.active { background:var(--brand); color:#fff; }
       .fc-chips a:hover { border-color:var(--border-strong); }
       .fc-chips .n { font-variant-numeric:tabular-nums; opacity:.8; }
+      .fc-chips { gap:.5rem 1.1rem; }
+      .fc-group { display:inline-flex; gap:.35rem; align-items:center; flex-wrap:wrap; }
+      .fc-gl { font-size:.6875rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:var(--text-faint); margin-right:.1rem; }
+      .fc-chips a.warn:not(.active) { color:#b91c1c; background:#fee2e2; }
+      .fc-next { font-size:.8125rem; font-weight:600; color:var(--text-muted); white-space:nowrap; text-decoration:none; }
+      a.fc-next { color:var(--link); }
+      a.fc-next:hover { text-decoration:underline; }
+      .fc-next.urgent { color:#b91c1c; }
+      .fc-next.done { color:#0d7a67; }
+      .fc-sub a { color:inherit; }
       .fc-filters { display:flex; gap:.5rem; flex-wrap:wrap; margin:0 0 .9rem; }
       .fc-filters input, .fc-filters select { padding:.45rem .7rem; border:1px solid var(--border-strong); border-radius:8px;
                     font:inherit; background:var(--bg-input); color:var(--text-body); }
@@ -87,10 +100,11 @@ $activeNav = $stage === 'notplaced' ? 'factory-quotes' : 'factory-orders';
       .fc-sub { color:var(--text-faint); font-size:.8125rem; }
       .fc-card { background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:.25rem .5rem; }
       .fc-empty { padding:1.6rem 1rem; text-align:center; color:var(--text-faint); }
-      a.fc-link { font-weight:600; color:var(--text-primary); text-decoration:none; }
+      a.fc-link { font-weight:600; color:var(--text-primary); text-decoration:none; white-space:nowrap; }
       a.fc-link:hover { color:var(--link); text-decoration:underline; }
       .fc-rm { margin-left:.45rem; font-size:.75rem; color:var(--link); text-decoration:none; white-space:nowrap; }
       .fc-rm:hover { text-decoration:underline; }
+      @media (max-width:1100px){ .fc-hide-md { display:none; } }
       @media (max-width:720px){ .fc-hide-sm { display:none; } }
     </style>
 </head>
@@ -126,18 +140,25 @@ $activeNav = $stage === 'notplaced' ? 'factory-quotes' : 'factory-orders';
          orders yet. Open one to add blinds or place it.</p>
       <?php else: ?>
       <p class="page-subtitle ui-hint">Every order placed with us, whoever placed it: from their portal, as a direct order,
-         or keyed in here. Our own quotes that aren&rsquo;t placed yet show as <b>Quotes</b>.</p>
+         or keyed in here. <b>Making</b> is where the blinds are, <b>Money</b> is where the bill is, and <b>Open</b>
+         is anything not yet both dispatched and paid.</p>
       <?php endif; ?>
     </div>
     <a href="/master-admin/new-order.php" class="btn btn-primary">+ New order</a>
   </div>
 
-  <div class="fc-chips" role="navigation" aria-label="Filter by stage">
-    <a href="<?= e($qs(['stage' => 'open'])) ?>" class="<?= $stage === 'open' ? 'active' : '' ?>">Open <span class="n"><?= $counts['open'] ?></span></a>
-    <?php foreach ($meta as $k => [$label]): ?>
-      <a href="<?= e($qs(['stage' => $k])) ?>" class="<?= $stage === $k ? 'active' : '' ?>"><?= e($label) ?> <span class="n"><?= $counts[$k] ?></span></a>
+  <div class="fc-chips" role="navigation" aria-label="Filter orders">
+    <?php foreach ($groups as $gname => $chips): ?>
+      <span class="fc-group">
+        <?php if (trim($gname) !== ''): ?><span class="fc-gl"><?= e($gname) ?></span><?php endif; ?>
+        <?php foreach ($chips as $k => $label): ?>
+          <a href="<?= e($qs(['stage' => $k])) ?>" class="<?= $stage === $k ? 'active' : '' ?><?= in_array($k, ['needs_invoicing', 'overdue'], true) && $counts[$k] > 0 ? ' warn' : '' ?>"><?= e($label) ?> <span class="n"><?= $counts[$k] ?></span></a>
+        <?php endforeach; ?>
+      </span>
     <?php endforeach; ?>
-    <a href="<?= e($qs(['stage' => 'all'])) ?>" class="<?= $stage === 'all' ? 'active' : '' ?>">All <span class="n"><?= $counts['all'] ?></span></a>
+    <?php if ($stage === 'dispatched'): ?>
+      <a href="<?= e($qs(['stage' => 'dispatched'])) ?>" class="active">Dispatched</a>
+    <?php endif; ?>
   </div>
 
   <form method="get" class="fc-filters" action="/factory/orders.php">
@@ -165,8 +186,8 @@ $activeNav = $stage === 'notplaced' ? 'factory-quotes' : 'factory-orders';
       <div class="table-wrap">
         <table class="table">
           <thead><tr>
-            <th>Order</th><th>Account</th><th class="fc-hide-sm">Their ref</th><th class="fc-hide-sm">Date</th>
-            <th class="num">Blinds</th><th class="num fc-hide-sm">Value</th><th>Stage</th>
+            <th>Order</th><th>Account</th><th class="fc-hide-md">Their ref</th><th class="fc-hide-md">Date</th>
+            <th class="num">Blinds</th><th class="num fc-hide-sm">Value</th><th>Making</th><th>Money</th><th>Next</th>
           </tr></thead>
           <tbody>
           <?php foreach ($rows as $r): ?>
@@ -179,11 +200,19 @@ $activeNav = $stage === 'notplaced' ? 'factory-quotes' : 'factory-orders';
                 <?php endif; ?>
               </td>
               <td><?= e($r['account']) ?></td>
-              <td class="fc-hide-sm"><?= e((string) ($r['customer_reference'] ?? '')) ?></td>
-              <td class="fc-hide-sm"><?= e(date('j M Y', strtotime((string) $r['created_at']))) ?></td>
+              <td class="fc-hide-md"><?= e((string) ($r['customer_reference'] ?? '')) ?></td>
+              <td class="fc-hide-md" style="white-space:nowrap"><?= e(date('j M Y', strtotime((string) $r['created_at']))) ?></td>
               <td class="num"><?= (int) $r['blinds'] ?></td>
               <td class="num fc-hide-sm"><?= e($money($r['value'])) ?></td>
-              <td><?= fc_stage_pill($r['stage']) ?><?php if ($r['invoice'] !== ''): ?><span class="fc-inv" title="Invoiced"><?= e($r['invoice']) ?></span><?php endif; ?>
+              <td><?= fc_stage_pill($r['stage']) ?></td>
+              <td><?= fc_money_pill($r['money']) ?>
+                <?php foreach ($r['invoices'] as $iv): ?>
+                  <div class="fc-sub"><?php if ($canAccounts): ?><a href="/master-admin/invoice-pdf.php?id=<?= (int) $iv['id'] ?>" target="_blank" rel="noopener"><?= e($iv['number']) ?></a><?php else: ?><?= e($iv['number']) ?><?php endif; ?><?php if ($iv['outstanding'] > 0.004): ?> &middot; <?= e($money($iv['outstanding'])) ?> owed<?php if ($iv['due'] !== ''): ?>, due <?= e(date('j M', strtotime($iv['due']))) ?><?php endif; ?><?php endif; ?></div>
+                <?php endforeach; ?></td>
+              <td>
+                <?php [$nLabel, $nUrl, $nUrgent] = $r['next']; ?>
+                <?php if ($nUrl !== ''): ?><a class="fc-next<?= $nUrgent ? ' urgent' : '' ?>" href="<?= e($nUrl) ?>"><?= e($nLabel) ?></a>
+                <?php else: ?><span class="fc-next<?= $nUrgent ? ' urgent' : '' ?><?= $nLabel === 'Done' ? ' done' : '' ?>"><?= e($nLabel) ?></span><?php endif; ?>
                 <?php if ($r['stage'] !== 'notplaced'): ?><a class="fc-rm" href="/factory/remake-new.php?order=<?= (int) $r['id'] ?>" title="Raise a remake on this order">&#8635; Remake</a><?php endif; ?></td>
             </tr>
           <?php endforeach; ?>

@@ -305,6 +305,14 @@ if (!empty($quote['remake_of_quote_id'])) {
 // In Production"). Not on the factory's own quotes — it has its own pages.
 require_once __DIR__ . '/../_partials/order_stage.php';
 $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quote['fulfilment_stage'] ?? null);
+// The factory's OWN placed order, opened by the console office: show Making +
+// Money as Console → Orders does, so "invoiced" vs "paid" is clear here too.
+$fcStatus = null;
+if (is_factory_client($clientId) && function_exists('factory_console_user') && factory_console_user()
+    && in_array((string) ($quote['status'] ?? ''), os_placed_statuses(), true)) {
+    require_once __DIR__ . '/../_partials/factory_console.php';
+    $fcStatus = fc_order_status(db(), $clientId, $quote);
+}
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -325,6 +333,8 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
         .status-ordered   { background: #ede9fe; color: #5b21b6; }
         .status-invoiced  { background: #fef3c7; color: #92400e; }
         .status-paid      { background: #14532d; color: #ffffff; }
+        .qsb-fc { margin-left: 0.5rem; font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.85; }
+        .qsb-fc .fc-pill { display: inline-block; padding: 0.0625rem 0.5rem; font-size: 0.6875rem; font-weight: 700; border-radius: 999px; white-space: nowrap; text-transform: none; letter-spacing: 0; margin-right: 0.35rem; }
         .item-desc { font-size: 0.875rem; color: var(--text-secondary); line-height: 1.45; }
         .item-desc strong { color: var(--text-primary); font-weight: 600; }
         .item-extras { color: var(--text-faint); font-size: 0.8125rem; margin-top: 0.25rem; }
@@ -858,6 +868,9 @@ $factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quo
                     <?= e((string) $quote['status']) ?>
                 </span>
                 <?php if ($factoryPill !== ''): ?><?= $factoryPill ?><?php endif; ?>
+                <?php if ($fcStatus): ?>
+                    <span class="qsb-fc" title="Making / Money">Making <?= fc_stage_pill($fcStatus['stage']) ?> Money <?= fc_money_pill($fcStatus['money']) ?></span>
+                <?php endif; ?>
             </span>
             <?php
                 // The two transitions that almost always want one-click
