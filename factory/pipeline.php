@@ -31,6 +31,7 @@ require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require_once __DIR__ . '/../_partials/factory_console.php';
 require_once __DIR__ . '/../_partials/process_order.php';
+require_once __DIR__ . '/../_partials/remakes.php';   // rm_waiting_count() — the sidebar only loads it for the main factory's console
 
 requireFactoryOffice();
 
