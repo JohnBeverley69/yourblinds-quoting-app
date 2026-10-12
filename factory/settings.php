@@ -20,7 +20,21 @@ $MASTER = current_factory_id();
 $flashOk = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
-    if (isset($_POST['reset'])) {
+    if (isset($_POST['floor_lanes_form'])) {
+        // Floor logins see the Incoming orders tabs + MAKE / BUY chips (read-only).
+        $on = !empty($_POST['floor_sees_lanes']) ? 1 : 0;
+        try {
+            $pdo->prepare(
+                'INSERT INTO client_settings (client_id, floor_sees_lanes) VALUES (?, ?)
+                 ON DUPLICATE KEY UPDATE floor_sees_lanes = VALUES(floor_sees_lanes)'
+            )->execute([$MASTER, $on]);
+            $_SESSION['flash_success'] = $on
+                ? 'Floor logins can now see the order tabs on Incoming orders.'
+                : 'Floor logins see the plain order list again.';
+        } catch (Throwable $e) {
+            $_SESSION['flash_success'] = 'Could not save — run setup/migrations/migrate_floor_sees_lanes.php first.';
+        }
+    } elseif (isset($_POST['reset'])) {
         foc_reset($pdo, $MASTER);
         $_SESSION['flash_success'] = 'Order colours reset to the defaults.';
     } else {
@@ -36,6 +50,13 @@ $flashOk = (string) ($_SESSION['flash_success'] ?? '');
 unset($_SESSION['flash_success']);
 
 $colours = foc_colours($pdo, $MASTER);
+
+$floorSeesLanes = null;   // null = column not migrated yet
+try {
+    $fl = $pdo->prepare('SELECT floor_sees_lanes FROM client_settings WHERE client_id = ? LIMIT 1');
+    $fl->execute([$MASTER]);
+    $floorSeesLanes = (int) $fl->fetchColumn() === 1;
+} catch (Throwable $e) { /* not migrated */ }
 
 // A tiny "when does an order get this colour?" note per state, so it's not a
 // mystery which is which.
@@ -109,5 +130,21 @@ require __DIR__ . '/../_partials/factory_head.php';
         </div>
     </form>
 </div>
+
+<?php if ($floorSeesLanes !== null): ?>
+<div class="fs-card" style="margin-top:1rem">
+    <h2>Floor logins</h2>
+    <p class="fs-note">On <strong>Incoming orders</strong>, the office sees tabs for the next jobs (To make, To order, Awaiting supplier…) and each order's MAKE and BUY progress. Floor logins see a plain list with the Worksheet button. Switch this on to let them see the tabs and progress too. They still can't action anything.</p>
+    <form method="post" action="/factory/settings.php">
+        <?= csrf_field() ?>
+        <input type="hidden" name="floor_lanes_form" value="1">
+        <label style="display:flex;gap:.6rem;align-items:center;font-weight:600">
+            <input type="checkbox" name="floor_sees_lanes" value="1" <?= $floorSeesLanes ? 'checked' : '' ?> style="width:18px;height:18px">
+            Floor logins can see the order tabs (read-only)
+        </label>
+        <div class="fs-actions"><button type="submit" class="fs-btn primary">Save</button></div>
+    </form>
+</div>
+<?php endif; ?>
 
 <?php require __DIR__ . '/../_partials/factory_foot.php'; ?>

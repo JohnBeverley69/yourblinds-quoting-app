@@ -32,6 +32,18 @@ requireFactory();
 // and the expand chevron stay: the floor is meant to read and print tickets.
 $ioOffice = !function_exists('factory_user_is_office') || factory_user_is_office();
 
+// Floor logins see the next-job tabs and the MAKE / BUY chips only when the
+// factory switches it on (Factory → Settings, client_settings.floor_sees_lanes,
+// default off — John, 2026-10-12). Read-only either way: no action buttons.
+$showLanes = $ioOffice;
+if (!$showLanes) {
+    try {
+        $fl = db()->prepare('SELECT floor_sees_lanes FROM client_settings WHERE client_id = ? LIMIT 1');
+        $fl->execute([current_factory_id()]);
+        $showLanes = (int) $fl->fetchColumn() === 1;
+    } catch (Throwable $e) { /* column not migrated yet — keep them hidden */ }
+}
+
 $pdo    = db();
 $MASTER = current_factory_id();
 
@@ -226,7 +238,7 @@ $LANES = [
     'dispatched' => 'Dispatched',
 ];
 $lane = (string) ($_GET['lane'] ?? 'open');
-if (!isset($LANES[$lane])) $lane = 'open';
+if (!isset($LANES[$lane]) || !$showLanes) $lane = 'open';
 $emptyTrack = ['make' => ['units' => 0, 'made' => 0, 'released' => false], 'buy' => [],
                'total_units' => 0, 'ready_units' => 0, 'waiting_on' => [], 'lines' => []];
 
@@ -484,6 +496,7 @@ require __DIR__ . '/../_partials/factory_head.php';
 <?php if ($flashOk !== ''): ?><div class="io-flash ok"><?= e($flashOk) ?></div><?php endif; ?>
 <?php if ($flashErr !== ''): ?><div class="io-flash err"><?= e($flashErr) ?></div><?php endif; ?>
 
+<?php if ($showLanes): ?>
 <nav class="io-lanes" aria-label="Show orders by their next job">
     <?php foreach ($LANES as $k => $label):
         $href = '/factory/incoming-orders.php' . ($k === 'open' ? '' : '?lane=' . $k); ?>
@@ -491,6 +504,7 @@ require __DIR__ . '/../_partials/factory_head.php';
         <a href="<?= e($href) ?>" class="<?= $lane === $k ? 'active' : '' ?>"<?= $lane === $k ? ' aria-current="page"' : '' ?>><?= e($label) ?> <span class="n"><?= (int) $laneCount[$k] ?></span></a>
     <?php endforeach; ?>
 </nav>
+<?php endif; ?>
 
 <?php if ($loadError !== null): ?>
     <div class="io-empty">Couldn't load orders: <?= e($loadError) ?></div>
@@ -597,7 +611,7 @@ require __DIR__ . '/../_partials/factory_head.php';
                         <?php
                             // MAKE track — the blinds we make, linked to the floor.
                             $mk = $t['make'];
-                            if ($mk['units'] > 0):
+                            if ($showLanes && $mk['units'] > 0):
                                 $mkCls = $mk['made'] >= $mk['units'] ? 't-done' : ($mk['released'] ? 't-prog' : 't-idle');
                                 $mkTxt = $mk['released'] || $mk['made'] > 0
                                     ? $mk['made'] . '/' . $mk['units'] . ' made'
@@ -607,7 +621,7 @@ require __DIR__ . '/../_partials/factory_head.php';
                         <?php endif; ?>
                         <?php
                             // BUY-IN track — one chip per supplier.
-                            foreach ($t['buy'] as $supName => $b):
+                            foreach ($showLanes ? $t['buy'] : [] as $supName => $b):
                                 $bCls = $b['state'] === 'received' ? 't-done' : ($b['state'] === 'ordered' ? 't-wait' : 't-todo');
                                 $bTxt = $b['state'] === 'received' ? 'received'
                                       : ($b['state'] === 'ordered' ? 'ordered ' . date('j M', strtotime((string) $b['sent_at'])) : $b['units'] . ' to order');
@@ -629,7 +643,7 @@ require __DIR__ . '/../_partials/factory_head.php';
                         <?php if ($parts): ?>
                             <span class="io-waiting" title="Parts still to make on the floor">Floor: <b><?= implode('</b> · <b>', $parts) ?></b></span>
                         <?php endif; ?>
-                        <?php if ($fs !== 'dispatched' && $t['total_units'] > 0): ?>
+                        <?php if ($showLanes && $fs !== 'dispatched' && $t['total_units'] > 0): ?>
                             <span class="io-ready">
                                 <b><?= (int) $t['ready_units'] ?> of <?= (int) $t['total_units'] ?> ready</b><?php if ($t['waiting_on']): ?> · waiting on <?= e(implode(' · ', $t['waiting_on'])) ?><?php endif; ?>
                             </span>
@@ -655,8 +669,11 @@ require __DIR__ . '/../_partials/factory_head.php';
                                 $sup = (string) ($j['supplier'] ?? '');
                                 switch ($j['kind']) {
                                     case 'accept':
+                                        // Accept = take it on AND put its blinds on the floor
+                                        // (set-status.php, accept=1). All bought-in: just accepted.
                                         return '<form method="post" action="/factory/set-status.php">' . $h
-                                             . '<button type="submit" name="status" value="received" class="' . $cls . '" title="Take the order on — it moves to To make / To order">Accept</button></form>';
+                                             . '<input type="hidden" name="accept" value="1">'
+                                             . '<button type="submit" name="status" value="received" class="' . $cls . '" title="Take the order on and put its blinds on the floor">Accept</button></form>';
                                     case 'start':
                                         return '<form method="post" action="/factory/set-status.php">' . $h
                                              . '<button type="submit" name="status" value="in_production" class="' . $cls . '" title="Put the blinds we make on the floor">Start production</button></form>';
