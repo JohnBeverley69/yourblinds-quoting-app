@@ -428,3 +428,33 @@ if (!function_exists('ptp_parse_band_blocks')) {
         return $bands;
     }
 }
+
+if (!function_exists('ptp_canonical_band')) {
+    /**
+     * The spelling a band already has on this product, for a code the parser
+     * read from a file. The parser upper-cases what it reads ("Band Blackout" →
+     * BLACKOUT), but a band's NAME is its identity: fabrics, option scopes and the
+     * band box all carry it, and the push keeps the master's case (#1032). So an
+     * import into a product whose fabrics already say "Blackout" made a second,
+     * shouting "BLACKOUT" table. Reuse an existing spelling (price table first,
+     * then the fabrics) when one matches ignoring case; otherwise keep the
+     * upper-cased code as before.
+     */
+    function ptp_canonical_band(PDO $pdo, int $clientId, int $productId, string $code): string
+    {
+        $code = trim($code);
+        if ($code === '') return $code;
+        foreach ([
+            'SELECT band_code FROM price_tables    WHERE client_id = ? AND product_id = ? AND UPPER(band_code) = UPPER(?) LIMIT 1',
+            'SELECT band_code FROM product_options WHERE client_id = ? AND product_id = ? AND UPPER(band_code) = UPPER(?) LIMIT 1',
+        ] as $sql) {
+            try {
+                $st = $pdo->prepare($sql);
+                $st->execute([$clientId, $productId, $code]);
+                $hit = $st->fetchColumn();
+                if ($hit !== false && trim((string) $hit) !== '') return trim((string) $hit);
+            } catch (Throwable $e) { /* column missing on an old schema — fall through */ }
+        }
+        return $code;
+    }
+}

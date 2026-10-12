@@ -175,7 +175,7 @@ $bpi_import = function (array $bands) use ($clientId, $productId, $systemId): ar
     $pdo->beginTransaction();
     try {
         foreach ($bands as $band) {
-            $code  = strtoupper((string) ($band['code'] ?? ''));
+            $code  = ptp_canonical_band($pdo, (int) $clientId, (int) $productId, strtoupper((string) ($band['code'] ?? '')));
             $cells = is_array($band['cells'] ?? null) ? $band['cells'] : [];
             if ($code === '') continue;
 

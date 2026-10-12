@@ -71,7 +71,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Single-band semantics: take the first band only.
                 $picked       = $bands[0];
                 $extrasIgnored = max(0, count($bands) - 1);
-                $code         = strtoupper($picked['code']);
+                $code         = ptp_canonical_band(db(), (int) $clientId, (int) $productId, strtoupper($picked['code']));
 
                 if (!$picked['cells']) {
                     $error = 'Band ' . $code . ' had no price cells.';
