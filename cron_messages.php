@@ -7,6 +7,7 @@ declare(strict_types=1);
  * Sends, 10am–8pm UK time:
  *   - day-before appointment reminders (sms_run_day_before(), _partials/sms.php)
  *   - quote follow-ups (qfu_run(), _partials/quote_follow_up.php)
+ * and deletes Messages-log entries over 12 months old (sms_purge_old()).
  *
  * RUN IT — one of:
  *   CLI (the Cloudways cron; no auth needed, nothing served):
@@ -65,3 +66,7 @@ echo "Quote follow-ups: {$f['texts']} texts and {$f['emails']} emails sent, {$f[
 if ((int) $now->format('G') < 10 || (int) $now->format('G') >= 20) {
     echo "(Reminders and follow-ups only go out between 10am and 8pm.)\n";
 }
+
+// Messages log retention: 12 months (privacy policy).
+$purged = sms_purge_old();
+if ($purged > 0) echo "Messages log: {$purged} entries over 12 months old deleted.\n";

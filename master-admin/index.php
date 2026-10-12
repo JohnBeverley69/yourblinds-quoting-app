@@ -188,6 +188,30 @@ $activeNav = 'master-admin';
             </form>
         </section>
 
+        <!-- Send-from address for every email the platform sends (quotes,
+             invoices, supplier orders…). Companies' emails show THEIR name,
+             but come from this address with Reply-To set to the company. -->
+        <?php
+            $mailFromSet = trim((string) (app_setting_get('mail_from', '') ?? ''));
+            $mailFromEnv = (string) (env('MAIL_FROM', 'noreply@yourblinds.uk') ?? 'noreply@yourblinds.uk');
+            $mailFromNow = ($mailFromSet !== '' && filter_var($mailFromSet, FILTER_VALIDATE_EMAIL)) ? $mailFromSet : $mailFromEnv;
+        ?>
+        <section class="section">
+            <h2 class="section-title" style="margin:0 0 0.5rem">Send-from email address</h2>
+            <p style="color:var(--text-muted);font-size:0.875rem;margin:0 0 1rem;line-height:1.5;max-width:46rem">
+                Every email YourBlinds sends comes <strong>from this address</strong>, showing the company's name, with
+                replies going to the company. Now: <strong><?= e($mailFromNow) ?></strong>.
+                To change it: create the mailbox (at Fasthosts), add it to AuthSMTP's <em>authorised From addresses</em>,
+                then enter it here. A test email is sent to you first &mdash; if AuthSMTP refuses it, nothing changes.
+            </p>
+            <form method="post" action="/master-admin/email-from.php" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center">
+                <?= csrf_field() ?>
+                <input type="email" name="mail_from" required placeholder="e.g. hello@yourblinds.uk"
+                       value="<?= e($mailFromSet) ?>" style="min-width:18rem;padding:.45rem .6rem">
+                <button type="submit" class="btn btn-primary">Test and save</button>
+            </form>
+        </section>
+
         <!-- Public sign-up: open or close the self-service registration form.
              Close it while trial tenants are being cleared out; reopen when
              real clients should be able to register again. -->

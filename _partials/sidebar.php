@@ -318,6 +318,9 @@ if ($isFactoryConsole) {
                 'trade-accounts' => ['/master-admin/trade-accounts.php', 'Trade accounts', $isSuperAdmin],
                 'wholesale'      => ['/master-admin/wholesale.php',      'Invoices',       $isFactoryAccounts],
                 'bank'           => ['/master-admin/bank.php',           'Bank',           $isFactoryAccounts],
+                // Emails (and texts) Beverley Blinds has sent — the Messages log. The page itself
+                // needs "see all customers' jobs" (cm_can_view_all_customers), hence both.
+                'messages'       => ['/messages/index.php',              'Messages',       $isFactoryAccounts && $canSeeAllJobs],
                 'quickbooks'     => ['/master-admin/quickbooks.php',     'QuickBooks',     $isSuperAdmin],
                 // The accounts person matches customers; super-admins reach it from the QuickBooks page.
                 'qbo-customers'  => ['/master-admin/quickbooks-customers.php', 'QuickBooks customers', !$isSuperAdmin && $isFactoryAccounts],

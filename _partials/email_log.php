@@ -7,12 +7,15 @@ declare(strict_types=1);
  * page next to the texts, with whether it went (BlindDesk's "Email Log").
  *
  * Called from mailer_send() when the caller passes $opts['log'] — so the
- * record is written whatever happened (sent, failed, paused). Only the
- * attachment's file name is kept, never the file. Never throws: logging must
- * not break a send.
+ * record is written whatever happened (sent, failed, paused).
+ *
+ * Privacy: only what's needed to answer "did it go?" is kept — recipient,
+ * subject, date, status and the attachment's NAME. Never the message text or
+ * the file. Entries are deleted after 12 months (sms_purge_old(), run by
+ * cron_messages.php). Never throws: logging must not break a send.
  *
  * "Sent" means our mail server accepted it. Bounces (an address that doesn't
- * exist) come back to the noreply mailbox and are not tracked yet.
+ * exist) come back to the send-from mailbox and are not tracked yet.
  */
 
 /** Kinds of email, for labels on the Messages page. */
@@ -56,7 +59,7 @@ function email_log_record(array $log, $to, string $subject, string $body, ?strin
             $detail = $note;
         }
         $toList = implode(', ', array_filter(array_map(static fn ($r) => trim((string) $r), (array) $to)));
-        $text   = $subject . "\n\n" . $body . ($attachmentName ? "\n\n[Attached: " . $attachmentName . ']' : '');
+        $text   = $subject . ($attachmentName ? "\n[Attached: " . $attachmentName . ']' : '');   // never the body
 
         $cols = ['client_id', 'channel', 'direction', 'kind', 'customer_id', 'user_id',
                  'to_addr', 'from_addr', 'body', 'segments', 'status', 'status_detail', 'provider', 'sent_at'];
