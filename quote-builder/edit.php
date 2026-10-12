@@ -1470,36 +1470,6 @@ if (is_factory_client($clientId) && function_exists('factory_console_user') && f
                 </div>
             <?php endif; ?>
             </form>
-            <?php if ($isDirectOrder):
-                // Sold for — its own form so it stays editable after the order is
-                // placed (the price is often agreed later). Default tick: inc VAT
-                // for a VAT-registered business, ex VAT otherwise.
-                $sfAmt = $quote['sold_for_amount'] ?? null;
-                $sfInc = $sfAmt !== null && $sfAmt !== ''
-                    ? !empty($quote['sold_for_inc_vat'])
-                    : qb_client_vat_percent(db(), (int) $quote['client_id']) > 0;   // same rate the sum uses
-            ?>
-            <form method="post" action="/quote-builder/save_sold_for.php" class="form" novalidate
-                  style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border)">
-                <?= csrf_field() ?>
-                <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
-                <label for="sold_for" style="display:block;font-weight:600">Sold for <span style="color:var(--text-faint);font-weight:400">(optional &mdash; what your customer is paying)</span></label>
-                <div style="display:flex;gap:0.75rem;align-items:center;flex-wrap:wrap;margin-top:0.35rem">
-                    <span>£</span>
-                    <input id="sold_for" name="sold_for" type="number" step="0.01" min="0" inputmode="decimal"
-                           style="width:9rem" placeholder="0.00"
-                           value="<?= ($sfAmt !== null && $sfAmt !== '') ? e(number_format((float) $sfAmt, 2, '.', '')) : '' ?>">
-                    <label style="display:inline-flex;align-items:center;gap:0.35rem;font-weight:400;margin:0">
-                        <input type="checkbox" name="sold_for_inc_vat" value="1" <?= $sfInc ? 'checked' : '' ?>> inc VAT
-                    </label>
-                    <button type="submit" class="btn btn-secondary">Save</button>
-                </div>
-                <span style="display:block;color:var(--text-muted,#667);font-size:0.8125rem;margin-top:0.35rem">
-                    Only for your own figures &mdash; we never see it. With a price, this order counts in your Dashboard's
-                    sales and profit; without one, it's left out. You can add or change it at any time.
-                </span>
-            </form>
-            <?php endif; ?>
         </section>
 
         <?php if ($editable): ?>

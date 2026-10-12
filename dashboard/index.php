@@ -209,16 +209,9 @@ $hasDirectOrder = false;
 try { $pdo->query('SELECT direct_order FROM quotes LIMIT 0'); $hasDirectOrder = true; } catch (Throwable $e) {}
 $noDirect  = $hasDirectOrder ? ' AND COALESCE(direct_order, 0) = 0'   : '';
 $noDirectQ = $hasDirectOrder ? ' AND COALESCE(q.direct_order, 0) = 0' : '';
-// A direct order WITH a "Sold for" price (what the client's customer pays) is a
-// real sale: it counts in revenue at that price (gross, like quote totals) and in
-// profit at its net price minus the order total (what they pay us). Without one
-// it stays out. Close rate always leaves direct orders out (they aren't quotes).
-$hasSoldFor = false;
-if ($hasDirectOrder) {
-    try { $pdo->query('SELECT sold_for_net FROM quotes LIMIT 0'); $hasSoldFor = true; } catch (Throwable $e) {}
-}
-$keepSales  = $hasSoldFor ? ' AND (COALESCE(direct_order, 0) = 0 OR sold_for_net IS NOT NULL)'     : $noDirect;
-$keepSalesQ = $hasSoldFor ? ' AND (COALESCE(q.direct_order, 0) = 0 OR q.sold_for_net IS NOT NULL)' : $noDirectQ;
+// Sales figures keep direct orders out (see above) — the same filter.
+$keepSales  = $noDirect;
+$keepSalesQ = $noDirectQ;
 // Remake orders (Factory Console) are the factory putting a fault right, not a new
 // sale — keep them out of every sales, close-rate and profit figure here.
 try {
@@ -228,8 +221,8 @@ try {
     $keepSales  .= ' AND remake_of_quote_id IS NULL';
     $keepSalesQ .= ' AND q.remake_of_quote_id IS NULL';
 } catch (Throwable $e) { /* remakes not migrated */ }
-$saleTotal  = $hasSoldFor ? 'CASE WHEN COALESCE(direct_order, 0) = 1 THEN sold_for_gross ELSE total END'       : 'total';
-$saleTotalQ = $hasSoldFor ? 'CASE WHEN COALESCE(q.direct_order, 0) = 1 THEN q.sold_for_gross ELSE q.total END' : 'q.total';
+$saleTotal  = 'total';
+$saleTotalQ = 'q.total';
 $inDecided = implode(',', array_fill(0, count($decidedStatuses), '?'));
 
 // ---- Salesperson filter ----------------------------------------------
@@ -321,18 +314,14 @@ if ($canSeeRevenue && $hasDirectOrder) {
     $placed = $wonStatuses;
     $inPl   = implode(',', array_fill(0, count($placed), '?'));
     // A remake is putting a fault right, not another direct order. It inherits
-    // direct_order and the sold_for_* figures from the original (the copy in
-    // _partials/remakes.php skips neither), so without this guard it lands in
-    // these tiles a second time. Lines 204-207 build exactly this guard into
-    // the fragments every other figure on the page uses; the two direct-order
-    // queries (here and the gross-profit supplement below) used none of them.
+    // direct_order from the original, so without this guard it lands in this
+    // tile a second time.
     $st = $pdo->prepare(
         "SELECT COUNT(*) AS n, COALESCE(SUM(total), 0) AS spend
            FROM quotes
           WHERE client_id = ? AND direct_order = 1
             AND remake_of_quote_id IS NULL
             AND status IN ($inPl)
-            " . ($hasSoldFor ? 'AND sold_for_net IS NULL' : '') . "
             $dateClause
             $doUser"
     );
@@ -374,15 +363,11 @@ $productMixTotal = 1;
 if ($canSeeProducts) {
     [$pmDate, $pmDateParams] = $buildDateFilter('q.created_at');
     [$pmUser, $pmUserParams] = $buildUserFilter('q.created_by_user_id');
-    // A priced direct order's lines are at cost; scale them to its net sold-for price.
-    $pmScale = $hasSoldFor
-        ? 'CASE WHEN COALESCE(q.direct_order, 0) = 1 THEN q.sold_for_net / NULLIF(q.subtotal, 0) ELSE 1 END'
-        : '1';
     $st = $pdo->prepare(
         "SELECT qi.product_id,
                 COALESCE(p.name, qi.product_name_snapshot, '(unknown)') AS product_name,
                 SUM(qi.quantity)   AS units,
-                SUM(qi.line_total * $pmScale) AS revenue
+                SUM(qi.line_total) AS revenue
            FROM quote_items qi
            JOIN quotes q     ON q.id = qi.quote_id
            LEFT JOIN products p ON p.id = qi.product_id
@@ -467,24 +452,6 @@ if ($canSeeProfit) {
         $overrideDisc = (float) $od->fetchColumn();
     } catch (Throwable $e) { /* price_override column absent (pre-migration) → no adjustment */ }
 
-    if ($row && $hasSoldFor) {
-        try {
-            $dq = $pdo->prepare(
-                "SELECT COALESCE(SUM(q.sold_for_net), 0) AS sell, COALESCE(SUM(q.subtotal), 0) AS cost, COUNT(*) AS jobs
-                   FROM quotes q
-                  WHERE q.client_id = ? AND q.direct_order = 1 AND q.sold_for_net IS NOT NULL
-                    AND q.remake_of_quote_id IS NULL
-                    AND q.status IN ($inWon)
-                    $mgDate
-                    $mgUser"
-            );
-            $dq->execute($args);
-            $dr = $dq->fetch() ?: ['sell' => 0, 'cost' => 0, 'jobs' => 0];
-            $row['sell_total'] = (float) $row['sell_total'] + (float) $dr['sell'];
-            $row['cost_basis'] = (float) $row['cost_basis'] + (float) $dr['cost'];
-            $row['jobs']       = (int) $row['jobs'] + (int) $dr['jobs'];
-        } catch (Throwable $e) { /* leave quote-only figures */ }
-    }
 
     if ($row) {
         $sell = (float) $row['sell_total'] - $overrideDisc;
@@ -1281,13 +1248,6 @@ $activeNav = 'dashboard';
                 <div class="kpi-value"><?= (int) $kpi['won_count'] ?></div>
                 <div class="kpi-sub">accepted &amp; beyond</div>
             </div>
-            <?php if ($directOrders !== null && (int) $directOrders['n'] > 0): ?>
-            <div class="kpi-tile" title="Orders sent straight through with New order that have no Sold for price yet. Shown at what you pay for them and kept out of revenue and profit, because the system doesn't know what you sold them for. Add a Sold for price on the order to count it.">
-                <div class="kpi-label">Direct orders &mdash; no selling price</div>
-                <div class="kpi-value">£<?= number_format((float) $directOrders['spend'], 2) ?></div>
-                <div class="kpi-sub"><?= (int) $directOrders['n'] ?> order<?= (int) $directOrders['n'] === 1 ? '' : 's' ?> at your cost, ex VAT &middot; not counted in revenue or profit until you add what you sold <?= (int) $directOrders['n'] === 1 ? 'it' : 'them' ?> for</div>
-            </div>
-            <?php endif; ?>
         </div>
         <?php endif; ?>
 

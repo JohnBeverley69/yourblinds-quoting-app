@@ -448,25 +448,15 @@ window.addEventListener('pageshow', function (e) {
                 <?= e($user['company_name']) ?> &middot; <?= e($roleLabel) ?>
             </div>
         </div>
-        <?php if ($hasQuotes && ($canCreateQuotes || $canCreateOrders || $isSuperAdmin)): ?>
+        <?php if ($hasQuotes && ($canCreateQuotes || $isSuperAdmin)): ?>
             <!-- Primary CTA — one "New" button, pinned at the top. The factory
-                 super-admin gets the trade/retail launcher. Everyone else gets
-                 Quote and/or Order by permission: Create quotes → New quote,
-                 Create orders → New order (a straight order to us, no retail
-                 customer). Both → New opens a two-item menu; one → straight there. -->
+                 super-admin gets the trade/retail launcher; everyone else starts a
+                 quote. Direct orders ("New order", no quote) were switched OFF
+                 2026-10-12 (John): every job goes through a quote so its buying
+                 AND selling price are on the system. -->
             <div class="sidebar-cta">
                 <?php if ($isFactoryOffice && $isFactoryAccounts): ?>
                     <a href="/master-admin/new-order.php" class="sidebar-cta-btn"><span aria-hidden="true">+</span> New</a>
-                <?php elseif ($canCreateQuotes && $canCreateOrders): ?>
-                    <details class="sidebar-new">
-                        <summary class="sidebar-cta-btn"><span aria-hidden="true">+</span> New</summary>
-                        <div class="sidebar-new-menu">
-                            <a href="/quote-builder/new.php">New quote</a>
-                            <a href="/quote-builder/new_order.php">New order</a>
-                        </div>
-                    </details>
-                <?php elseif ($canCreateOrders): ?>
-                    <a href="/quote-builder/new_order.php" class="sidebar-cta-btn"><span aria-hidden="true">+</span> New order</a>
                 <?php else: ?>
                     <a href="/quote-builder/new.php" class="sidebar-cta-btn"><span aria-hidden="true">+</span> New</a>
                 <?php endif; ?>
