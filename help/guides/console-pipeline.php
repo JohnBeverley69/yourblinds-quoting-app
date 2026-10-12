@@ -46,7 +46,8 @@ $S = [
     ['12', 'Sending it out', 'On a ready order, the button says Add to today\'s run. It takes you to the Dispatch tray, where the van run is ticked and printed, just as before. Once it has gone out, the card moves on to Dispatched, to invoice. If you do not see the money columns, the button simply says Dispatch.', 12],
     ['13', 'Getting paid', 'In the money columns, the button follows the bill. Raise invoice, in green, when it has gone out with no invoice. Record payment, while it is waiting to be paid, or part paid. And Chase payment, in red, once it is overdue. That opens the account, so you can see everything they owe.', 13],
     ['14', 'Cards move by their buttons', 'You cannot drag a card from one column to another. Cards move with their buttons, and with the work itself, like the floor finishing the blinds. That way nothing skips a check. For example, an order cannot be dispatched until every blind is made, and every bought-in item has been received.', 14],
-    ['15', 'Where\'s my order?', 'When a customer rings to ask where their order is, use the search box at the top. Type the account, the order number, their reference, the name, or an invoice number, then tap Find. The cards that match open up on their own. Or pick an account from the list, to see only their orders. Clear takes you back to the whole board. On a phone, swipe sideways to see every column.', 15],
+    ['15', 'Column colours', 'You can choose the colour of each column. Click Colours, next to Open all and Close all. It opens Factory Settings, at the Pipeline colours card. There is one colour picker for each column. Each colour sets the column\'s top bar, its count, and a faint tint behind it. Click Save pipeline colours, or Reset to defaults to go back.', 15],
+    ['16', 'Where\'s my order?', 'When a customer rings to ask where their order is, use the search box at the top. Type the account, the order number, their reference, the name, or an invoice number, then tap Find. The cards that match open up on their own. Or pick an account from the list, to see only their orders. Clear takes you back to the whole board. On a phone, swipe sideways to see every column.', 16],
 ];
 $len = static fn (int $n): string => (string) round(mb_strlen($S[$n - 1][2]) / 13.6, 1);
 /** Seconds into line $n at which $phrase is spoken (+ $add). */
@@ -181,7 +182,7 @@ $col = static function (string $key, array $cards, array $o = [], string $count 
     [$t, $hint, $c] = $COLS[$key];
     [$cc, $cs] = $o['col'] ?? ['', ''];
     [$hc, $hs] = $o['head'] ?? ['', ''];
-    $h = '<div class="pcol ' . $cc . '" style="--pc:' . $c . ';' . $cs . '">'
+    $h = '<div class="pcol ' . $cc . '" style="--pc:' . $c . ';background:rgba(' . implode(',', array_map('hexdec', str_split(ltrim($c, '#'), 2))) . ',.07);' . $cs . '">'
        . '<header><span class="pt2 ' . $hc . '" style="' . $hs . '">' . $t . '</span><span class="pn">' . ($count !== '' ? $count : count($cards)) . '</span></header>'
        . '<p class="phn">' . $hint . '</p>';
     if (!$cards) $h .= '<p class="pem">Nothing here.</p>';
@@ -204,7 +205,8 @@ $sum = static fn (array $anim = []): string =>
     . '<span class="' . ($anim[2][0] ?? '') . '" style="' . ($anim[2][1] ?? '') . '"><b>1</b> ready to go</span>'
     . '<span class="od ' . ($anim[3][0] ?? '') . '" style="' . ($anim[3][1] ?? '') . '"><b>1</b> overdue</span>'
     . '<span class="ptools"><span class="btns sm ' . ($anim[4][0] ?? '') . '" style="' . ($anim[4][1] ?? '') . '">Open all</span>'
-    . '<span class="btns sm ' . ($anim[5][0] ?? '') . '" style="' . ($anim[5][1] ?? '') . '">Close all</span></span></div>';
+    . '<span class="btns sm ' . ($anim[5][0] ?? '') . '" style="' . ($anim[5][1] ?? '') . '">Close all</span>'
+    . '<span class="btns sm ' . ($anim[8][0] ?? '') . '" style="' . ($anim[8][1] ?? '') . '">Colours</span></span></div>';
 
 $head = '<div class="ph"><div><div class="pt">Pipeline</div>'
       . '<div class="psub">Every open order, left to right from new to paid. Each card says what it&rsquo;s waiting on and gives the next step.</div></div></div>';
@@ -270,6 +272,9 @@ return [
           .gd .prm{ display:inline-block; flex:none; font-size:.8em; font-weight:800; line-height:1; color:#fff; background:#7c3aed; border-radius:4px; padding:.15em .3em; }
           .gd .psum > .prmlink{ background:#ede9fe; color:#5b21b6; border-color:#ede9fe; font-weight:600; } .gd .psum > .prmlink b{ color:#5b21b6; }
           .gd .ptip{ position:absolute; z-index:3; left:30%; top:105%; background:#1f2937; color:#fff; font-size:.6rem; padding:.2rem .45rem; border-radius:5px; white-space:nowrap; }
+          .gd .focr{ display:grid; grid-template-columns:1fr 1.6rem 3.6rem; gap:.4rem; align-items:center; padding:.2rem .4rem; margin:0 0 .2rem; border-radius:6px; font-size:.6rem; color:var(--ink); font-weight:600; }
+          .gd .focr .sw{ width:1.4rem; height:.95rem; border:1px solid var(--border-strong,#9aa3ad); border-radius:3px; }
+          .gd .focr .hx{ font-family:monospace; font-weight:400; color:var(--soft); }
           .gd .pdot{ width:.6em; height:.6em; border-radius:50%; background:#b91c1c; flex:none; margin-left:auto; }
           .gd .pbody{ padding:0 .55em .55em; display:flex; flex-direction:column; gap:.3em; }
           .gd .plink{ font-weight:700; font-size:1.05em; color:var(--ink); border-radius:4px; }
@@ -338,7 +343,7 @@ return [
                 <!-- 0 — poster -->
                 <div class="sc" data-scene="0">
                   ' . $head . $find() . $sum() . $fullBoard . '
-                  <p class="scs" style="margin-top:.7rem">Press <b>&#9654; Play</b> below &mdash; fifteen short chapters, at an easy pace.</p>
+                  <p class="scs" style="margin-top:.7rem">Press <b>&#9654; Play</b> below &mdash; sixteen short chapters, at an easy pace.</p>
                 </div>
 
                 <!-- 1 — what it is for -->
@@ -581,23 +586,56 @@ return [
                   <p class="pfoot a-fade" style="' . $d(14, 'That way nothing') . '">Cards move only with their buttons, so nothing skips a check (no dispatch before every bought-in item is in).</p>
                 </div>
 
-                <!-- 15 — where\'s my order -->
+                <!-- 15 — column colours -->
                 <div class="sc" data-scene="15" data-len="' . $len(15) . '">
+                  <div class="sct a-fade" style="--d:.2s">Column colours</div>
+                  ' . $sum([[], [], [], [], [], [], [], [], ['a-ring', $d(15, 'Click Colours')]]) . '
+                  <div class="two">
+                    <div class="scr a-rise" style="' . $d(15, 'It opens Factory Settings') . '"><b class="h">Pipeline colours</b>
+                      <div class="phn" style="font-size:.6rem;margin:0 0 .4rem">The colour of each column on the <b>Pipeline</b> board: its top bar, its count and a faint tint behind the column. Pick any colour you like for each one.</div>'
+                      . (static function () use ($COLS, $d): string {
+                          $h = '';
+                          foreach (['new', 'confirmed', 'in_production', 'awaiting_supplier', 'ready', 'to_invoice', 'to_pay', 'paid', 'dispatched'] as $k) {
+                              [$t, , $c] = $COLS[$k]; if ($k === 'dispatched') $t = 'Dispatched (white-label factories)';
+                              $row = static fn (string $hex, string $cls = '', string $st = ''): string =>
+                                  '<div class="focr ' . $cls . '" style="grid-area:1/1;border-top:3px solid ' . $hex . ';background:rgba(' . implode(',', array_map('hexdec', str_split(ltrim($hex, '#'), 2))) . ',.10);' . $st . '">'
+                                  . '<span>' . $t . '</span><span class="sw" style="background:' . $hex . '"></span><span class="hx">' . $hex . '</span></div>';
+                              $h .= $k === 'ready'
+                                  ? '<div style="display:grid">' . $row($c, 'a-out', $d(15, 'one colour picker', 1.5)) . $row('#0e7490', 'a-fade', $d(15, 'one colour picker', 1.5)) . '</div>'
+                                  : $row($c);
+                          }
+                          return $h;
+                      })()
+                      . '<div style="display:flex;gap:.35rem;margin-top:.45rem"><span class="pbt a-press" style="display:inline-block;padding:.3rem .6rem;' . $d(15, 'Click Save') . '">Save pipeline colours</span>'
+                      . '<span class="btns a-pop" style="' . $d(15, 'or Reset to defaults') . '">Reset to defaults</span></div></div>
+                    <div>
+                      <div class="pbd" style="font-size:.66rem;display:grid;grid-template-columns:1fr"><div class="a-out" style="grid-area:1/1;' . $d(15, 'Click Save', 1) . '">' . $col('ready', ['E']) . '</div><div class="a-fade" style="grid-area:1/1;' . $d(15, 'Click Save', 1) . '">' . str_replace('--pc:#245ea3;background:rgba(36,94,163,.07)', '--pc:#0e7490;background:rgba(14,116,144,.07)', $col('ready', ['E'])) . '</div></div>
+                      <div class="chips">
+                        <span class="chip a-pop" style="' . $d(15, 'top bar') . '">top bar</span>
+                        <span class="chip a-pop" style="' . $d(15, 'its count') . '">count</span>
+                        <span class="chip a-pop" style="' . $d(15, 'a faint tint') . '">faint tint</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 16 — where\'s my order -->
+                <div class="sc" data-scene="16" data-len="' . $len(16) . '">
                   <div class="sct a-fade" style="--d:.2s">Where&rsquo;s my order?</div>
                   <div class="pfind">
-                    <span class="ib grow a-ring" style="' . $d(15, 'use the search box') . '"><span class="swap"><span class="gph a-out" style="' . $d(15, 'Type the account') . '">Where&rsquo;s my order? Account, order no., their ref, name&hellip;</span>
-                      <span class="a-fade" style="' . $d(15, 'Type the account') . '"><span class="a-type" style="' . $d(15, 'Type the account', .2) . ';--ts:7;--tt:.8s">PO 4420</span></span></span></span>
-                    <span class="ib sel a-ring" style="' . $d(15, 'Or pick an account') . '"><span class="swap"><span class="a-out" style="' . $d(15, 'Or pick an account', .8) . '">All accounts</span><span class="a-fade" style="' . $d(15, 'Or pick an account', .8) . '">ABC Blinds</span></span></span>
-                    <span class="btns a-press" style="' . $d(15, 'then tap Find') . '">Find</span>
-                    <span class="btns a-pop" style="' . $d(15, 'Clear takes you') . '">Clear</span>
+                    <span class="ib grow a-ring" style="' . $d(16, 'use the search box') . '"><span class="swap"><span class="gph a-out" style="' . $d(16, 'Type the account') . '">Where&rsquo;s my order? Account, order no., their ref, name&hellip;</span>
+                      <span class="a-fade" style="' . $d(16, 'Type the account') . '"><span class="a-type" style="' . $d(16, 'Type the account', .2) . ';--ts:7;--tt:.8s">PO 4420</span></span></span></span>
+                    <span class="ib sel a-ring" style="' . $d(16, 'Or pick an account') . '"><span class="swap"><span class="a-out" style="' . $d(16, 'Or pick an account', .8) . '">All accounts</span><span class="a-fade" style="' . $d(16, 'Or pick an account', .8) . '">ABC Blinds</span></span></span>
+                    <span class="btns a-press" style="' . $d(16, 'then tap Find') . '">Find</span>
+                    <span class="btns a-pop" style="' . $d(16, 'Clear takes you') . '">Clear</span>
                   </div>
                   <div class="pbd">'
                     . $col('new', [], [], '0') . $col('in_production', [], [], '0')
-                    . $col('awaiting_supplier', ['<div class="a-pop" style="' . $d(15, 'then tap Find', .6) . '">' . $card('D') . '</div>']) . $col('ready', []) . '
+                    . $col('awaiting_supplier', ['<div class="a-pop" style="' . $d(16, 'then tap Find', .6) . '">' . $card('D') . '</div>']) . $col('ready', []) . '
                   </div>
                   <div class="chips">
-                    <span class="chip a-pop" style="' . $d(15, 'or an invoice number') . '">account &middot; order number &middot; their ref &middot; name &middot; invoice number</span>
-                    <span class="chip ok a-pop" style="' . $d(15, 'On a phone') . '">On a phone: swipe sideways &harr;</span>
+                    <span class="chip a-pop" style="' . $d(16, 'or an invoice number') . '">account &middot; order number &middot; their ref &middot; name &middot; invoice number</span>
+                    <span class="chip ok a-pop" style="' . $d(16, 'On a phone') . '">On a phone: swipe sideways &harr;</span>
                   </div>
                 </div>
 
@@ -632,6 +670,8 @@ return [
              <b>Needs invoicing</b> or <b>Overdue</b>. Click the number to open the card underneath; click again to close it.
              <b>Open all</b> and <b>Close all</b>, at the right of the totals, open or close every card at once. The eight columns share
              the page width; on a screen under about 1100px wide they scroll sideways.</p>
+
+          <p><b>Column colours.</b> <b>Colours</b>, next to Open all and Close all, opens <b>Factory Settings</b> at the <b>Pipeline colours</b> card: one colour picker per column (including <em>Dispatched (white-label factories)</em>). Each colour sets the column&rsquo;s top bar, its count and a faint tint behind it. <b>Save pipeline colours</b> keeps them; <b>Reset to defaults</b> puts the original colours back.</p>
 
           <p><b>Remakes.</b> A remake order&rsquo;s line has a purple <b>R</b> after the order number (hover it: <em>Remake of
              &hellip;</em>). The totals add <b>n remakes in progress</b> with an R, and, when any are waiting, a purple link
