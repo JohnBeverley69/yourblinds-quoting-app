@@ -208,7 +208,7 @@ $activeNav = 'factory-pipeline';
       .pl-find input, .pl-find select { padding:.5rem .75rem; border:1px solid var(--border-strong); border-radius:8px; font:inherit; background:var(--bg-input); color:var(--text-body); }
       .pl-find input { width:24rem; max-width:100%; }
       .pl-sum { display:flex; flex-wrap:wrap; gap:.5rem; margin:0 0 .9rem; font-size:.8125rem; }
-      .pl-sum span { padding:.2rem .65rem; border-radius:999px; background:var(--bg-card); border:1px solid var(--border); color:var(--text-muted); }
+      .pl-sum > span { padding:.2rem .65rem; border-radius:999px; background:var(--bg-card); border:1px solid var(--border); color:var(--text-muted); }
       .pl-sum b { color:var(--text-primary); }
       .pl-board { display:grid; grid-template-columns:repeat(<?= count($COLS) ?>, minmax(0, 1fr)); gap:.4rem; align-items:start; }
       .pl-col { background:var(--bg-subtle-2); border-radius:10px; padding:.4rem; display:flex; flex-direction:column; gap:.2rem; min-width:0; }
@@ -229,6 +229,9 @@ $activeNav = 'factory-pipeline';
       .pl-card > summary:hover { color:var(--link); }
       .pl-card[open] { box-shadow:0 2px 8px rgba(15,23,42,.12); }
       .pl-sn { overflow:hidden; text-overflow:ellipsis; }
+      .pl-rm { display:inline-block; flex:none; font-size:.625rem; font-weight:800; line-height:1; color:#fff; background:#7c3aed; border-radius:4px; padding:.15rem .3rem; border:0 !important; }
+      .pl-rmlink { padding:.2rem .65rem; border-radius:999px; background:#ede9fe; color:#5b21b6; text-decoration:none; font-weight:600; }
+      .pl-rmlink:hover { text-decoration:underline; color:#5b21b6; }
       .pl-dot { width:.5rem; height:.5rem; border-radius:50%; background:#b91c1c; flex:none; margin-left:auto; }
       .pl-body { padding:0 .55rem .55rem; display:flex; flex-direction:column; gap:.35rem; }
       .pl-tools { display:flex; gap:.4rem; margin-left:auto; }
@@ -285,6 +288,9 @@ $activeNav = 'factory-pipeline';
 
   <div class="pl-sum">
     <span><b><?= $open ?></b> open order<?= $open === 1 ? '' : 's' ?></span>
+    <?php $rmOnBoard = count(array_filter($shown, static fn ($r) => $r['remake_of'] !== '' && $r['stage'] !== 'dispatched')); $rmWaiting = rm_waiting_count($pdo, $factory); ?>
+    <?php if ($rmOnBoard > 0): ?><span><b><?= $rmOnBoard ?></b> remake<?= $rmOnBoard === 1 ? '' : 's' ?> in progress <span class="pl-rm">R</span></span><?php endif; ?>
+    <?php if ($rmWaiting > 0): ?><a class="pl-rmlink" href="/factory/remakes.php"><b><?= $rmWaiting ?></b> remake<?= $rmWaiting === 1 ? '' : 's' ?> waiting for approval &rarr;</a><?php endif; ?>
     <?php if ($counts['awaiting_supplier'] > 0): ?><span><b><?= $counts['awaiting_supplier'] ?></b> waiting on suppliers</span><?php endif; ?>
     <?php if ($counts['ready'] > 0): ?><span><b><?= $counts['ready'] ?></b> ready to go</span><?php endif; ?>
     <?php if ($money): $od = count(array_filter($board['to_pay'], static fn ($r) => $r['money'] === 'overdue')); ?>
@@ -311,7 +317,7 @@ $activeNav = 'factory-pipeline';
               foreach ($linesBy[$qid] ?? [] as $l) if ($lineStatus($r, $l)[1] === 'bad') { $urgent = true; break; }
             ?>
             <details class="pl-card"<?= ($q !== '' || $account >= 0) ? ' open' : '' ?>>
-              <summary title="<?= e($r['account']) ?>"><span class="pl-sn"><?= e((string) $r['quote_number']) ?></span><?php if ($urgent): ?><span class="pl-dot" aria-label="Needs attention"></span><?php endif; ?></summary>
+              <summary title="<?= e($r['account']) ?>"><span class="pl-sn"><?= e((string) $r['quote_number']) ?></span><?php if ($r['remake_of'] !== ''): ?><span class="pl-rm" title="Remake of <?= e($r['remake_of']) ?>">R</span><?php endif; ?><?php if ($urgent): ?><span class="pl-dot" aria-label="Needs attention"></span><?php endif; ?></summary>
               <div class="pl-body">
               <div class="pl-row">
                 <a class="pl-num" href="<?= e($r['open_url']) ?>">Open order &rarr;</a>
