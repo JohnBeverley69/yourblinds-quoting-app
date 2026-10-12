@@ -191,6 +191,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 );
                 $done[]  = (string) $inv['number'];
                 $total  += (float) $inv['total'];
+            } catch (ArAlreadyInvoicedException $e) {
+                // A second click / second admin got there first: nothing written.
+                $failed[] = (string) $allowed[$qid]['quote_number'] . ' was already invoiced'
+                          . ($e->invNumber !== '' ? ' on ' . $e->invNumber : '');
             } catch (Throwable $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
                 $failed[] = (string) $allowed[$qid]['quote_number'] . ' — ' . $e->getMessage();
