@@ -28,7 +28,10 @@ $weekStart = date('Y-m-d', strtotime('monday this week'));
 $monthAgo  = date('Y-m-d', strtotime('-30 days'));
 $inThisWeek = 0;
 $busiest = [];
+// The MONEY side, counted with the same rules as the Orders list chips.
+$toBill = ['needs_invoicing' => 0, 'awaiting' => 0, 'overdue' => 0];
 foreach ($orders as $o) {
+    foreach ($toBill as $k => $_) if (fc_filter_match($o, $k)) $toBill[$k]++;
     $byStage[$o['stage']]++;
     if (in_array($o['stage'], ['new', 'confirmed', 'in_production'], true)) $blindsIn += (int) $o['blinds'];
     $day = substr((string) $o['created_at'], 0, 10);
@@ -164,6 +167,19 @@ $activeNav = 'factory-dashboard';
       </a>
     <?php endforeach; ?>
   </div>
+  <div class="fd-grid">
+    <?php foreach ([
+        'needs_invoicing' => ['Needs invoicing',  'Dispatched, no invoice yet',  $toBill['needs_invoicing'] > 0 ? '#b91c1c' : 'var(--border)'],
+        'awaiting'        => ['Awaiting payment', 'Invoiced, not paid yet',      '#245ea3'],
+        'overdue'         => ['Overdue',          'Past the invoice due date',   $toBill['overdue'] > 0 ? '#b91c1c' : 'var(--border)'],
+    ] as $k => [$label, $sub, $col]): ?>
+      <a class="fd-tile" href="/factory/orders.php?stage=<?= e($k) ?>" style="--fd-c:<?= e($col) ?>">
+        <div class="fd-label"><?= e($label) ?></div>
+        <div class="fd-value"><?= (int) $toBill[$k] ?></div>
+        <div class="fd-sub"><?= e($sub) ?></div>
+      </a>
+    <?php endforeach; ?>
+  </div>
   <?php if ($byStage['notplaced'] > 0): ?>
     <p class="fd-notplaced"><a href="/factory/orders.php?stage=notplaced"><?= (int) $byStage['notplaced'] ?> of our own quote<?= $byStage['notplaced'] === 1 ? '' : 's' ?></a> not placed yet.</p>
   <?php endif; ?>
@@ -184,7 +200,7 @@ $activeNav = 'factory-dashboard';
         <p class="fd-empty">No orders yet. When an account places an order with us it shows here.</p>
       <?php else: ?>
         <div class="table-wrap"><table class="table">
-          <thead><tr><th>Order</th><th>Account</th><th class="num">Blinds</th><th>Stage</th></tr></thead>
+          <thead><tr><th>Order</th><th>Account</th><th class="num">Blinds</th><th>Making</th><th>Money</th></tr></thead>
           <tbody>
           <?php foreach ($recent as $o): ?>
             <tr>
@@ -192,6 +208,7 @@ $activeNav = 'factory-dashboard';
               <td><?= e($o['account']) ?></td>
               <td class="num"><?= (int) $o['blinds'] ?></td>
               <td><?= fc_stage_pill($o['stage']) ?></td>
+              <td><?= fc_money_pill($o['money']) ?></td>
             </tr>
           <?php endforeach; ?>
           </tbody>

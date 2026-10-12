@@ -152,6 +152,11 @@ require __DIR__ . '/../_partials/factory_head.php';
     .fe-fabric .fab-sup { color: var(--text-faint, #94a3b8); font-size: 0.8rem; }
     .fe-fabric .fab-loading, .fe-fabric .fab-empty { padding: 0.6rem; color: var(--text-faint, #94a3b8); font-size: 0.85rem; }
     .fe-fabric.changed .fab-current { color: #166534; }
+    .fe-status { display: flex; flex-wrap: wrap; gap: 0.35rem 0.5rem; align-items: center; }
+    .fe-sl { font-size: 0.6875rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint, #94a3b8); margin-left: 0.5rem; }
+    .fe-sl:first-child { margin-left: 0; }
+    .fc-pill { display: inline-block; padding: 0.0625rem 0.5rem; font-size: 0.6875rem; font-weight: 700; border-radius: 999px; white-space: nowrap; }
+    .fe-inv { font-size: 0.75rem; color: var(--text-muted, #64748b); border: 1px solid var(--border-strong, #cbd5e1); border-radius: 999px; padding: 0 0.45rem; }
 </style>
 
 <div class="fe-bar">
@@ -174,6 +179,20 @@ require __DIR__ . '/../_partials/factory_head.php';
         &middot; <?= e((string) ($order['company_name'] ?? '')) ?>
         &middot; <?= count($items) ?> blind<?= count($items) === 1 ? '' : 's' ?>
         &middot; <a href="/factory/remake-new.php?order=<?= (int) $qid ?>">&#8635; Raise a remake</a>
+    </p>
+    <?php
+    // Making + Money, the same two columns as Console → Orders.
+    require_once __DIR__ . '/../_partials/factory_console.php';
+    $fcs = fc_order_status($pdo, $MASTER, $order);
+    [$nLabel, $nUrl] = $fcs['next'];
+    ?>
+    <p class="fe-sub fe-status">
+        <span class="fe-sl">Making</span> <?= fc_stage_pill($fcs['stage']) ?>
+        <span class="fe-sl">Money</span> <?= fc_money_pill($fcs['money']) ?>
+        <?php foreach ($fcs['invoices'] as $iv): ?>
+            <span class="fe-inv"><?= e($iv['number']) ?><?= $iv['outstanding'] > 0.004 ? ' · £' . e(number_format($iv['outstanding'], 2)) . ' owed' : '' ?></span>
+        <?php endforeach; ?>
+        <span class="fe-sl">Next</span> <?php if ($nUrl !== ''): ?><a href="<?= e($nUrl) ?>"><?= e($nLabel) ?></a><?php else: ?><?= e($nLabel) ?><?php endif; ?>
     </p>
     <?php if ($lineLock !== ''): ?>
         <div class="fe-flash err">The blinds on this order can't be changed — <?= e($lineLock) ?>. Raise a credit note or a new order instead. The references can still be corrected.</div>

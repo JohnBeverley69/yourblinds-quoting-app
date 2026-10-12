@@ -42,12 +42,222 @@ function fc_stage_pill(string $key): string
 }
 
 /**
+ * An order's status is two separate things, shown side by side (John, 2026-10-11):
+ *
+ *   MAKING — where the blinds are: fc_stage_meta() above, the same words as
+ *            Incoming orders (New / Received / In production / Ready / Dispatched).
+ *   MONEY  — where the bill is, from the factory's own invoices:
+ *            Not invoiced → Needs invoicing (dispatched, no invoice yet) →
+ *            Invoiced · awaiting payment / Part paid / Overdue → Paid.
+ *
+ * Before this the one Stage pill only followed making, so an order that was
+ * invoiced and an order that was invoiced AND paid both just said "Dispatched".
+ */
+function fc_money_meta(): array
+{
+    return [
+        'none'            => ['—',                        '#94a3b8', 'transparent'],
+        'not_invoiced'    => ['Not invoiced',             '#64748b', '#f1f5f9'],
+        'needs_invoicing' => ['Needs invoicing',          '#b91c1c', '#fee2e2'],
+        'awaiting'        => ['Invoiced · awaiting payment', '#245ea3', '#dde8f6'],
+        'part_paid'       => ['Part paid',                '#b5730f', '#f7ecd6'],
+        'overdue'         => ['Overdue',                  '#ffffff', '#b91c1c'],
+        'paid'            => ['Paid',                     '#ffffff', '#0d7a67'],
+    ];
+}
+
+function fc_money_pill(string $key): string
+{
+    $m = fc_money_meta()[$key] ?? fc_money_meta()['none'];
+    return '<span class="fc-pill" style="color:' . $m[1] . ';background:' . $m[2] . '">'
+         . htmlspecialchars($m[0], ENT_QUOTES, 'UTF-8') . '</span>';
+}
+
+/**
+ * The list's filter chips, in their groups => [key => label]. "Open" is anything
+ * still needing making OR money; "Done" is dispatched AND paid.
+ */
+function fc_filter_groups(): array
+{
+    return [
+        ''          => ['open' => 'Open'],
+        'To make'   => ['new' => 'New', 'confirmed' => 'Received', 'in_production' => 'In production', 'ready' => 'Ready to go'],
+        'To bill'   => ['needs_invoicing' => 'Needs invoicing', 'awaiting' => 'Awaiting payment', 'overdue' => 'Overdue'],
+        'Finished'  => ['done' => 'Done'],
+        'Not placed'=> ['notplaced' => 'Quotes'],
+        ' '         => ['all' => 'All'],
+    ];
+}
+
+/** Does an fc_orders() row belong under filter $key? */
+function fc_filter_match(array $r, string $key): bool
+{
+    switch ($key) {
+        case 'all':      return true;
+        case 'open':     return $r['stage'] !== 'notplaced' && !$r['done'];
+        case 'done':     return $r['done'];
+        case 'awaiting': return in_array($r['money'], ['awaiting', 'part_paid'], true);
+        case 'needs_invoicing':
+        case 'overdue':  return $r['money'] === $key;
+        case 'dispatched': return $r['stage'] === 'dispatched';   // old links
+        default:         return $r['stage'] === $key;
+    }
+}
+
+/**
+ * Live (non-void) factory invoices for each order, oldest first:
+ *   [quote_id => [[id, number, status, total, outstanding, due, overdue], …]]
+ * An order can have several (INV-BEV-2026-0001-2) and one invoice can cover
+ * several orders; outstanding is the invoice's own balance, net of payments AND
+ * credit notes, the same sum as ar_open_invoices().
+ */
+function fc_order_invoices(PDO $pdo, int $factoryId, array $quoteIds): array
+{
+    $quoteIds = array_values(array_unique(array_filter(array_map('intval', $quoteIds))));
+    if (!$quoteIds || !ar_table_ready($pdo, 'factory_ar_invoice_orders') || !ar_table_ready($pdo, 'factory_ar_invoices')) return [];
+    $ph   = implode(',', array_fill(0, count($quoteIds), '?'));
+    $cred = ar_table_ready($pdo, 'factory_ar_credit_notes')
+        ? "COALESCE((SELECT SUM(cn.total) FROM factory_ar_credit_notes cn
+                      WHERE cn.against_invoice_id = i.id AND cn.status <> 'void'), 0)"
+        : '0';
+    try {
+        $st = $pdo->prepare(
+            "SELECT io.quote_id, i.id, i.inv_number, i.status, i.issue_date, i.due_date, i.total,
+                    i.total - i.amount_paid - $cred AS outstanding
+               FROM factory_ar_invoice_orders io
+               JOIN factory_ar_invoices i ON i.id = io.invoice_id
+              WHERE io.quote_id IN ($ph) AND i.factory_client_id = ? AND i.status <> 'void'
+           ORDER BY i.issue_date, i.id"
+        );
+        $st->execute([...$quoteIds, $factoryId]);
+        $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        return [];   // invoices not migrated — no money shown
+    }
+    $today = date('Y-m-d');
+    $out = [];
+    foreach ($rows as $r) {
+        // A paid invoice owes nothing, whatever the sum says (rounding).
+        $owed = (string) $r['status'] === 'paid' ? 0.0 : max(0.0, round((float) $r['outstanding'], 2));
+        // Same fallback as ar_aging(): no due date = 30 days from issue.
+        $due = (string) ($r['due_date'] ?? '');
+        if ($due === '' && (string) ($r['issue_date'] ?? '') !== '') $due = date('Y-m-d', strtotime($r['issue_date'] . ' +30 days'));
+        $out[(int) $r['quote_id']][] = [
+            'id'          => (int) $r['id'],
+            'number'      => (string) $r['inv_number'],
+            'status'      => (string) $r['status'],
+            'total'       => (float) $r['total'],
+            'outstanding' => $owed,
+            'paid_some'   => $owed < round((float) $r['total'], 2) - 0.004,
+            'due'         => $due,
+            'overdue'     => $owed > 0.004 && $due !== '' && $due < $today,
+        ];
+    }
+    return $out;
+}
+
+/** fc_money_meta() key for an fc_orders() row (needs stage, status, invoices, billed_here). */
+function fc_money_state(array $r): string
+{
+    if ($r['stage'] === 'notplaced') return 'none';
+    $sent = $r['stage'] === 'dispatched';
+    if (!$r['billed_here']) {
+        // Our own one-off sale: billed from the quote builder.
+        if ((string) $r['status'] === 'paid')     return 'paid';
+        if ((string) $r['status'] === 'invoiced') return 'awaiting';
+        return $sent ? 'needs_invoicing' : 'not_invoiced';
+    }
+    $inv = $r['invoices'];
+    if (!$inv) return $sent ? 'needs_invoicing' : 'not_invoiced';
+    $owed = 0.0; $late = false; $some = false;
+    foreach ($inv as $i) {
+        $owed += $i['outstanding'];
+        $late  = $late || $i['overdue'];
+        $some  = $some || $i['paid_some'];
+    }
+    if ($owed <= 0.004) return 'paid';
+    if ($late)          return 'overdue';
+    return $some ? 'part_paid' : 'awaiting';
+}
+
+/**
+ * The one thing to do next on an order, for its row: [label, url|'' , urgent].
+ * Money that's late comes first; otherwise making until it's dispatched, then
+ * money. Accounts links only for someone allowed on the accounts pages (#1057).
+ */
+function fc_next_action(array $r): array
+{
+    $acct  = !function_exists('factory_accounts_user') || factory_accounts_user();
+    $accId = (int) ($r['account_key'] ?? 0);
+    $acUrl = $acct && $accId > 0 ? '/master-admin/account.php?id=' . $accId : '';
+    if ($r['stage'] === 'notplaced') return ['Place the order', '/quote-builder/edit.php?id=' . (int) $r['id'], false];
+    if ($r['money'] === 'overdue')   return ['Chase payment', $acUrl, true];
+    switch ($r['stage']) {
+        case 'new':           return ['Mark received',    '/factory/incoming-orders.php', false];
+        case 'confirmed':     return ['Start production', '/factory/incoming-orders.php', false];
+        case 'in_production': return ['Being made',       '', false];
+        case 'ready':         return ['Dispatch', $acct ? '/master-admin/dispatch.php' : '/factory/incoming-orders.php', false];
+    }
+    switch ($r['money']) {
+        case 'needs_invoicing':
+            if (!$r['billed_here']) return ['Raise invoice', '/quote-builder/edit.php?id=' . (int) $r['id'], true];
+            return ['Raise invoice', $acct ? '/master-admin/wholesale.php' . ($accId > 0 ? '?account=' . $accId : '') : '', true];
+        case 'awaiting':  return ['Wait for payment', $acUrl, false];
+        case 'part_paid': return ['Wait for the rest', $acUrl, false];
+    }
+    return ['Done', '', false];
+}
+
+/** fc_stage_meta() key from a quote's status, fulfilment_stage and factory_jobs.status. */
+function fc_making_stage(string $status, string $fs, string $fj): string
+{
+    if (!in_array($status, os_placed_statuses(), true)) return 'notplaced';
+    if (in_array($fs, ['dispatched', 'ready', 'in_production'], true)) return $fs;
+    if ($fj === 'dispatched') return 'dispatched';
+    if ($fj === 'in_production' || $fj === 'made') return 'in_production';
+    if ($fj === '' || $fj === 'new') return 'new';
+    return 'confirmed';
+}
+
+/**
+ * Making + Money for ONE order, for the order's own page — the same rules as
+ * the Orders list row. Returns ['stage','money','invoices','next','done'].
+ */
+function fc_order_status(PDO $pdo, int $factoryId, array $quote): array
+{
+    $id = (int) ($quote['id'] ?? 0);
+    $fj = '';
+    try {
+        $st = $pdo->prepare('SELECT status FROM factory_jobs WHERE quote_id = ? LIMIT 1');
+        $st->execute([$id]);
+        $fj = (string) ($st->fetchColumn() ?: '');
+    } catch (Throwable $e) { /* no floor jobs table */ }
+    $own = (int) ($quote['client_id'] ?? 0) === $factoryId;
+    $r = [
+        'id'          => $id,
+        'status'      => (string) ($quote['status'] ?? ''),
+        'stage'       => fc_making_stage((string) ($quote['status'] ?? ''), (string) ($quote['fulfilment_stage'] ?? ''), $fj),
+        'invoices'    => fc_order_invoices($pdo, $factoryId, [$id])[$id] ?? [],
+        'account_key' => (int) ($quote['account_client_id'] ?? 0) > 0 ? (int) $quote['account_client_id'] : ($own ? 0 : (int) ($quote['client_id'] ?? 0)),
+    ];
+    $r['billed_here'] = !($own && $r['account_key'] === 0);
+    $r['money'] = fc_money_state($r);
+    $r['done']  = $r['stage'] === 'dispatched' && $r['money'] === 'paid';
+    $r['next']  = fc_next_action($r);
+    return $r;
+}
+
+/**
  * Every order the factory office should see, newest first (max 400). Each row adds:
  *   stage       — a fc_stage_meta() key
  *   account     — who it's for (trade account, else the ordering business, else "One-off")
  *   blinds      — blinds on it that the factory makes or supplies
  *   value       — net value to the factory where known (what the invoice bills), else null
- *   invoice     — the factory invoice number once invoiced, else ''
+ *   invoice     — the factory invoice number(s) once invoiced, space-separated, else ''
+ *   invoices    — fc_order_invoices() entries for it
+ *   money       — a fc_money_meta() key
+ *   done        — dispatched AND paid (nothing left to do)
+ *   next        — fc_next_action(): [label, url, urgent]
  *   open_url    — where "open" goes (quote builder for our own, factory edit for an account's)
  */
 function fc_orders(PDO $pdo, int $factoryId): array
@@ -90,6 +300,10 @@ function fc_orders(PDO $pdo, int $factoryId): array
     // the fuller stage value is derived in PHP afterwards from the factory-job
     // rows, which are fetched by id once this query has run. With more than 400
     // orders still open the counts would narrow again — raise the cap then.
+    // NB a dispatched order can still be open on the MONEY side (not invoiced or
+    // not paid); those sit with the dispatched ones, newest first, so the cap
+    // drops the oldest of them first. Fine at today's volumes; if it ever bites,
+    // sort unpaid dispatched orders ahead of paid ones here.
     // The tenant's archive flag is deliberately NOT applied to this query.
     // archived_at is set from the ACCOUNT's own Order history
     // (orders/archive.php) with no status restriction, so they can archive a
@@ -135,21 +349,9 @@ function fc_orders(PDO $pdo, int $factoryId): array
     $valueBy = [];
     foreach (ar_placed_orders($pdo, $factoryId) as $r) $valueBy[(int) $r['id']] = (float) $r['wholesale_total'];
 
-    // Factory invoice numbers (void ones don't count).
-    $invBy = [];
-    if (ar_table_ready($pdo, 'factory_ar_invoice_orders') && ar_table_ready($pdo, 'factory_ar_invoices')) {
-        $ids = array_map(static fn ($r) => (int) $r['id'], $rows);
-        $ph  = implode(',', array_fill(0, count($ids), '?'));
-        try {
-            $st = $pdo->prepare(
-                "SELECT io.quote_id, i.inv_number FROM factory_ar_invoice_orders io
-                   JOIN factory_ar_invoices i ON i.id = io.invoice_id
-                  WHERE io.quote_id IN ($ph) AND i.factory_client_id = ? AND i.status <> 'void'"
-            );
-            $st->execute([...$ids, $factoryId]);
-            foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) $invBy[(int) $r['quote_id']] = (string) $r['inv_number'];
-        } catch (Throwable $e) { /* invoices not migrated — no badge */ }
-    }
+    // The order's factory invoices (void ones don't count): numbers for the row
+    // and the search, what's still owed for the MONEY column.
+    $invBy = fc_order_invoices($pdo, $factoryId, array_map(static fn ($r) => (int) $r['id'], $rows));
 
     require_once __DIR__ . '/remakes.php';
     $remakeOf = rm_remake_orders($pdo, array_map(static fn ($r) => (int) $r['id'], $rows));
@@ -158,17 +360,7 @@ function fc_orders(PDO $pdo, int $factoryId): array
         $id  = (int) $r['id'];
         $r['remake_of'] = $remakeOf[$id] ?? '';
         $own = (int) $r['client_id'] === $factoryId;
-        if (!in_array((string) $r['status'], $placed, true)) {
-            $stage = 'notplaced';
-        } else {
-            $fs = (string) ($r['fulfilment_stage'] ?? '');
-            $fj = (string) ($r['factory_status'] ?? '');
-            if (in_array($fs, ['dispatched', 'ready', 'in_production'], true)) $stage = $fs;
-            elseif ($fj === 'dispatched')    $stage = 'dispatched';
-            elseif ($fj === 'in_production' || $fj === 'made') $stage = 'in_production';
-            elseif ($fj === '' || $fj === 'new') $stage = 'new';
-            else $stage = 'confirmed';
-        }
+        $stage = fc_making_stage((string) $r['status'], (string) ($r['fulfilment_stage'] ?? ''), (string) ($r['factory_status'] ?? ''));
         $r['stage']   = $stage;
         $r['account'] = trim((string) ($r['account_name'] ?? '')) !== ''
             ? (string) $r['account_name']
@@ -177,7 +369,15 @@ function fc_orders(PDO $pdo, int $factoryId): array
             ? (int) $r['account_client_id']
             : ($own ? 0 : (int) $r['client_id']);
         $r['value']   = $valueBy[$id] ?? ($own ? (float) $r['subtotal'] : null);
-        $r['invoice'] = $invBy[$id] ?? '';
+        $r['invoices'] = $invBy[$id] ?? [];
+        $r['invoice']  = implode(' ', array_column($r['invoices'], 'number'));
+        // Our own one-off (retail) sale isn't billed through the factory's
+        // invoices (ar_placed_orders() leaves it out), so its money is read from
+        // the quote's own status instead.
+        $r['billed_here'] = !($own && (int) $r['account_key'] === 0);
+        $r['money'] = fc_money_state($r);
+        $r['done']  = $stage === 'dispatched' && $r['money'] === 'paid';
+        $r['next']  = fc_next_action($r);
         $r['open_url'] = ($own || $stage === 'notplaced')
             ? '/quote-builder/edit.php?id=' . $id
             : '/factory/edit-order.php?order=' . $id;
