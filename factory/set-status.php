@@ -18,7 +18,9 @@ require_once __DIR__ . '/../quote-builder/_helpers.php';   // qb_factory_paperwo
 
 requireFactoryOffice();
 
-$backTo = '/factory/incoming-orders.php';
+// Back to the Incoming orders tab the action came from (whitelisted lanes only).
+require_once __DIR__ . '/../_partials/order_tracks.php';
+$backTo = ot_back_url($_POST['back'] ?? null);
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     header('Location: ' . $backTo);

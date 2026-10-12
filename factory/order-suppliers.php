@@ -36,7 +36,10 @@ $qs->execute([$quoteId]);
 $quote = $qs->fetch(PDO::FETCH_ASSOC);
 if (!$quote) { http_response_code(404); exit('Order not found.'); }
 
-$backToOrder = '/factory/incoming-orders.php';
+// Back to the Incoming orders tab this came from (whitelisted lanes only).
+require_once __DIR__ . '/../_partials/order_tracks.php';
+$backLane    = (string) ($_GET['back'] ?? $_POST['back'] ?? '');
+$backToOrder = ot_back_url($backLane);
 
 // Authorise: this factory owns a line on the order.
 $own = $pdo->prepare(
@@ -195,8 +198,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     // Re-derive the "ordered / received" rollups from the log (only flips to
     // "ordered" once EVERY bought-in supplier on the order has been sent).
-    if ($sentTo) factory_boughtin_restamp($pdo, $quoteId, $factoryId);
-    if ($sentTo && !$failed)      qb_flash_redirect($backToOrder, 'success', 'Ordered from ' . implode(', ', $sentTo) . '.');
+    if ($sentTo) {
+        factory_boughtin_restamp($pdo, $quoteId, $factoryId);
+        // An order out to a supplier moves the stage on (Received → In production
+        // for an all-bought-in order). It never recomputed here, so the order kept
+        // reading "Received" after its purchase orders had gone.
+        require_once __DIR__ . '/../_partials/order_stage.php';
+        try { recompute_order_stage($pdo, $quoteId); } catch (Throwable $e) { /* stage is display-only here */ }
+    }
+    if ($sentTo && !$failed)     qb_flash_redirect($backToOrder, 'success', 'Ordered from ' . implode(', ', $sentTo) . '.');
     elseif ($sentTo && $failed)   qb_flash_redirect($backToOrder, 'error', 'Ordered from ' . implode(', ', $sentTo) . ' — FAILED for ' . implode(', ', $failed) . '.');
     elseif ($failed)              qb_flash_redirect($backToOrder, 'error', 'Nothing was sent (failed for ' . implode(', ', $failed) . ').');
     else                          qb_flash_redirect($backToOrder, 'error', 'Nothing was sent.');
@@ -222,6 +232,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     <form method="post" action="/factory/order-suppliers.php" id="facSupForm">
         <?= csrf_field() ?>
         <input type="hidden" name="quote_id" value="<?= (int) $quoteId ?>">
+        <input type="hidden" name="back" value="<?= e($backLane) ?>">
         <section class="section">
             <p style="color:var(--text-secondary);margin:0 0 1rem">These lines are <strong>bought-in</strong> — the factory orders them from the supplier rather than making them. Tick a supplier and <strong>Order selected</strong>; each gets an email with only their lines + a spec PDF.</p>
             <?php if (!$groups): ?>
