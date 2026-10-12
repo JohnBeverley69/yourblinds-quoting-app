@@ -34,21 +34,6 @@ const KNOWN_GAPS = [
     // Found by this test on 2026-10-12 and reported to John — not fixed yet.
     'push.product_options.fabric_group'           => 'BUG: fabric group not pushed',
     'push.product_extra_choices.markup_pct_override' => 'BUG (latent — no screen sets it): per-choice markup override not pushed',
-    'duplicate.products.price_per_sqm'            => 'BUG: Duplicate forgets price-per-m² mode',
-    'duplicate.products.min_area_m2'              => 'BUG: Duplicate forgets the minimum area',
-    'duplicate.products.line_charge'              => 'BUG: Duplicate forgets the line charge',
-    'duplicate.products.supplier_name'            => 'BUG: Duplicate forgets the supplier',
-    'duplicate.product_systems.is_default'        => 'BUG: Duplicate forgets the default system',
-    'duplicate.product_options.system_id'         => 'BUG: Duplicate loses which system a fabric belongs to',
-    'duplicate.product_options.fabric_group'      => 'BUG: Duplicate forgets the fabric group',
-    'duplicate.product_options.cost_price'        => 'BUG: Duplicate drops the fabric cost',
-    'duplicate.product_extras.code'               => 'BUG: Duplicate forgets the option code',
-    'duplicate.product_extra_choices.cost_price'  => 'BUG: Duplicate drops the option cost',
-    'duplicate.product_extra_choices.markup_pct_override' => 'BUG (latent): per-choice markup override',
-    'duplicate.price_tables.sort_order'           => 'BUG: Duplicate forgets price table order',
-    'duplicate.price_table_rows.cost'             => 'BUG: Duplicate drops the cost grid',
-    'duplicate.product_extra_choice_bands'        => 'BUG: Duplicate drops which bands a choice is limited to',
-    'duplicate.product_extra_choice_options'      => 'BUG: Duplicate drops which fabrics a choice is limited to',
 ];
 
 /** Columns that are identities or links — checked through the links, not compared raw. */
@@ -299,4 +284,36 @@ test('known copy gaps are still real (delete a KNOWN_GAPS line once it is fixed)
     $seen = json_decode((string) @file_get_contents(getenv('YB_TEST_OUT') . '/copy-gaps.json'), true) ?: [];
     $stale = array_keys(array_diff_key(KNOWN_GAPS, $seen));
     if ($stale) skip('fixed now, delete from KNOWN_GAPS: ' . implode(', ', $stale));
+});
+
+test('a duplicated real product prices exactly like the original (Forest Wood, Roller fascia, PF Shutter)', function () {
+    require_once APP_ROOT . '/tests/lib/prices.php';
+    $h = as_user('super');
+    foreach (['Forest Wood 50mm, 4 hold-downs + 2 brackets + wand, 1650mm pelmet' => 85, 'Roller, 3 blinds on one Senses fascia' => 5,
+              'PF Shutter, 3 panels (panel split)' => 199] as $name => $pid) {
+        $r = t_submit($h, '/admin/products/duplicate.php', ['id' => $pid]);
+        check($r->status === 302 && preg_match('/edit\.php\?id=(\d+)/', (string) $r->location, $m), "Duplicate of #$pid failed");
+        $copy = (int) $m[1];
+        // Re-point the line at the copy, matching everything by name.
+        $q = price_scenarios()[$name];
+        $byName = static fn (string $sql, array $p) => (int) t_val($sql, $p);
+        $q['product_id'] = $copy;
+        $q['system_id'] = $byName('SELECT c.id FROM product_systems c JOIN product_systems s ON s.name = c.name WHERE c.product_id = ? AND s.id = ?', [$copy, $q['system_id']]);
+        $q['option_id'] = $byName('SELECT c.id FROM product_options c JOIN product_options s ON s.name = c.name AND s.band_code <=> c.band_code
+                                    WHERE c.product_id = ? AND s.id = ? ORDER BY c.id LIMIT 1', [$copy, $q['option_id']]);
+        $mapChoice = static fn (int $cid) => $byName('SELECT c.id FROM product_extra_choices c JOIN product_extras ce ON ce.id = c.product_extra_id
+                JOIN product_extra_choices s ON s.label = c.label JOIN product_extras se ON se.id = s.product_extra_id AND se.name = ce.name
+               WHERE ce.product_id = ? AND s.id = ? LIMIT 1', [$copy, $cid]);
+        foreach ($q['extras'] as &$e) {
+            $e['extra_id'] = $byName('SELECT c.id FROM product_extras c JOIN product_extras s ON s.name = c.name AND s.sort_order = c.sort_order
+                                       WHERE c.product_id = ? AND s.id = ? ORDER BY c.id LIMIT 1', [$copy, $e['extra_id']]);
+            if (isset($e['choice_id']))  $e['choice_id'] = $mapChoice((int) $e['choice_id']);
+            if (isset($e['choice_ids'])) $e['choice_ids'] = array_map($mapChoice, $e['choice_ids']);
+        }
+        unset($e);
+        $orig = price_figures(qb_preview_response(db(), 3, price_scenarios()[$name], true, false, 0));
+        $dup  = price_figures(qb_preview_response(db(), 3, $q, true, false, 0));
+        check(!isset($orig['error']), "$name did not price on the original: " . ($orig['error'] ?? ''));
+        check_same(t_show($orig), t_show($dup), "$name — duplicate vs original");
+    }
 });
