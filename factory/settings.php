@@ -20,7 +20,21 @@ $MASTER = current_factory_id();
 $flashOk = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
-    if (isset($_POST['floor_lanes_form'])) {
+    if (isset($_POST['process_summary_form'])) {
+        // Process order: skip the "here's what will happen" summary. Per factory.
+        $on = !empty($_POST['process_skip_summary']) ? 1 : 0;
+        try {
+            $pdo->prepare(
+                'INSERT INTO client_settings (client_id, process_skip_summary) VALUES (?, ?)
+                 ON DUPLICATE KEY UPDATE process_skip_summary = VALUES(process_skip_summary)'
+            )->execute([$MASTER, $on]);
+            $_SESSION['flash_success'] = $on
+                ? 'Process order now goes straight through, with no summary.'
+                : 'Process order shows its summary first again.';
+        } catch (Throwable $e) {
+            $_SESSION['flash_success'] = 'Could not save — run setup/migrations/migrate_process_skip_summary.php first.';
+        }
+    } elseif (isset($_POST['floor_lanes_form'])) {
         // Floor logins see the Incoming orders tabs + MAKE / BUY chips (read-only).
         $on = !empty($_POST['floor_sees_lanes']) ? 1 : 0;
         try {
@@ -66,6 +80,13 @@ try {
     $fl = $pdo->prepare('SELECT floor_sees_lanes FROM client_settings WHERE client_id = ? LIMIT 1');
     $fl->execute([$MASTER]);
     $floorSeesLanes = (int) $fl->fetchColumn() === 1;
+} catch (Throwable $e) { /* not migrated */ }
+
+$processSkip = null;   // null = column not migrated yet
+try {
+    $ps = $pdo->prepare('SELECT process_skip_summary FROM client_settings WHERE client_id = ? LIMIT 1');
+    $ps->execute([$MASTER]);
+    $processSkip = (int) $ps->fetchColumn() === 1;
 } catch (Throwable $e) { /* not migrated */ }
 
 // A tiny "when does an order get this colour?" note per state, so it's not a
@@ -167,6 +188,22 @@ require __DIR__ . '/../_partials/factory_head.php';
         </div>
     </form>
 </div>
+
+<?php if ($processSkip !== null): ?>
+<div class="fs-card" style="margin-top:1rem">
+    <h2>Process order</h2>
+    <p class="fs-note"><strong>Process order</strong> takes a new order in, puts the blinds you make on the floor and emails each bought-in supplier its purchase order, in one click. First it shows a summary of what will happen and who gets emailed. Tick this to skip the summary and process straight away.</p>
+    <form method="post" action="/factory/settings.php">
+        <?= csrf_field() ?>
+        <input type="hidden" name="process_summary_form" value="1">
+        <label style="display:flex;gap:.6rem;align-items:center;font-weight:600">
+            <input type="checkbox" name="process_skip_summary" value="1" <?= $processSkip ? 'checked' : '' ?> style="width:18px;height:18px">
+            Process orders without the summary
+        </label>
+        <div class="fs-actions"><button type="submit" class="fs-btn primary">Save</button></div>
+    </form>
+</div>
+<?php endif; ?>
 
 <?php if ($floorSeesLanes !== null): ?>
 <div class="fs-card" style="margin-top:1rem">

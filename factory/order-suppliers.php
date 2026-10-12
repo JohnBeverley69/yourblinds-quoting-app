@@ -54,45 +54,12 @@ if (!in_array((string) $quote['status'], ['ordered', 'fitted', 'invoiced', 'paid
     qb_flash_redirect($backToOrder, 'error', 'Only placed orders can be ordered from suppliers.');
 }
 
-// Factory buyer identity + delivery + from — the FACTORY's own settings.
-$cStmt = $pdo->prepare('SELECT company_name, email, phone FROM clients WHERE id = ? LIMIT 1');
-$cStmt->execute([$factoryId]);
-$client = $cStmt->fetch() ?: [];
-
-$deliveryAddress = '';
-try {
-    $dStmt = $pdo->prepare('SELECT supplier_delivery_address FROM client_settings WHERE client_id = ? LIMIT 1');
-    $dStmt->execute([$factoryId]);
-    $deliveryAddress = (string) ($dStmt->fetchColumn() ?: '');
-} catch (Throwable $e) {}
-
-$fromName  = (string) ($client['company_name'] ?? '');
-$fromEmail = (string) ($client['email'] ?? '');
-try {
-    $fsStmt = $pdo->prepare('SELECT email_from_name, reply_to_email FROM client_settings WHERE client_id = ? LIMIT 1');
-    $fsStmt->execute([$factoryId]);
-    if ($fsRow = $fsStmt->fetch()) {
-        if (trim((string) ($fsRow['email_from_name'] ?? '')) !== '') $fromName  = trim((string) $fsRow['email_from_name']);
-        if (trim((string) ($fsRow['reply_to_email']  ?? '')) !== '') $fromEmail = trim((string) $fsRow['reply_to_email']);
-    }
-} catch (Throwable $e) {}
-$mailOpts = [];
-if ($fromName !== '') { $mailOpts['from_name'] = $fromName; $mailOpts['reply_to_name'] = $fromName; }
-if ($fromEmail !== '' && filter_var($fromEmail, FILTER_VALIDATE_EMAIL)) { $mailOpts['reply_to_email'] = $fromEmail; }
-
-// Factory's supplier emails + account numbers.
-$emailByName = []; $accountByName = [];
-try {
-    $supHasAccount = false;
-    try { $supHasAccount = $pdo->query("SHOW COLUMNS FROM suppliers LIKE 'account_number'")->fetchColumn() !== false; } catch (Throwable $e) {}
-    $eStmt = $pdo->prepare('SELECT name, email' . ($supHasAccount ? ', account_number' : '') . ' FROM suppliers WHERE client_id = ?');
-    $eStmt->execute([$factoryId]);
-    foreach ($eStmt->fetchAll() as $r) {
-        $nm = trim((string) $r['name']);
-        $emailByName[$nm]   = trim((string) ($r['email'] ?? ''));
-        $accountByName[$nm] = $supHasAccount ? trim((string) ($r['account_number'] ?? '')) : '';
-    }
-} catch (Throwable $e) {}
+// Factory buyer identity, delivery, from and supplier emails — the FACTORY's own
+// records, shared with Process order (factory_po_sender).
+$sender          = factory_po_sender($pdo, $factoryId);
+$deliveryAddress = (string) $sender['delivery'];
+$emailByName     = $sender['emails'];
+$accountByName   = $sender['accounts'];
 
 // Bought-in lines only, grouped by the MASTER product's supplier.
 $lines = [];
@@ -116,35 +83,15 @@ try {
     qb_flash_redirect($backToOrder, 'error', 'Could not read the bought-in lines: ' . $e->getMessage());
 }
 
-// Extras per line.
-$extrasByItem = [];
-$lineIds = array_map(static fn ($l) => (int) $l['id'], $lines);
-if ($lineIds) {
-    $eph = implode(',', array_fill(0, count($lineIds), '?'));
-    try {
-        $exSt = $pdo->prepare("SELECT quote_item_id, extra_name_snapshot, choice_label_snapshot, user_value FROM quote_item_extras WHERE quote_item_id IN ($eph) ORDER BY id");
-        $exSt->execute($lineIds); $exRows = $exSt->fetchAll();
-    } catch (Throwable $e) {
-        $exSt = $pdo->prepare("SELECT quote_item_id, extra_name_snapshot, choice_label_snapshot FROM quote_item_extras WHERE quote_item_id IN ($eph) ORDER BY id");
-        $exSt->execute($lineIds); $exRows = $exSt->fetchAll();
-        foreach ($exRows as &$er) { $er['user_value'] = null; } unset($er);
-    }
-    foreach ($exRows as $er) { $extrasByItem[(int) $er['quote_item_id']][] = $er; }
-}
-$fmtExtraSpec = static function (array $ex): string {
-    $name = trim((string) ($ex['extra_name_snapshot'] ?? '')); $choice = trim((string) ($ex['choice_label_snapshot'] ?? ''));
-    $out = $name; if ($choice !== '') $out .= ($out !== '' ? ': ' : '') . $choice;
-    if (isset($ex['user_value']) && $ex['user_value'] !== null && (float) $ex['user_value'] > 0) {
-        $out .= ' — ' . rtrim(rtrim(number_format((float) $ex['user_value'], 2, '.', ''), '0'), '.') . 'mm';
-    }
-    return $out;
-};
+// Extras per line, formatted as on every PO.
+$extrasByItem = factory_po_extras($pdo, array_map(static fn ($l) => (int) $l['id'], $lines));
 
 // Group by supplier.
 $groups = [];
 foreach ($lines as $ln) {
     $sup = trim((string) ($ln['supplier'] ?? ''));
     if ($sup === '') continue;   // shouldn't happen — predicate guarantees a supplier
+    $ln['options'] = $extrasByItem[(int) $ln['id']] ?? [];
     $groups[$sup]['items'][] = $ln;
     $groups[$sup]['qty'] = ($groups[$sup]['qty'] ?? 0) + (int) ($ln['quantity'] ?? 1);
 }
@@ -162,9 +109,11 @@ try {
     foreach ($lsStmt->fetchAll() as $r) { $lastSent[trim((string) $r['supplier_name'])] = (string) $r['last_sent']; }
 } catch (Throwable $e) {}
 
-$isSendable = static fn (string $name) => $name !== '' && filter_var($emailByName[$name] ?? '', FILTER_VALIDATE_EMAIL) !== false;
+$isSendable = static fn (string $name) => $name !== '' && factory_po_email($sender, $name) !== '';
 
 // ── Send ────────────────────────────────────────────────────────────────────
+// The backstop: Process order sends the POs normally. This page re-sends a
+// supplier's WHOLE order (ticked on purpose) when something has gone wrong.
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
     $chosen = array_map('strval', (array) ($_POST['send'] ?? []));
@@ -173,27 +122,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     foreach ($chosen as $name) {
         $name = trim($name);
         if (!isset($groups[$name]) || !$isSendable($name)) continue;
-        $items = $groups[$name]['items'];
-        $pdfItems = array_map(static fn ($it) => [
-            'product'  => $it['product_name_snapshot'], 'system' => $it['system_name_snapshot'],
-            'fabric'   => $it['fabric_name_snapshot'], 'colour' => $it['fabric_colour_snapshot'],
-            'code'     => $it['fabric_code_snapshot'], 'band' => $it['fabric_band_snapshot'],
-            'width_mm' => $it['width_mm'], 'drop_mm' => $it['drop_mm'], 'quantity' => $it['quantity'],
-            'room'     => $it['room_name'], 'notes' => $it['notes'],
-            'options'  => array_map($fmtExtraSpec, $extrasByItem[(int) $it['id']] ?? []),
-        ], $items);
-
-        $ctx = [
-            'company_name' => (string) ($client['company_name'] ?? ''), 'company_email' => (string) ($client['email'] ?? ''),
-            'company_phone' => (string) ($client['phone'] ?? ''), 'supplier_name' => $name,
-            'account_number' => $accountByName[$name] ?? '', 'delivery_address' => $deliveryAddress,
-            'quote_number' => (string) $quote['quote_number'], 'po_ref' => (string) $quote['quote_number'], 'date' => date('j M Y'),
-        ];
-        $ok = supplier_send_group($pdo, $ctx, $pdfItems, $emailByName[$name], $mailOpts, [
-            'client_id' => $factoryId, 'quote_id' => $quoteId, 'supplier_name' => $name,
-            'item_count' => count($items), 'sent_by_user_id' => (int) $user['user_id'], 'ordered_by_factory_id' => $factoryId,
-        ]);
-        if ($ok) $sentTo[] = $name; else $failed[] = $name;
+        $r = factory_po_send($pdo, $sender, $quoteId, (string) $quote['quote_number'], $name, $groups[$name]['items'], (int) $user['user_id']);
+        if ($r['ok']) $sentTo[] = $name; else $failed[] = $name;
     }
 
     // Re-derive the "ordered / received" rollups from the log (only flips to
@@ -265,7 +195,7 @@ require __DIR__ . '/../_partials/factory_head.php';
                                 $fab = implode(' / ', array_filter([(string) $it['fabric_name_snapshot'], (string) $it['fabric_colour_snapshot'], (string) $it['fabric_code_snapshot']], static fn ($s) => trim((string) $s) !== '')); ?>
                                 <tr>
                                     <td><strong><?= e((string) $it['product_name_snapshot']) ?></strong>
-                                        <?php foreach (($extrasByItem[(int) $it['id']] ?? []) as $ex): ?><br><span style="color:#1f3b5b;font-size:0.8125rem;font-weight:600">+ <?= e($fmtExtraSpec($ex)) ?></span><?php endforeach; ?>
+                                        <?php foreach (($extrasByItem[(int) $it['id']] ?? []) as $ex): ?><br><span style="color:#1f3b5b;font-size:0.8125rem;font-weight:600">+ <?= e($ex) ?></span><?php endforeach; ?>
                                     </td>
                                     <td><?= $fab !== '' ? e($fab) : '—' ?></td>
                                     <td><?= (int) ($it['width_mm'] ?? 0) ?> &times; <?= (int) ($it['drop_mm'] ?? 0) ?> mm</td>

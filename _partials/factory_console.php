@@ -214,9 +214,9 @@ function fc_next_action(array $r): array
     if ($r['stage'] === 'notplaced') return ['Place the order', '/quote-builder/edit.php?id=' . (int) $r['id'], false];
     if ($r['money'] === 'overdue')   return ['Chase payment', $acUrl, true];
     switch ($r['stage']) {
-        // Accept takes the order on AND puts it on the floor (#1061) — same word
-        // as the Incoming orders and Pipeline buttons.
-        case 'new':           return ['Accept',           '/factory/incoming-orders.php', false];
+        // Process order takes the order in, puts it on the floor and emails its
+        // suppliers — same words as the Incoming orders and Pipeline buttons.
+        case 'new':           return ['Process order',    '/factory/incoming-orders.php?lane=new', false];
         case 'confirmed':     return ['Start production', '/factory/incoming-orders.php', false];
         case 'in_production':
         case 'awaiting_supplier': return fc_making_next($r['tracks'] ?? null);
@@ -233,16 +233,21 @@ function fc_next_action(array $r): array
 }
 
 /**
- * Next for an order in production, from ot_order_tracks(): still being made on
- * the floor → "Being made"; made but a bought-in item not ordered → "Order from
- * X"; ordered and not received → "Waiting on X". Same wording as Incoming orders.
+ * Next for an order in production, from ot_order_tracks(): a supplier PO that
+ * didn't go → "Couldn't order from X", an item added after processing → "New
+ * item to order from X" (both first: they're the office's job, whatever the
+ * floor is doing); still being made → "Being made"; ordered and not received →
+ * "Waiting on X". Same wording as Incoming orders.
  */
 function fc_making_next(?array $t): array
 {
-    if (!$t || $t['make']['made'] < $t['make']['units']) return ['Being made', '', false];
-    foreach ($t['buy'] as $sup => $b) {
-        if ($b['state'] === 'to_order') return ['Order from ' . $sup, '/factory/incoming-orders.php', true];
+    foreach ($t['buy'] ?? [] as $sup => $b) {
+        if ($b['state'] !== 'to_order') continue;
+        if (($b['problem'] ?? '') === 'failed') return ["Couldn't order from " . $sup, '/factory/incoming-orders.php?lane=problem', true];
+        if (($b['problem'] ?? '') === 'new_item') return ['New item to order from ' . $sup, '/factory/incoming-orders.php?lane=order', true];
+        return ['Order from ' . $sup, '/factory/incoming-orders.php', true];
     }
+    if (!$t || $t['make']['made'] < $t['make']['units']) return ['Being made', '', false];
     foreach ($t['buy'] as $sup => $b) {
         if ($b['state'] === 'ordered') return ['Waiting on ' . $sup, '/factory/incoming-orders.php', false];
     }

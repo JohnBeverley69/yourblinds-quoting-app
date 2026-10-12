@@ -18,9 +18,10 @@ declare(strict_types=1);
  *     Due, lines, money pill + invoices), each line's status ($lineStatus), the
  *     one button ($action), the footer;
  *   - _partials/order_tracks.php — ot_next_jobs(): the order the jobs come in
- *     (accept, order, start, receive, dispatch, floor);
+ *     (process, retry, order_new, order, start, receive, dispatch, floor);
  *   - _partials/factory_console.php — fc_money_meta() pills, fc_money_visible();
- *   - factory/order-suppliers.php — "Order bought-in items", Order selected;
+ *   - _partials/process_order.php + factory/process-order.php — Process order,
+ *     its summary, Retry, Order new item from;
  *   - factory/set-status.php — the "Can't dispatch yet" check;
  *   - master-admin/dispatch.php — the Dispatch tray.
  * Every label, button and message is copied from those files.
@@ -41,8 +42,8 @@ $S = [
     ['7', 'Each line has its own status', 'Under that, every line on the order has its own status. A blind made here says Not started, then Being made, three of five, then a tick and Made. A bought-in item says the supplier, not ordered yet, then Waiting on the supplier, with the date it was ordered. So on a mixed order, you can see exactly which part is holding it up.', 7],
     ['8', 'The money on a card', 'Once an order has an invoice, its card shows the money pill. Invoiced, awaiting payment, Part paid, Overdue, or Paid. Under the pill is each invoice number, what is still owed, and when it is due. Once it is paid, it shows the date it was paid instead.', 8],
     ['9', 'Remakes on the board', 'Remakes show up too. A remake\'s line has a purple R after the order number. Hover over the R to see which order it is a remake of. Above the board, the totals say how many remakes are in progress. If any are waiting for approval, a purple link takes you to the Remakes page. Those are not orders yet, so they have no card.', 9],
-    ['10', 'One button: taking it in', 'Each card has one button, and it is always the next step. The same rules as Incoming orders decide it, so the two never disagree. A new order shows Accept. One click takes it in and sends its blinds to the floor. While the floor is making it, the button says See progress, so you can see how far each blind has got.', 10],
-    ['11', 'Bought-in items', 'If a line is bought in, the button says Order from, and the supplier\'s name, in red. It opens Order bought-in items, where you tick the supplier and click Order selected. When the goods arrive, click Received from, and the supplier\'s name. Once everything is made and in, the card moves on to Ready to go.', 11],
+    ['10', 'One button: taking it in', 'Each card has one button, and it is always the next step. The same rules as Incoming orders decide it, so the two never disagree. A new order shows Process order. First, a summary says what will happen: which blinds go to the floor, and which suppliers are emailed their purchase order. Click Process order, and it does all of that in one go. While the floor is making it, the button says See progress, so you can see how far each blind has got.', 10],
+    ['11', 'Bought-in items', 'Bought-in items are ordered by Process order, so there is nothing more to click. If a purchase order cannot go, say the supplier has no order email, the card says Couldn\'t order from, and the supplier\'s name, in red, with the reason. Fix it, then click Retry. An item added after processing shows New item to order. When the goods arrive, click Received from, and the supplier\'s name. Once everything is made and in, the card moves on to Ready to go.', 11],
     ['12', 'Sending it out', 'On a ready order, the button says Add to today\'s run. It takes you to the Dispatch tray, where the van run is ticked and printed, just as before. Once it has gone out, the card moves on to Dispatched, to invoice. If you do not see the money columns, the button simply says Dispatch.', 12],
     ['13', 'Getting paid', 'In the money columns, the button follows the bill. Raise invoice, in green, when it has gone out with no invoice. Record payment, while it is waiting to be paid, or part paid. And Chase payment, in red, once it is overdue. That opens the account, so you can see everything they owe.', 13],
     ['14', 'Cards move by their buttons', 'You cannot drag a card from one column to another. Cards move with their buttons, and with the work itself, like the floor finishing the blinds. That way nothing skips a check. For example, an order cannot be dispatched until every blind is made, and every bought-in item has been received.', 14],
@@ -92,13 +93,13 @@ $rmb = '<span class="rmb">REMAKE</span>';
 $CARDS = [
     'A' => ['ABC-2026-0041', '&pound;412.80', 'ABC Blinds', 'PO 4471', false, 'Due 16 Oct',
             [['Roller Blind &times; 4', 'Not started', 'muted'], ['Vertical Blind &times; 2', 'Not started', 'muted']],
-            '', [], ['Accept', '']],
+            '', [], ['Process order', '']],
     'B' => ['HUG-2026-0012', '&pound;101.15', 'Hughes Interiors', 'Kitchen', false, 'Due 15 Oct',
             [['Roller Blind &times; 2', 'Not started', 'muted']],
             '', [], ['Start production', '']],
     'C' => ['CST-2026-0009', '&pound;318.60', 'Coastal Shutters', 'CS-120', false, 'Due 14 Oct',
-            [['Roller Blind &times; 3', 'Being made &middot; 1 of 3', 'amber'], ['PF Venetian &times; 1', 'Hunter Douglas &middot; not ordered yet', 'bad']],
-            '', [], ['Order from Hunter Douglas', 'bad']],
+            [['Roller Blind &times; 3', 'Being made &middot; 1 of 3', 'amber'], ['PF Venetian &times; 1', 'Couldn&rsquo;t order from Hunter Douglas &middot; No order email is set for Hunter Douglas (Settings &rsaquo; Suppliers).', 'bad']],
+            '', [], ['Retry Hunter Douglas', 'bad']],
     // C once the Hunter Douglas item is in: the floor is still making the rollers.
     'C2' => ['CST-2026-0009', '&pound;318.60', 'Coastal Shutters', 'CS-120', false, 'Due 14 Oct',
             [['Roller Blind &times; 3', 'Being made &middot; 1 of 3', 'amber'], ['PF Venetian &times; 1', '&#10003; Received from Hunter Douglas', 'ok']],
@@ -524,6 +525,10 @@ return [
                     . $col('new', [$card('A', ['btn' => ['a-press', $d(10, 'A new order shows', 1.5)]])], ['col' => ['a-rise', $d(10, 'A new order shows')]])
                     . $col('in_production', [$card('C2', ['btn' => ['a-ring', $d(10, 'the button says See')]])], ['col' => ['a-rise', $d(10, 'While the floor')]]) . '
                   </div>
+                  <div class="scr a-rise" style="margin-top:.5rem;' . $d(10, 'First, a summary') . '"><b class="h">Process ABC-2026-0041</b>
+                    <div class="a-pop" style="' . $d(10, 'which blinds go') . '">Put 6 blinds on the floor: Roller Blind &times;4, Vertical Blind &times;2</div>
+                    <div class="a-pop" style="' . $d(10, 'which suppliers are emailed') . '">Email Hunter Douglas its purchase order (1 item) &rarr; orders@example.com</div>
+                    <div style="margin-top:.45rem"><span class="pbt a-press" style="display:inline-block;padding:.3rem .7rem;' . $d(10, 'Click Process order') . '">Process order</span> <span style="margin-left:.4rem">Cancel</span></div></div>
                   <div class="chips"><span class="chip ok a-pop" style="' . $d(10, 'The same rules') . '">Same rules as <b>Incoming orders</b></span></div>
                 </div>
 
@@ -531,11 +536,12 @@ return [
                 <div class="sc" data-scene="11" data-len="' . $len(11) . '">
                   <div class="sct a-fade" style="--d:.2s">Bought-in items</div>
                   <div class="two" style="margin-top:.4rem">
-                    <div style="font-size:.74rem">' . $card('C', ['btn' => ['a-press', $d(11, 'It opens')], 'line1' => ['a-ring', $d(11, 'If a line is bought')]]) . '</div>
-                    <div class="scr a-rise" style="' . $d(11, 'It opens') . '"><b class="h">Order bought-in items</b>
-                      <div style="margin:.2rem 0 .35rem">These lines are <b>bought-in</b> &mdash; the factory orders them from the supplier rather than making them.</div>
-                      <span class="tk"><span class="tick a-sel" style="' . $d(11, 'you tick the supplier') . '">&#10003;</span> Hunter Douglas &middot; PF Venetian &times; 1</span>
-                      <div style="margin-top:.45rem"><span class="pbt a-press" style="display:inline-block;padding:.3rem .7rem;' . $d(11, 'click Order selected') . '">Order selected</span></div></div>
+                    <div style="font-size:.74rem">' . $card('C', ['btn' => ['a-press', $d(11, 'click Retry')], 'line1' => ['a-ring', $d(11, 'If a purchase order')]]) . '</div>
+                    <div class="scr a-rise" style="' . $d(11, 'If a purchase order') . '"><b class="h">Couldn&rsquo;t order</b>
+                      <div style="margin:.2rem 0 .35rem">A supplier&rsquo;s purchase order didn&rsquo;t go, so the order sits in <b>Couldn&rsquo;t order</b> on Incoming orders, in red, until it does. Nothing fails quietly.</div>
+                      <span class="tk a-pop" style="' . $d(11, 'with the reason') . '">No order email is set for Hunter Douglas (Settings &rsaquo; Suppliers).</span>
+                      <div style="margin-top:.45rem"><span class="pbt a-press" style="display:inline-block;padding:.3rem .7rem;' . $d(11, 'click Retry') . '">Retry Hunter Douglas</span></div>
+                      <div class="a-pop" style="margin-top:.45rem;' . $d(11, 'An item added') . '">Added a bought-in blind later? <b>New item to order from &hellip;</b> sends just the new item.</div></div>
                   </div>
                   <div class="two" style="margin-top:.6rem">
                     <div class="a-rise" style="font-size:.74rem;' . $d(11, 'When the goods') . '">' . $card('D', ['btn' => ['a-press', $d(11, 'click Received from', 1)]]) . '</div>
@@ -693,10 +699,16 @@ return [
 
           <p><b>The one button</b> is the next step, worked out by the same rules as <b>Incoming orders</b>:</p>
           <ul class="steps">
-            <li><b>Accept</b> &mdash; takes a new order in and sends its made-here blinds to the floor in one go.</li>
-            <li><b>Order from &lt;supplier&gt;</b> (red) &mdash; opens <b>Order bought-in items</b>: tick the supplier, then
-                <b>Order selected</b>; each supplier gets an email with only their lines and a spec PDF.</li>
-            <li><b>Start production</b> &mdash; only on an order taken in before <b>Accept</b> did both: sends its blinds to the floor.</li>
+            <li><b>Process order</b> &mdash; on a new order. It takes the order in, sends its made-here blinds to the floor and emails each
+                bought-in supplier its purchase order (one per supplier, with only their lines and a spec PDF), in one go. A summary
+                comes first &mdash; e.g. <em>Put 6 blinds on the floor &middot; Email Hunter Douglas its purchase order (1 item)</em> &mdash;
+                with <b>Process order</b> and <b>Cancel</b>. A factory can switch the summary off: Factory &rarr; Settings &rarr;
+                <b>Process orders without the summary</b>.</li>
+            <li><b>Retry &lt;supplier&gt;</b> (red) &mdash; a purchase order that couldn&rsquo;t go (no order email, or the email
+                failed). The line says <b>Couldn&rsquo;t order from &lt;supplier&gt;</b> and why; fix it, then retry.</li>
+            <li><b>Order new item from &lt;supplier&gt;</b> (red) &mdash; a bought-in item added after the order was processed. Only
+                the new item is sent, marked as additional to the first purchase order.</li>
+            <li><b>Start production</b> &mdash; only on an order taken in before <b>Process order</b>: sends its blinds to the floor.</li>
             <li><b>Received from &lt;supplier&gt;</b> (purple) &mdash; the bought-in goods have arrived.</li>
             <li><b>Add to today&rsquo;s run &rarr;</b> (blue) &mdash; opens the <b>Dispatch tray</b>, where the van run is ticked and
                 printed. Without the money columns the button is <b>Dispatch</b>.</li>

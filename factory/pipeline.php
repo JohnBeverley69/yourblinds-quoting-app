@@ -20,6 +20,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require_once __DIR__ . '/../_partials/factory_console.php';
+require_once __DIR__ . '/../_partials/process_order.php';
 
 requireFactoryOffice();
 
@@ -132,6 +133,11 @@ $lineStatus = static function (array $r, array $l): array {
     $sup = (string) $t['supplier'];
     if ($s === 'Received') return ['✓ Received from ' . $sup, 'ok'];
     if ($s === 'To order') return [$sup . ' · not ordered yet', 'bad'];
+    if ($s === 'Not ordered') {
+        $why = (string) ($r['tracks']['buy'][$sup]['reason'] ?? '');
+        return ["Couldn't order from " . $sup . ($why !== '' ? ' · ' . $why : ''), 'bad'];
+    }
+    if ($s === 'New item to order') return ['New item to order from ' . $sup, 'bad'];
     return ['Waiting on ' . $sup . ' · ' . lcfirst($s), 'bad'];
 };
 
@@ -150,9 +156,12 @@ $action = static function (array $r) use ($money, $csrf): string {
         if ($j) {
             $sup = (string) ($j['supplier'] ?? '');
             switch ($j['kind']) {
-                case 'accept':
-                    return '<form method="post" action="/factory/set-status.php">' . $h . '<input type="hidden" name="accept" value="1">'
-                         . '<button type="submit" name="status" value="received" class="pl-btn" title="Take the order on and put its blinds on the floor">Accept</button></form>';
+                case 'process':
+                    return po_button($qid, (string) $r['quote_number'], $t, 'pipeline', 'pl-btn', 'Process order', null, 'Take the order in, put its blinds on the floor and email its suppliers');
+                case 'retry':
+                    return po_button($qid, (string) $r['quote_number'], $t, 'pipeline', 'pl-btn bad', 'Retry ' . $sup, $sup, (string) ($t['buy'][$sup]['reason'] ?? ''));
+                case 'order_new':
+                    return po_button($qid, (string) $r['quote_number'], $t, 'pipeline', 'pl-btn bad', 'Order new item from ' . $sup, $sup);
                 case 'start':
                     return '<form method="post" action="/factory/set-status.php">' . $h
                          . '<button type="submit" name="status" value="in_production" class="pl-btn">Start production</button></form>';
@@ -366,5 +375,6 @@ $activeNav = 'factory-pipeline';
     The <a href="/master-admin/dispatch.php">Dispatch tray</a> is still where the van run is ticked and printed.<?php else: ?>Dispatched orders leave after 7 days and stay on <a href="/factory/orders.php?stage=all">Orders</a>.<?php endif; ?></p>
 </main>
 </div>
+<?= po_modal(po_skip_summary($pdo, current_factory_id())) ?>
 </body>
 </html>

@@ -12,7 +12,8 @@ declare(strict_types=1);
  *
  * $ctx      header for the PO: company_name/company_email/company_phone (the
  *           BUYER), supplier_name, account_number, delivery_address,
- *           quote_number, po_ref, date.
+ *           quote_number, po_ref, date; optional addition (true = a follow-up
+ *           PO for items added after the first one went).
  * $pdfItems the mapped spec rows (product/system/fabric/colour/code/band/
  *           width_mm/drop_mm/quantity/room/notes/options[]).
  * $logMeta  client_id, quote_id, supplier_name, item_count, sent_by_user_id,
@@ -32,11 +33,18 @@ function supplier_send_group(PDO $pdo, array $ctx, array $pdfItems, string $emai
 
     $pdf = function_exists('pdf_render_supplier_order') ? pdf_render_supplier_order($ctx, $pdfItems) : null;
 
+    // A follow-up PO: items added to an order after its first PO went. Says so,
+    // so the supplier adds them rather than reading it as the order again.
+    $addition = !empty($ctx['addition']);
     $bodyLines = [
         'Hello,',
         '',
-        'Please supply the following order from ' . ($company !== '' ? $company : 'us')
-            . ' (ref ' . $qNum . '). Full specification is attached as a PDF.',
+        $addition
+            ? 'Please supply the following ADDITIONAL item(s) for our order ref ' . $qNum
+                . ' from ' . ($company !== '' ? $company : 'us') . '. This is in addition to the purchase order'
+                . ' already sent, not a repeat of it. Full specification is attached as a PDF.'
+            : 'Please supply the following order from ' . ($company !== '' ? $company : 'us')
+                . ' (ref ' . $qNum . '). Full specification is attached as a PDF.',
         '',
     ];
     if ($account !== '') {
@@ -76,7 +84,7 @@ function supplier_send_group(PDO $pdo, array $ctx, array $pdfItems, string $emai
 
     $ok = mailer_send(
         $email,
-        ($company !== '' ? $company : 'Order') . ' — Purchase Order ' . $qNum,
+        ($company !== '' ? $company : 'Order') . ($addition ? ' — Additional items for Purchase Order ' : ' — Purchase Order ') . $qNum,
         implode("\n", $bodyLines),
         $attachment,
         null,
