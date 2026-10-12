@@ -40,12 +40,13 @@ $S = [
     ['6', 'What an open card shows', 'Now look at an open card. At the top is Open order. Click it to open the order itself. Next to it is the value. Under that is the account, and their reference. A purple REMAKE badge marks a remake of an earlier order. Then comes the due date, so you can see at a glance when it has to go out.', 6],
     ['7', 'Each line has its own status', 'Under that, every line on the order has its own status. A blind made here says Not started, then Being made, three of five, then a tick and Made. A bought-in item says the supplier, not ordered yet, then Waiting on the supplier, with the date it was ordered. So on a mixed order, you can see exactly which part is holding it up.', 7],
     ['8', 'The money on a card', 'Once an order has an invoice, its card shows the money pill. Invoiced, awaiting payment, Part paid, Overdue, or Paid. Under the pill is each invoice number, what is still owed, and when it is due. Once it is paid, it shows the date it was paid instead.', 8],
-    ['9', 'One button: taking it in', 'Each card has one button, and it is always the next step. The same rules as Incoming orders decide it, so the two never disagree. A new order shows Mark received. Once it is in, Start production sends it to the floor. While the floor is making it, the button says View on floor, so you can see how far it has got.', 9],
-    ['10', 'Bought-in items', 'If a line is bought in, the button says Order from, and the supplier\'s name, in red. It opens Order bought-in items, where you tick the supplier and click Order selected. When the goods arrive, click Received from, and the supplier\'s name. Once everything is made and in, the card moves on to Ready to go.', 10],
-    ['11', 'Sending it out', 'On a ready order, the button says Add to today\'s run. It takes you to the Dispatch tray, where the van run is ticked and printed, just as before. Once it has gone out, the card moves on to Dispatched, to invoice. If you do not see the money columns, the button simply says Dispatch.', 11],
-    ['12', 'Getting paid', 'In the money columns, the button follows the bill. Raise invoice, in green, when it has gone out with no invoice. Record payment, while it is waiting to be paid, or part paid. And Chase payment, in red, once it is overdue. That opens the account, so you can see everything they owe.', 12],
-    ['13', 'Cards move by their buttons', 'You cannot drag a card from one column to another. Cards move with their buttons, and with the work itself, like the floor finishing the blinds. That way nothing skips a check. For example, an order cannot be dispatched until every blind is made, and every bought-in item has been received.', 13],
-    ['14', 'Where\'s my order?', 'When a customer rings to ask where their order is, use the search box at the top. Type the account, the order number, their reference, the name, or an invoice number, then tap Find. The cards that match open up on their own. Or pick an account from the list, to see only their orders. Clear takes you back to the whole board. On a phone, swipe sideways to see every column.', 14],
+    ['9', 'Remakes on the board', 'Remakes show up too. A remake\'s line has a purple R after the order number. Hover over the R to see which order it is a remake of. Above the board, the totals say how many remakes are in progress. If any are waiting for approval, a purple link takes you to the Remakes page. Those are not orders yet, so they have no card.', 9],
+    ['10', 'One button: taking it in', 'Each card has one button, and it is always the next step. The same rules as Incoming orders decide it, so the two never disagree. A new order shows Mark received. Once it is in, Start production sends it to the floor. While the floor is making it, the button says View on floor, so you can see how far it has got.', 10],
+    ['11', 'Bought-in items', 'If a line is bought in, the button says Order from, and the supplier\'s name, in red. It opens Order bought-in items, where you tick the supplier and click Order selected. When the goods arrive, click Received from, and the supplier\'s name. Once everything is made and in, the card moves on to Ready to go.', 11],
+    ['12', 'Sending it out', 'On a ready order, the button says Add to today\'s run. It takes you to the Dispatch tray, where the van run is ticked and printed, just as before. Once it has gone out, the card moves on to Dispatched, to invoice. If you do not see the money columns, the button simply says Dispatch.', 12],
+    ['13', 'Getting paid', 'In the money columns, the button follows the bill. Raise invoice, in green, when it has gone out with no invoice. Record payment, while it is waiting to be paid, or part paid. And Chase payment, in red, once it is overdue. That opens the account, so you can see everything they owe.', 13],
+    ['14', 'Cards move by their buttons', 'You cannot drag a card from one column to another. Cards move with their buttons, and with the work itself, like the floor finishing the blinds. That way nothing skips a check. For example, an order cannot be dispatched until every blind is made, and every bought-in item has been received.', 14],
+    ['15', 'Where\'s my order?', 'When a customer rings to ask where their order is, use the search box at the top. Type the account, the order number, their reference, the name, or an invoice number, then tap Find. The cards that match open up on their own. Or pick an account from the list, to see only their orders. Clear takes you back to the whole board. On a phone, swipe sideways to see every column.', 15],
 ];
 $len = static fn (int $n): string => (string) round(mb_strlen($S[$n - 1][2]) / 13.6, 1);
 /** Seconds into line $n at which $phrase is spoken (+ $add). */
@@ -139,6 +140,7 @@ $card = static function (string $k, array $o = [], bool $noMoney = false, bool $
     $h = '<div class="pcd' . ($open ? ' open' : '') . ' ' . $c . '" style="' . $s . '">';
     [$c, $s] = $a('num'); [$c2, $s2] = $a('dot');
     $h .= '<div class="psm"><span class="car">' . ($open ? '&#9662;' : '&#9656;') . '</span><b class="pnum ' . $c . '" style="' . $s . '">' . $num . '</b>'
+        . ($rm ? '<span class="prm ' . ($o['r'][0] ?? '') . '" style="' . ($o['r'][1] ?? '') . '" title="Remake of ABC-2026-0038">R</span>' : '')
         . ($urgent ? '<span class="pdot ' . $c2 . '" style="' . $s2 . '"></span>' : '') . '</div>';
     if (!$open) return $h . '</div>';
     $h .= '<div class="pbody">';
@@ -196,6 +198,8 @@ $find = static fn (string $q = '', string $acc = 'All accounts', string $extra =
 $sum = static fn (array $anim = []): string =>
     '<div class="psum">'
     . '<span class="' . ($anim[0][0] ?? '') . '" style="' . ($anim[0][1] ?? '') . '"><b>8</b> open orders</span>'
+    . '<span class="' . ($anim[6][0] ?? '') . '" style="' . ($anim[6][1] ?? '') . '"><b>1</b> remake in progress <span class="prm">R</span></span>'
+    . '<span class="prmlink ' . ($anim[7][0] ?? '') . '" style="' . ($anim[7][1] ?? '') . '"><b>2</b> remakes waiting for approval &rarr;</span>'
     . '<span class="' . ($anim[1][0] ?? '') . '" style="' . ($anim[1][1] ?? '') . '"><b>1</b> waiting on suppliers</span>'
     . '<span class="' . ($anim[2][0] ?? '') . '" style="' . ($anim[2][1] ?? '') . '"><b>1</b> ready to go</span>'
     . '<span class="od ' . ($anim[3][0] ?? '') . '" style="' . ($anim[3][1] ?? '') . '"><b>1</b> overdue</span>'
@@ -263,6 +267,9 @@ return [
           .gd .psm{ display:flex; align-items:center; gap:.35em; padding:.25em .5em; white-space:nowrap; overflow:hidden; }
           .gd .psm .car{ font-size:.9em; color:var(--faint); }
           .gd .psm .pnum{ overflow:hidden; text-overflow:ellipsis; }
+          .gd .prm{ display:inline-block; flex:none; font-size:.8em; font-weight:800; line-height:1; color:#fff; background:#7c3aed; border-radius:4px; padding:.15em .3em; }
+          .gd .psum > .prmlink{ background:#ede9fe; color:#5b21b6; border-color:#ede9fe; font-weight:600; } .gd .psum > .prmlink b{ color:#5b21b6; }
+          .gd .ptip{ position:absolute; z-index:3; left:30%; top:105%; background:#1f2937; color:#fff; font-size:.6rem; padding:.2rem .45rem; border-radius:5px; white-space:nowrap; }
           .gd .pdot{ width:.6em; height:.6em; border-radius:50%; background:#b91c1c; flex:none; margin-left:auto; }
           .gd .pbody{ padding:0 .55em .55em; display:flex; flex-direction:column; gap:.3em; }
           .gd .plink{ font-weight:700; font-size:1.05em; color:var(--ink); border-radius:4px; }
@@ -331,7 +338,7 @@ return [
                 <!-- 0 — poster -->
                 <div class="sc" data-scene="0">
                   ' . $head . $find() . $sum() . $fullBoard . '
-                  <p class="scs" style="margin-top:.7rem">Press <b>&#9654; Play</b> below &mdash; fourteen short chapters, at an easy pace.</p>
+                  <p class="scs" style="margin-top:.7rem">Press <b>&#9654; Play</b> below &mdash; fifteen short chapters, at an easy pace.</p>
                 </div>
 
                 <!-- 1 — what it is for -->
@@ -487,92 +494,110 @@ return [
                   </div>
                 </div>
 
-                <!-- 9 — taking it in -->
+                <!-- 9 — remakes on the board -->
                 <div class="sc" data-scene="9" data-len="' . $len(9) . '">
-                  <div class="sct a-fade" style="--d:.2s">One button: taking it in</div>
-                  <div class="pbd big" style="margin-top:.4rem">'
-                    . $col('new', [$card('A', ['btn' => ['a-press', $d(9, 'A new order shows', 1.5)]])], ['col' => ['a-rise', $d(9, 'A new order shows')]])
-                    . $col('confirmed', [$card('B', ['btn' => ['a-press', $d(9, 'Start production sends', 1.5)]])], ['col' => ['a-rise', $d(9, 'Once it is in')]])
-                    . $col('in_production', [$card('C2', ['btn' => ['a-ring', $d(9, 'the button says View')]])], ['col' => ['a-rise', $d(9, 'While the floor')]]) . '
+                  <div class="sct a-fade" style="--d:.2s">Remakes on the board</div>
+                  ' . $sum([[], [], [], [], [], [], ['a-ring', $d(9, 'how many remakes are in progress')], ['a-ring', $d(9, 'a purple link')]]) . '
+                  <div class="pbd" style="font-size:.66rem">'
+                    . $col('in_production', ['C']) . $col('awaiting_supplier', ['D'])
+                    . $col('ready', ['<div style="position:relative">' . $card('E', ['r' => ['a-ring', $d(9, 'a purple R')]], false, false)
+                        . '<span class="ptip a-pop" style="' . $d(9, 'Hover over the R', 1) . '">Remake of ABC-2026-0038</span></div>'])
+                    . $col('to_invoice', ['F']) . '
                   </div>
-                  <div class="chips"><span class="chip ok a-pop" style="' . $d(9, 'The same rules') . '">Same rules as <b>Incoming orders</b></span></div>
+                  <div class="chips" style="margin-top:2.2rem">
+                    <span class="chip a-pop" style="' . $d(9, 'a purple R') . ';border-color:#7c3aed"><span class="prm" style="font-size:.7rem">R</span> a remake</span>
+                    <span class="chip a-pop" style="' . $d(9, 'a purple link') . ';border-color:#7c3aed">waiting for approval &rarr; <b>Remakes</b> page</span>
+                    <span class="chip a-pop" style="' . $d(9, 'Those are not orders') . '">not orders yet &mdash; no card</span>
+                  </div>
+                  <div class="a-move" style="--fx:70%;--fy:95%;--tx:70%;--ty:8.6rem;' . $d(9, 'Hover over the R') . ';--md:1.2s">' . $ptr . '</div>
                 </div>
 
-                <!-- 10 — bought-in items -->
+                <!-- 10 — taking it in -->
                 <div class="sc" data-scene="10" data-len="' . $len(10) . '">
+                  <div class="sct a-fade" style="--d:.2s">One button: taking it in</div>
+                  <div class="pbd big" style="margin-top:.4rem">'
+                    . $col('new', [$card('A', ['btn' => ['a-press', $d(10, 'A new order shows', 1.5)]])], ['col' => ['a-rise', $d(10, 'A new order shows')]])
+                    . $col('confirmed', [$card('B', ['btn' => ['a-press', $d(10, 'Start production sends', 1.5)]])], ['col' => ['a-rise', $d(10, 'Once it is in')]])
+                    . $col('in_production', [$card('C2', ['btn' => ['a-ring', $d(10, 'the button says View')]])], ['col' => ['a-rise', $d(10, 'While the floor')]]) . '
+                  </div>
+                  <div class="chips"><span class="chip ok a-pop" style="' . $d(10, 'The same rules') . '">Same rules as <b>Incoming orders</b></span></div>
+                </div>
+
+                <!-- 11 — bought-in items -->
+                <div class="sc" data-scene="11" data-len="' . $len(11) . '">
                   <div class="sct a-fade" style="--d:.2s">Bought-in items</div>
                   <div class="two" style="margin-top:.4rem">
-                    <div style="font-size:.74rem">' . $card('C', ['btn' => ['a-press', $d(10, 'It opens')], 'line1' => ['a-ring', $d(10, 'If a line is bought')]]) . '</div>
-                    <div class="scr a-rise" style="' . $d(10, 'It opens') . '"><b class="h">Order bought-in items</b>
+                    <div style="font-size:.74rem">' . $card('C', ['btn' => ['a-press', $d(11, 'It opens')], 'line1' => ['a-ring', $d(11, 'If a line is bought')]]) . '</div>
+                    <div class="scr a-rise" style="' . $d(11, 'It opens') . '"><b class="h">Order bought-in items</b>
                       <div style="margin:.2rem 0 .35rem">These lines are <b>bought-in</b> &mdash; the factory orders them from the supplier rather than making them.</div>
-                      <span class="tk"><span class="tick a-sel" style="' . $d(10, 'you tick the supplier') . '">&#10003;</span> Hunter Douglas &middot; PF Venetian &times; 1</span>
-                      <div style="margin-top:.45rem"><span class="pbt a-press" style="display:inline-block;padding:.3rem .7rem;' . $d(10, 'click Order selected') . '">Order selected</span></div></div>
+                      <span class="tk"><span class="tick a-sel" style="' . $d(11, 'you tick the supplier') . '">&#10003;</span> Hunter Douglas &middot; PF Venetian &times; 1</span>
+                      <div style="margin-top:.45rem"><span class="pbt a-press" style="display:inline-block;padding:.3rem .7rem;' . $d(11, 'click Order selected') . '">Order selected</span></div></div>
                   </div>
                   <div class="two" style="margin-top:.6rem">
-                    <div class="a-rise" style="font-size:.74rem;' . $d(10, 'When the goods') . '">' . $card('D', ['btn' => ['a-press', $d(10, 'click Received from', 1)]]) . '</div>
+                    <div class="a-rise" style="font-size:.74rem;' . $d(11, 'When the goods') . '">' . $card('D', ['btn' => ['a-press', $d(11, 'click Received from', 1)]]) . '</div>
                     <div class="notes">
-                      <span class="chip a-pop" style="' . $d(10, 'When the goods') . '">Goods arrived? <b>Received from &hellip;</b></span>
-                      <span class="chip ok a-pop" style="' . $d(10, 'Once everything') . '">&rarr; <b>Ready to go</b></span>
+                      <span class="chip a-pop" style="' . $d(11, 'When the goods') . '">Goods arrived? <b>Received from &hellip;</b></span>
+                      <span class="chip ok a-pop" style="' . $d(11, 'Once everything') . '">&rarr; <b>Ready to go</b></span>
                     </div>
                   </div>
                 </div>
 
-                <!-- 11 — sending it out -->
-                <div class="sc" data-scene="11" data-len="' . $len(11) . '">
+                <!-- 12 — sending it out -->
+                <div class="sc" data-scene="12" data-len="' . $len(12) . '">
                   <div class="sct a-fade" style="--d:.2s">Sending it out</div>
                   <div class="two" style="margin-top:.4rem">
-                    <div style="font-size:.74rem">' . $card('E', ['btn' => ['a-press', $d(11, 'It takes you')]]) . '</div>
-                    <div class="scr a-rise" style="' . $d(11, 'It takes you', .8) . '"><b class="h">Dispatch tray</b>
+                    <div style="font-size:.74rem">' . $card('E', ['btn' => ['a-press', $d(12, 'It takes you')]]) . '</div>
+                    <div class="scr a-rise" style="' . $d(12, 'It takes you', .8) . '"><b class="h">Dispatch tray</b>
                       <div style="font-weight:700;color:var(--ink);margin:.2rem 0">Ready to go out</div>
-                      <span class="tk"><span class="tick a-sel" style="' . $d(11, 'ticked and printed') . '">&#10003;</span> ABC Blinds &middot; ABC-2026-0038-R1</span>
-                      <div class="chip a-pop" style="' . $d(11, 'just as before') . ';margin-top:.4rem;font-size:.62rem">the van run, ticked and printed</div></div>
+                      <span class="tk"><span class="tick a-sel" style="' . $d(12, 'ticked and printed') . '">&#10003;</span> ABC Blinds &middot; ABC-2026-0038-R1</span>
+                      <div class="chip a-pop" style="' . $d(12, 'just as before') . ';margin-top:.4rem;font-size:.62rem">the van run, ticked and printed</div></div>
                   </div>
                   <div class="chips">
-                    <span class="chip ok a-pop" style="' . $d(11, 'Once it has gone') . '">&rarr; <b>Dispatched &middot; to invoice</b></span>
-                    <span class="chip a-pop" style="' . $d(11, 'If you do not see') . '">No money columns? The button says <span class="pbt blue" style="display:inline-block;padding:.15rem .5rem;font-size:.66rem">Dispatch</span></span>
+                    <span class="chip ok a-pop" style="' . $d(12, 'Once it has gone') . '">&rarr; <b>Dispatched &middot; to invoice</b></span>
+                    <span class="chip a-pop" style="' . $d(12, 'If you do not see') . '">No money columns? The button says <span class="pbt blue" style="display:inline-block;padding:.15rem .5rem;font-size:.66rem">Dispatch</span></span>
                   </div>
                 </div>
 
-                <!-- 12 — getting paid -->
-                <div class="sc" data-scene="12" data-len="' . $len(12) . '">
+                <!-- 13 — getting paid -->
+                <div class="sc" data-scene="13" data-len="' . $len(13) . '">
                   <div class="sct a-fade" style="--d:.2s">Getting paid</div>
                   <div class="pbd big" style="margin-top:.4rem">'
-                    . $col('to_invoice', [$card('F', ['btn' => ['a-press', $d(12, 'Raise invoice, in green', 1)]])], ['col' => ['a-rise', $d(12, 'Raise invoice, in green')]])
-                    . $col('to_pay', [$card('G', ['btn' => ['a-press', $d(12, 'Record payment', 1)]]), $card('H', ['btn' => ['a-press', $d(12, 'And Chase payment', 1)]])], ['col' => ['a-rise', $d(12, 'Record payment')]]) . '
+                    . $col('to_invoice', [$card('F', ['btn' => ['a-press', $d(13, 'Raise invoice, in green', 1)]])], ['col' => ['a-rise', $d(13, 'Raise invoice, in green')]])
+                    . $col('to_pay', [$card('G', ['btn' => ['a-press', $d(13, 'Record payment', 1)]]), $card('H', ['btn' => ['a-press', $d(13, 'And Chase payment', 1)]])], ['col' => ['a-rise', $d(13, 'Record payment')]]) . '
                   </div>
-                  <div class="chips"><span class="chip a-pop" style="' . $d(12, 'That opens the account') . '">Chase payment opens the <b>account</b></span></div>
+                  <div class="chips"><span class="chip a-pop" style="' . $d(13, 'That opens the account') . '">Chase payment opens the <b>account</b></span></div>
                 </div>
 
-                <!-- 13 — move by buttons -->
-                <div class="sc" data-scene="13" data-len="' . $len(13) . '">
+                <!-- 14 — move by buttons -->
+                <div class="sc" data-scene="14" data-len="' . $len(14) . '">
                   <div class="sct a-fade" style="--d:.2s">Cards move by their buttons</div>
                   <div class="pbd" style="margin-top:.4rem">' . $col('awaiting_supplier', ['D']) . $col('ready', []) . '</div>
                   <div class="chips">
-                    <span class="chip bad a-pop" style="' . $d(13, 'You cannot drag') . '">&#10007; no dragging</span>
-                    <span class="chip ok a-pop" style="' . $d(13, 'Cards move with') . '">&#10003; buttons, and the work itself</span>
+                    <span class="chip bad a-pop" style="' . $d(14, 'You cannot drag') . '">&#10007; no dragging</span>
+                    <span class="chip ok a-pop" style="' . $d(14, 'Cards move with') . '">&#10003; buttons, and the work itself</span>
                   </div>
-                  <div class="scr a-rise" style="' . $d(13, 'For example') . ';margin-top:.5rem;max-width:30rem;border-color:#fecaca;background:#fef2f2;color:#991b1b">
+                  <div class="scr a-rise" style="' . $d(14, 'For example') . ';margin-top:.5rem;max-width:30rem;border-color:#fecaca;background:#fef2f2;color:#991b1b">
                     Can&rsquo;t dispatch yet &mdash; the order isn&rsquo;t ready. Every blind must be made and every bought-in item received first.</div>
-                  <p class="pfoot a-fade" style="' . $d(13, 'That way nothing') . '">Cards move only with their buttons, so nothing skips a check (no dispatch before every bought-in item is in).</p>
+                  <p class="pfoot a-fade" style="' . $d(14, 'That way nothing') . '">Cards move only with their buttons, so nothing skips a check (no dispatch before every bought-in item is in).</p>
                 </div>
 
-                <!-- 14 — where\'s my order -->
-                <div class="sc" data-scene="14" data-len="' . $len(14) . '">
+                <!-- 15 — where\'s my order -->
+                <div class="sc" data-scene="15" data-len="' . $len(15) . '">
                   <div class="sct a-fade" style="--d:.2s">Where&rsquo;s my order?</div>
                   <div class="pfind">
-                    <span class="ib grow a-ring" style="' . $d(14, 'use the search box') . '"><span class="swap"><span class="gph a-out" style="' . $d(14, 'Type the account') . '">Where&rsquo;s my order? Account, order no., their ref, name&hellip;</span>
-                      <span class="a-fade" style="' . $d(14, 'Type the account') . '"><span class="a-type" style="' . $d(14, 'Type the account', .2) . ';--ts:7;--tt:.8s">PO 4420</span></span></span></span>
-                    <span class="ib sel a-ring" style="' . $d(14, 'Or pick an account') . '"><span class="swap"><span class="a-out" style="' . $d(14, 'Or pick an account', .8) . '">All accounts</span><span class="a-fade" style="' . $d(14, 'Or pick an account', .8) . '">ABC Blinds</span></span></span>
-                    <span class="btns a-press" style="' . $d(14, 'then tap Find') . '">Find</span>
-                    <span class="btns a-pop" style="' . $d(14, 'Clear takes you') . '">Clear</span>
+                    <span class="ib grow a-ring" style="' . $d(15, 'use the search box') . '"><span class="swap"><span class="gph a-out" style="' . $d(15, 'Type the account') . '">Where&rsquo;s my order? Account, order no., their ref, name&hellip;</span>
+                      <span class="a-fade" style="' . $d(15, 'Type the account') . '"><span class="a-type" style="' . $d(15, 'Type the account', .2) . ';--ts:7;--tt:.8s">PO 4420</span></span></span></span>
+                    <span class="ib sel a-ring" style="' . $d(15, 'Or pick an account') . '"><span class="swap"><span class="a-out" style="' . $d(15, 'Or pick an account', .8) . '">All accounts</span><span class="a-fade" style="' . $d(15, 'Or pick an account', .8) . '">ABC Blinds</span></span></span>
+                    <span class="btns a-press" style="' . $d(15, 'then tap Find') . '">Find</span>
+                    <span class="btns a-pop" style="' . $d(15, 'Clear takes you') . '">Clear</span>
                   </div>
                   <div class="pbd">'
                     . $col('new', [], [], '0') . $col('in_production', [], [], '0')
-                    . $col('awaiting_supplier', ['<div class="a-pop" style="' . $d(14, 'then tap Find', .6) . '">' . $card('D') . '</div>']) . $col('ready', []) . '
+                    . $col('awaiting_supplier', ['<div class="a-pop" style="' . $d(15, 'then tap Find', .6) . '">' . $card('D') . '</div>']) . $col('ready', []) . '
                   </div>
                   <div class="chips">
-                    <span class="chip a-pop" style="' . $d(14, 'or an invoice number') . '">account &middot; order number &middot; their ref &middot; name &middot; invoice number</span>
-                    <span class="chip ok a-pop" style="' . $d(14, 'On a phone') . '">On a phone: swipe sideways &harr;</span>
+                    <span class="chip a-pop" style="' . $d(15, 'or an invoice number') . '">account &middot; order number &middot; their ref &middot; name &middot; invoice number</span>
+                    <span class="chip ok a-pop" style="' . $d(15, 'On a phone') . '">On a phone: swipe sideways &harr;</span>
                   </div>
                 </div>
 
@@ -599,7 +624,7 @@ return [
              users</b>. Everyone else sees one <b>Dispatched</b> column instead &mdash; <em>Gone out in the last 7 days</em> &mdash; and
              dispatched orders then stay on <b>Orders</b>.</p>
 
-          <p><b>The totals</b> above the board: <b>n open orders</b>, <b>n waiting on suppliers</b>, <b>n ready to go</b>, and
+          <p><b>The totals</b> above the board: <b>n open orders</b>, <b>n remakes in progress</b>, <b>n remakes waiting for approval &rarr;</b>, <b>n waiting on suppliers</b>, <b>n ready to go</b>, and
              (accounts users) <b>n overdue</b> in red.</p>
 
           <p><b>One line per order.</b> On the board each order is a single line: a &#9656; and its <b>order number</b>. A <b>red dot</b>
@@ -607,6 +632,11 @@ return [
              <b>Needs invoicing</b> or <b>Overdue</b>. Click the number to open the card underneath; click again to close it.
              <b>Open all</b> and <b>Close all</b>, at the right of the totals, open or close every card at once. The eight columns share
              the page width; on a screen under about 1100px wide they scroll sideways.</p>
+
+          <p><b>Remakes.</b> A remake order&rsquo;s line has a purple <b>R</b> after the order number (hover it: <em>Remake of
+             &hellip;</em>). The totals add <b>n remakes in progress</b> with an R, and, when any are waiting, a purple link
+             <b>n remakes waiting for approval &rarr;</b> to the <b>Remakes</b> page. Remakes waiting for approval aren&rsquo;t orders
+             yet, so they have no card.</p>
 
           <p><b>An open card</b> shows:</p>
           <ul class="steps">
