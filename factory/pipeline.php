@@ -167,7 +167,7 @@ $action = static function (array $r) use ($money, $csrf): string {
                     return '<form method="post" action="/factory/set-status.php">' . $h
                          . '<button type="submit" name="status" value="dispatched" class="pl-btn blue">Dispatch</button></form>';
                 case 'floor':
-                    return '<a class="pl-btn ghost" href="/factory/order-areas.php?order=' . $qid . '">View on floor</a>';
+                    return '<a class="pl-btn ghost" href="/factory/order-areas.php?order=' . $qid . '">See progress</a>';
             }
         }
         return '';
