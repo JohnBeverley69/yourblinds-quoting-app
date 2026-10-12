@@ -822,7 +822,7 @@ $activeNav = 'wholesale';
                                                 <button type="submit" class="btn btn-primary btn-sm" <?= $invReady ? '' : 'disabled' ?>>Raise invoice</button>
                                             </form>
                                         <?php elseif ($liveInv && $liveInv['status'] === 'raised'): ?>
-                                            <form method="post" action="/master-admin/wholesale.php" class="wh-primary" data-confirm="Email invoice <?= e((string) $liveInv['inv_number']) ?> to <?= e((string) $o['account_name']) ?>?">
+                                            <form method="post" action="/master-admin/wholesale.php" class="wh-primary">
                                                 <?= csrf_field() ?>
                                                 <input type="hidden" name="_action" value="inv_send">
                                                 <input type="hidden" name="inv_id" value="<?= (int) $liveInv['id'] ?>">
@@ -878,7 +878,7 @@ $activeNav = 'wholesale';
                                                     <a class="wh-link" href="/master-admin/invoice-edit.php?id=<?= (int) $iv['id'] ?>">Edit lines / carriage</a>
                                                 <?php endif; ?>
                                                 <?php if (in_array($iv['status'], ['draft', 'raised'], true)): ?>
-                                                    <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0" data-confirm="Email invoice <?= e((string) $iv['inv_number']) ?> to <?= e((string) $o['account_name']) ?>?">
+                                                    <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0">
                                                         <?= csrf_field() ?>
                                                         <input type="hidden" name="_action" value="inv_send">
                                                         <input type="hidden" name="inv_id" value="<?= (int) $iv['id'] ?>">
@@ -928,7 +928,7 @@ $activeNav = 'wholesale';
                                                 <span class="wh-money" style="min-width:5rem">&minus;<?= $money($c['total']) ?></span>
                                                 <a class="wh-link" href="/master-admin/credit-note-pdf.php?id=<?= (int) $c['id'] ?>" target="_blank">View / print</a>
                                                 <?php if (!$cvoid): ?>
-                                                    <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0" data-confirm="Email credit note <?= e((string) $c['cn_number']) ?> to <?= e((string) $o['account_name']) ?>?">
+                                                    <form method="post" action="/master-admin/wholesale.php" style="display:inline;margin:0">
                                                         <?= csrf_field() ?>
                                                         <input type="hidden" name="_action" value="cn_send">
                                                         <input type="hidden" name="cn_id" value="<?= (int) $c['id'] ?>">
