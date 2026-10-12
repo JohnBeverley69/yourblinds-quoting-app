@@ -55,6 +55,8 @@ $ORDER = [
     'trade-terms-page',
     'settings-accounting',
     'platform-accounting-apps',
+    'qbo-match-customers',
+    'bm-swap-over-balances',
     'settings-backup',
     // Who can get in.
     'users-add',

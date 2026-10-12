@@ -8,8 +8,9 @@ declare(strict_types=1);
  * rendered by help/guide.php. Fields: aud, section, title, eyebrow, blurb,
  * lede, open, v, css, demo, body, script.
  *
- * The CSV route — the only one built today (a live accounting link is on
- * hold, so it is not described here). Sources:
+ * The CSV route — what companies use. (The live QuickBooks link is only for
+ * the platform's own books, Factory Console → QuickBooks — see the
+ * settings-accounting guide; a body note says so.) Sources:
  *   accounts/index.php     — the three export buttons, their tooltips, the note
  *                            under them, the date filter + This/Last month
  *   accounts/export.php    — ?type=invoices / quickbooks / payments: columns,
@@ -299,6 +300,11 @@ return [
             </div>
           </div>',
         'body'    => '
+          <div class="heads"><span class="hi">&#9432;</span><div><b>Files, not a live link.</b> For your business, getting your
+             figures across is done with these files. (The same downloads are on <b>Setup &rarr; Settings &rarr; Accounting</b>.) A live
+             link that sends paid invoices straight into QuickBooks exists only for the platform&rsquo;s own books (Beverley Blinds)
+             for now; it may be opened to other companies later.</div></div>
+
           <p><b>The three files.</b> Open <b>Payments</b> in the left-hand menu (under <b>Retail</b>). If it isn&rsquo;t there, the
              <b>Accounts</b> feature (part of the <b>Gold</b> plan) isn&rsquo;t on your account. The three export buttons, top right, are only
              shown to <b>admins</b>. The note under them says it too: <em>&ldquo;CSV for Xero / QuickBooks / Sage. Respects the date filter

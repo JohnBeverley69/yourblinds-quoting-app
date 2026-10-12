@@ -845,28 +845,29 @@ return [
       <p>The invoice rows default to account code <strong>200 (Sales)</strong> and <strong>20% VAT</strong>. Those are
       Xero’s usual UK defaults — if your chart of accounts differs, remap them as you import, not here.</p>'],
 
-    // Super-admins only until the live link is opened to companies
-    // (platform_config QBO_CLIENT_CONNECT = 1) — companies don't see the section yet.
-    ['super', 'Accounts', 'Can I link QuickBooks so I don\'t re-key everything?', 'quickbooks qbo intuit connect link accounting integration oauth mapping sales receipt xero sage api',
-     '<p>You can link your <strong>QuickBooks Online</strong> company today, but be clear what that does and doesn’t
-      do yet. Go to <strong>Setup → Settings</strong> and pick the <strong>Accounting</strong> tab.</p>
-      <p>There you’ll see a <strong>QuickBooks Online</strong> card with a badge reading
-      <strong>Sandbox (test)</strong> or <strong>Live</strong>, and one of three states: <em>Not set up</em>,
-      <em>Not connected</em> or <em>● Connected</em>.</p>
+    // Super-admins only: the live link is for the platform's own books (Factory
+    // Console → QuickBooks); companies get the downloads (topic above).
+    ['super', 'Accounts', 'Can I link QuickBooks so I don\'t re-key everything?', 'quickbooks qbo intuit connect link accounting integration oauth mapping invoice payment send push match customers swap over blind matrix xero sage api',
+     '<p><strong>For Beverley Blinds&rsquo; own books, yes &mdash; it&rsquo;s live.</strong> Go to <strong>Factory Console →
+      Accounts → QuickBooks</strong>. Once it&rsquo;s set up, every payment confirmed in YourBlinds (on the Bank screen or
+      recorded by hand) sends the invoice(s) it pays, then <em>one</em> payment against them, so QuickBooks matches the bank
+      line. Nothing goes across before it&rsquo;s paid.</p>
       <ul>
-        <li><strong>Connect to QuickBooks</strong> sends you to QuickBooks’ own site to sign in and approve access —
-        YourBlinds never sees your accounting password.</li>
-        <li>Once connected, <strong>Set up mapping</strong> (later <strong>Edit mapping</strong>) asks four things:
-        <em>How to record a paid sale</em> (Sales Receipt, or Invoice + Payment), the <em>Sales item</em> (required —
-        QuickBooks insists on an item on every line, so one “Blinds” item is plenty), the <em>Default VAT / tax
-        code</em>, and the <em>Bank account paid sales land in</em>.</li>
-        <li><strong>Disconnect</strong> unlinks it again.</li>
+        <li><strong>Connect to QuickBooks</strong> — you sign in on QuickBooks&rsquo; own site; YourBlinds never sees the
+        password.</li>
+        <li><strong>Set up mapping</strong> — the <em>Sales item</em> (Blinds), <em>Default VAT / tax code</em> and the
+        <em>Bank account paid sales land in</em>. Paid sales always go on as an Invoice with a Payment against it.</li>
+        <li><strong>Match customers</strong> — pair each trade account with its customer already in QuickBooks, once. The
+        office can do it from <strong>QuickBooks customers</strong> in their menu.</li>
+        <li><strong>Sending to QuickBooks</strong> — set <em>Send invoices dated from</em> (earlier invoices, such as Blind
+        Matrix ones, are left alone), tick <em>Sending on</em> and <strong>Save</strong>. It then runs after each payment and
+        every 15 minutes. <em>What&rsquo;s been sent</em> lists anything held, with the reason.</li>
       </ul>
-      <p><strong>It is cash accounting.</strong> Nothing is ever sent to QuickBooks until a sale is <em>paid</em> — you
-      will never see an open debtor created from here.</p>
-      <p><strong>Be warned:</strong> at the moment this sets up the connection and the mapping only — no sales are
-      pushed across automatically yet. Until that arrives, use the downloads at the top of the same Accounting tab.
-      The section is only shown to super-admins until the link is opened to companies.</p>'],
+      <p><strong>Other companies</strong> don&rsquo;t get the live link yet. They use <strong>Download for QuickBooks / Xero /
+      Sage</strong> on <strong>Setup → Settings → Accounting</strong>; their own Connect section stays hidden until it&rsquo;s
+      opened to them.</p>
+      <p>The Help guides <em>QuickBooks live link</em>, <em>Match customers (QuickBooks)</em> and <em>Swap-over: Blind Matrix
+      balances</em> walk through each part.</p>'],
 
     ['factory', 'Accounts', 'How do I raise a delivery note and invoice for a trade account?', 'delivery note dn invoice trade wholesale raise dispatch print billing account order paperwork',
      '<p>Go to <strong>Factory Console → Invoices</strong> in the left-hand menu (the page itself is headed
