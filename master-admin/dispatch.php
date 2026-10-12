@@ -532,6 +532,7 @@ $money     = static fn ($n) => '£' . number_format((float) $n, 2);
     <div class="alert alert-success" role="alert"><?= e((string) $_SESSION['flash_success']) ?></div>
     <?php unset($_SESSION['flash_success']); ?>
   <?php endif; ?>
+  <?= os_paperwork_missing_banner($pdo, $factory, '/master-admin/dispatch.php') ?>
 
   <?php if (!$dnReady): ?>
     <div class="alert alert-error" role="alert">

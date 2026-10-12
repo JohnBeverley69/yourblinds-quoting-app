@@ -361,6 +361,7 @@ $activeNav = 'factory-pipeline';
 <main class="app-main">
   <?php if ($flashOk  !== ''): ?><div class="alert alert-success" role="status"><?= e($flashOk) ?></div><?php endif; ?>
   <?php if ($flashErr !== ''): ?><div class="alert alert-error"   role="alert"><?= e($flashErr) ?></div><?php endif; ?>
+  <?= os_paperwork_missing_banner($pdo, current_factory_id(), '/factory/pipeline.php') ?>
 
   <div class="pl-top">
     <div>
