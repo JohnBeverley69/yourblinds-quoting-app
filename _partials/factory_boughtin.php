@@ -15,6 +15,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/bought_in.php';
 require_once __DIR__ . '/supplier_send.php';
+require_once __DIR__ . '/extra_value.php';
 
 /** Distinct MASTER supplier names for an order's bought-in lines (factory-owned). */
 function factory_boughtin_supplier_names(PDO $pdo, int $quoteId, int $factoryId): array
@@ -159,7 +160,7 @@ function factory_po_extras(PDO $pdo, array $itemIds): array
     if (!$itemIds) return [];
     $ph = implode(',', array_fill(0, count($itemIds), '?'));
     try {
-        $st = $pdo->prepare("SELECT quote_item_id, extra_name_snapshot, choice_label_snapshot, user_value FROM quote_item_extras WHERE quote_item_id IN ($ph) ORDER BY id");
+        $st = $pdo->prepare("SELECT quote_item_id, extra_name_snapshot, choice_label_snapshot, user_value, mode FROM quote_item_extras WHERE quote_item_id IN ($ph) ORDER BY id");
         $st->execute($itemIds);
         $rows = $st->fetchAll(PDO::FETCH_ASSOC);
     } catch (Throwable $e) {
@@ -178,10 +179,7 @@ function factory_po_extra_text(array $ex): string
 {
     $n = trim((string) ($ex['extra_name_snapshot'] ?? '')); $c = trim((string) ($ex['choice_label_snapshot'] ?? ''));
     $o = $n; if ($c !== '') $o .= ($o !== '' ? ': ' : '') . $c;
-    if (isset($ex['user_value']) && $ex['user_value'] !== null && (float) $ex['user_value'] > 0) {
-        $o .= ' — ' . rtrim(rtrim(number_format((float) $ex['user_value'], 2, '.', ''), '0'), '.') . 'mm';
-    }
-    return $o;
+    return $o . extra_value_suffix($ex);   // "× 4" for a quantity, "— 50mm" for a size
 }
 
 /**

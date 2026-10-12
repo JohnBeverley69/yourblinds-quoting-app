@@ -23,6 +23,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/_helpers.php';
+require_once __DIR__ . '/../_partials/extra_value.php';
 require __DIR__ . '/../pdf-generator/pdf.php';
 require __DIR__ . '/../mailer.php';
 
@@ -169,7 +170,7 @@ if ($lineIds) {
     $eph = implode(',', array_fill(0, count($lineIds), '?'));
     try {
         $exSt = db()->prepare(
-            "SELECT quote_item_id, extra_name_snapshot, choice_label_snapshot, user_value
+            "SELECT quote_item_id, extra_name_snapshot, choice_label_snapshot, user_value, mode
                FROM quote_item_extras WHERE quote_item_id IN ($eph) ORDER BY id"
         );
         $exSt->execute($lineIds);
@@ -197,10 +198,7 @@ $fmtExtraSpec = static function (array $ex): string {
     $choice = trim((string) ($ex['choice_label_snapshot'] ?? ''));
     $out    = $name;
     if ($choice !== '') $out .= ($out !== '' ? ': ' : '') . $choice;
-    if (isset($ex['user_value']) && $ex['user_value'] !== null && (float) $ex['user_value'] > 0) {
-        $out .= ' — ' . rtrim(rtrim(number_format((float) $ex['user_value'], 2, '.', ''), '0'), '.') . 'mm';
-    }
-    return $out;
+    return $out . extra_value_suffix($ex);   // "× 4" for a quantity, "— 50mm" for a size
 };
 
 // Group by the product's supplier. Empty supplier = "unassigned" (a blocker) —
