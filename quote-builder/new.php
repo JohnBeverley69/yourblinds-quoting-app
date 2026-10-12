@@ -4,6 +4,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/_helpers.php';
+require_once __DIR__ . '/../_partials/offline_refs.php';
 
 requireLogin();
 
@@ -118,8 +119,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // returns, carrying a one-off client_ref. If the reply was lost and the tablet
     // sends it again, go to the quote it already made rather than making two.
     $clientRef = substr(preg_replace('/[^A-Za-z0-9-]/', '', (string) ($_POST['client_ref'] ?? '')), 0, 64);
-    if ($clientRef !== '' && !empty($_SESSION['qb_created_refs'][$clientRef])) {
-        header('Location: /quote-builder/edit.php?id=' . (int) $_SESSION['qb_created_refs'][$clientRef] . '#add-line');
+    // The session is the quick check; offline_refs survives the tablet signing in again.
+    $madeId = $clientRef !== ''
+        ? (int) ($_SESSION['qb_created_refs'][$clientRef] ?? oref_seen(db(), $clientId, 'quote', $clientRef) ?? 0)
+        : 0;
+    if ($madeId > 0) {
+        header('Location: /quote-builder/edit.php?id=' . $madeId . '#add-line');
         exit;
     }
 
@@ -180,7 +185,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($error === null) {
         try {
-            $res = qb_create_quote_from_fields(db(), $clientId, $f, $appointmentId, (int) $user['user_id']);
+            $pdo = db();
+            $pdo->beginTransaction();
+            $res = qb_create_quote_from_fields($pdo, $clientId, $f, $appointmentId, (int) $user['user_id']);
+            if (!oref_claim($pdo, $clientId, 'quote', $clientRef, (int) $res['id'])) {
+                // Another copy of this resend made the quote first: drop ours, go to theirs.
+                $pdo->rollBack();
+                header('Location: /quote-builder/edit.php?id=' . (int) oref_seen($pdo, $clientId, 'quote', $clientRef) . '#add-line');
+                exit;
+            }
+            $pdo->commit();
             if ($clientRef !== '') {
                 $refs = $_SESSION['qb_created_refs'] ?? [];
                 $refs[$clientRef] = (int) $res['id'];
@@ -193,6 +207,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             header('Location: /quote-builder/edit.php?id=' . $res['id'] . '#add-line');
             exit;
         } catch (Throwable $e) {
+            if (db()->inTransaction()) db()->rollBack();
             $error = 'Could not create quote: ' . $e->getMessage();
         }
     }

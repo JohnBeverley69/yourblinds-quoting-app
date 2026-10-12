@@ -9,6 +9,7 @@ require __DIR__ . '/pdf.php';
 require_once __DIR__ . '/../_partials/send_quota.php';
 require_once __DIR__ . '/../_partials/quote_expiry.php';
 require_once __DIR__ . '/../_partials/tenant_mail.php';
+require_once __DIR__ . '/../_partials/offline_refs.php';
 
 requireLogin();
 
@@ -100,6 +101,12 @@ $body .= (string) $user['company_name'];
 
 $filename = preg_replace('/[^A-Za-z0-9._-]/', '_', (string) $quote['quote_number']) . '.pdf';
 
+// Claim the ref in the database just before sending (it survives the tablet
+// signing in again, which the session list doesn't); give it back if the send fails.
+if (!oref_claim(db(), (int) $user['client_id'], 'email', $clientRef, (int) $quote['id'])) {
+    qb_flash_redirect($backUrl, 'success', 'Quote PDF already emailed.');
+}
+
 $ok = mailer_send(
     $to,
     $subject,
@@ -124,6 +131,7 @@ if ($ok) {
     }
 }
 if (!$ok) {
+    oref_release(db(), (int) $user['client_id'], 'email', $clientRef);
     qb_flash_redirect(
         $backUrl,
         'error',

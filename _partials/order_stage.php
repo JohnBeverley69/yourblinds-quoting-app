@@ -124,8 +124,8 @@ function os_derive_stage(PDO $pdo, int $quoteId, int $factory): string
     // A dispatched delivery note counts as dispatched too.
     $dnDispatched = false;
     try {
-        $d = $pdo->prepare("SELECT COUNT(*) FROM factory_ar_delivery_notes WHERE source_quote_id = ? AND status = 'dispatched'");
-        $d->execute([$quoteId]);
+        $d = $pdo->prepare("SELECT COUNT(*) FROM factory_ar_delivery_notes WHERE source_quote_id = ? AND factory_client_id = ? AND status = 'dispatched'");
+        $d->execute([$quoteId, $factory]);
         $dnDispatched = ((int) $d->fetchColumn()) > 0;
     } catch (Throwable $e) { /* table absent — ignore */ }
 
@@ -213,14 +213,15 @@ function os_mark_dispatched_dn(PDO $pdo, int $quoteId, ?int $factory = null, ?in
 
         $existing = $pdo->prepare(
             "SELECT id, status FROM factory_ar_delivery_notes
-              WHERE source_quote_id = ? AND status <> 'cancelled' ORDER BY id DESC LIMIT 1"
+              WHERE source_quote_id = ? AND factory_client_id = ? AND status <> 'cancelled'
+              ORDER BY id DESC LIMIT 1"
         );
-        $existing->execute([$quoteId]);
+        $existing->execute([$quoteId, $factory]);
         $dn = $existing->fetch(PDO::FETCH_ASSOC);
         if ($dn) {
             if (($dn['status'] ?? '') !== 'dispatched') {
-                $pdo->prepare("UPDATE factory_ar_delivery_notes SET status = 'dispatched', dispatched_at = NOW() WHERE id = ?")
-                    ->execute([(int) $dn['id']]);
+                $pdo->prepare("UPDATE factory_ar_delivery_notes SET status = 'dispatched', dispatched_at = NOW() WHERE id = ? AND factory_client_id = ?")
+                    ->execute([(int) $dn['id'], $factory]);
             }
             return;
         }

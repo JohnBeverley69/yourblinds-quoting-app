@@ -7,6 +7,7 @@ require __DIR__ . '/_helpers.php';
 require __DIR__ . '/../_partials/pricing_engine.php';
 require __DIR__ . '/../_partials/price_table_parser.php';
 require __DIR__ . '/../_partials/units.php';
+require_once __DIR__ . '/../_partials/offline_refs.php';
 
 requireLogin();
 
@@ -27,8 +28,11 @@ qb_require_quote_access($quote, $user, current_user_permissions());
 // Offline outbox: a blind saved on the tablet with no signal carries a one-off
 // client_ref. If the signal dropped AFTER we saved it but before the tablet got
 // the reply, the tablet sends it again. Seen that ref already? Don't add it twice.
+// The session list is the quick check; offline_refs is the one that survives the
+// tablet signing in again (and is claimed again at commit, below, for races).
 $clientRef = substr(preg_replace('/[^A-Za-z0-9-]/', '', (string) ($_POST['client_ref'] ?? '')), 0, 64);
-if ($clientRef !== '' && in_array($clientRef, $_SESSION['qb_client_refs'] ?? [], true)) {
+if ($clientRef !== '' && (in_array($clientRef, $_SESSION['qb_client_refs'] ?? [], true)
+        || oref_seen(db(), $clientId, 'item', $clientRef) !== null)) {
     qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId . '#add-line', 'success', 'Blind already added.');
 }
 
@@ -327,6 +331,11 @@ try {
 
     qb_reconcile_fascia_groups($pdo, $quoteId, $clientId, (int) ($quote['account_client_id'] ?? 0));
     qb_recompute_totals($quoteId);
+    if (!oref_claim($pdo, $clientId, 'item', $clientRef, $quoteId)) {
+        // Another copy of this resend got in first: drop ours.
+        $pdo->rollBack();
+        qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId . '#add-line', 'success', 'Blind already added.');
+    }
     $pdo->commit();
     if ($clientRef !== '') {
         $_SESSION['qb_client_refs'] = array_slice(array_merge($_SESSION['qb_client_refs'] ?? [], [$clientRef]), -200);
