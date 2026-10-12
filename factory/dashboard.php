@@ -630,6 +630,19 @@ $activeNav = 'factory-dashboard';
     <a href="/factory/pipeline.php" class="btn">Pipeline</a>
   </div>
 
+  <?php
+    // This morning's order checks (cron_messages.php stores the count) — a
+    // line only when something disagrees, so a quiet day shows nothing.
+    require_once __DIR__ . '/../_partials/app_settings.php';
+    $ocLast = json_decode((string) app_setting_get('order_checks_last', ''), true);
+    if (is_array($ocLast) && (int) ($ocLast['count'] ?? 0) > 0 && (int) $factory === (int) factory_client_id()):
+  ?>
+    <div class="alert alert-error" role="status" style="margin-bottom:.8rem">
+      ⚠ <?= (int) $ocLast['count'] ?> order<?= (int) $ocLast['count'] === 1 ? '' : 's' ?> didn&rsquo;t add up at
+      <?= e(date('H:i \o\n j M', strtotime((string) $ocLast['at']))) ?> &mdash; <a href="/factory/checks.php">see Order checks</a>.
+    </div>
+  <?php endif; ?>
+
   <div class="fd-periods">
     <?php foreach ($periods as $k => $lbl): ?>
       <a class="<?= $period === $k ? 'on' : '' ?>" href="?period=<?= e($k) ?>"><?= e($lbl) ?></a>

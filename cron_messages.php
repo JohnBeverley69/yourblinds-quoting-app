@@ -54,6 +54,36 @@ try {
     echo 'QuickBooks: ' . $e->getMessage() . "\n";
 }
 
+// Order checks: once a day from 7am, email the super-admins the orders whose
+// records disagree (_partials/order_checks.php) — only when there are any; a
+// quiet day sends nothing. The count is kept for the Dashboard's line.
+try {
+    require_once __DIR__ . '/_partials/app_settings.php';
+    $ocFactory = factory_client_id();
+    $ocToday   = $now->format('Y-m-d');
+    if ($ocFactory > 0 && (int) $now->format('G') >= 7 && app_setting_get('order_checks_run_on', '') !== $ocToday) {
+        require_once __DIR__ . '/_partials/order_checks.php';
+        $ocFind = oc_findings(db(), $ocFactory);
+        app_setting_set('order_checks_run_on', $ocToday);
+        app_setting_set('order_checks_last', json_encode(['at' => $now->format('Y-m-d H:i'), 'count' => count($ocFind)]));
+        if ($ocFind) {
+            require_once __DIR__ . '/mailer.php';
+            $ocTo = db()->query("SELECT email FROM client_users WHERE is_super_admin = 1 AND active = 1 AND email LIKE '%@%'")
+                        ->fetchAll(PDO::FETCH_COLUMN);
+            $ocUrl = rtrim((string) (env('APP_URL', 'https://yourblinds.uk') ?? ''), '/') . '/factory/checks.php';
+            $ocSent = 0;
+            foreach (array_unique($ocTo) as $ocAddr) {
+                if (mailer_send($ocAddr, 'Order checks: ' . count($ocFind) . ' to look at', oc_summary_text($ocFind, $ocUrl))) $ocSent++;
+            }
+            echo 'Order checks: ' . count($ocFind) . " to look at; emailed {$ocSent}.\n";
+        } else {
+            echo "Order checks: everything adds up.\n";
+        }
+    }
+} catch (Throwable $e) {
+    echo 'Order checks: ' . $e->getMessage() . "\n";
+}
+
 if (!sms_ready()) {
     echo "Texting tables not migrated yet; nothing to do.\n";
     exit;
