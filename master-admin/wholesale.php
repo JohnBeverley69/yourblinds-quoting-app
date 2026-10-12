@@ -233,8 +233,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             //    doesn't exist).
             $invNum = ar_order_invoice_number($pdo, $qid);
             $newInvId = 0;
+            $inv = null;
             if ($invNum === '') {
-                $inv      = ar_create_invoice($pdo, $factory, $qid, $accId, (int) ($user['user_id'] ?? 0), false);
+                try {
+                    $inv = ar_create_invoice($pdo, $factory, $qid, $accId, (int) ($user['user_id'] ?? 0), false);
+                } catch (ArAlreadyInvoicedException $e) {
+                    $invNum = $e->invNumber;   // raced by another request — the note still goes out
+                }
+            }
+            if ($inv) {
                 $invNum   = $inv['number'];
                 $newInvId = (int) $inv['id'];
                 $msg      = 'Delivery note ' . $dnNum . ' dispatched · invoice ' . $invNum . ' created (£' . number_format($inv['total'], 2) . ')';

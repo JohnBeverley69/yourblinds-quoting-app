@@ -21,6 +21,55 @@ function ar_factory_id(): int
     return 3;
 }
 
+/**
+ * Thrown by ar_create_invoice() when the order already has a live (non-void)
+ * invoice from this factory. Callers treat it as "already invoiced", not as a
+ * failure; $invNumber names the invoice that covers it.
+ */
+final class ArAlreadyInvoicedException extends RuntimeException
+{
+    public string $invNumber;
+    public function __construct(string $invNumber)
+    {
+        $this->invNumber = $invNumber;
+        parent::__construct('Already invoiced' . ($invNumber !== '' ? ' on ' . $invNumber : '') . ' (void it first to re-invoice).');
+    }
+}
+
+/**
+ * Has migrate_ar_invoice_one_per_order.php run? (factory_ar_invoice_orders gains
+ * factory_client_id + live_quote_id with a unique key, so the database itself
+ * refuses a second live invoice for an order.)
+ */
+function ar_io_live_ready(PDO $pdo): bool
+{
+    static $ok = null;
+    if ($ok !== null) return $ok;
+    try {
+        $s = $pdo->query("SELECT 1 FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE()
+                            AND TABLE_NAME = 'factory_ar_invoice_orders' AND COLUMN_NAME = 'live_quote_id' LIMIT 1");
+        return $ok = ($s->fetchColumn() !== false);
+    } catch (Throwable $e) {
+        return $ok = false;
+    }
+}
+
+/** This factory's live (non-void) invoice number for an order, or ''. */
+function ar_factory_order_invoice_number(PDO $pdo, int $factory, int $quoteId): string
+{
+    try {
+        $st = $pdo->prepare(
+            "SELECT i.inv_number FROM factory_ar_invoice_orders io
+               JOIN factory_ar_invoices i ON i.id = io.invoice_id
+              WHERE io.quote_id = ? AND i.factory_client_id = ? AND i.status <> 'void' LIMIT 1"
+        );
+        $st->execute([$quoteId, $factory]);
+        return (string) ($st->fetchColumn() ?: '');
+    } catch (Throwable $e) {
+        return '';
+    }
+}
+
 /** Order statuses that count as "placed" (an order the account owes for). */
 function ar_placed_statuses(): array
 {
@@ -753,8 +802,14 @@ function ar_create_delivery_note(PDO $pdo, int $factory, int $quoteId, int $acco
  * Returns ['id','number','total','sent'=>bool,'send_message'=>string,'send_pending'=>bool].
  * Throws RuntimeException on a business problem (no owned lines; a priced option
  * with no captured wholesale price — an uncaptured pre-2A order) or PDOException.
- * The caller MUST have guarded against double-invoicing (see
- * factory_ar_invoice_orders) before calling.
+ *
+ * One live invoice per order per factory: idempotent under concurrency. Inside
+ * the transaction the order's quotes row is locked (FOR UPDATE) and re-checked,
+ * and once migrate_ar_invoice_one_per_order.php has run a unique key on
+ * factory_ar_invoice_orders backs it up. A second attempt throws
+ * ArAlreadyInvoicedException and writes nothing — inside a caller's
+ * transaction its own inserts are rolled back to a savepoint, so the caller's
+ * other work (e.g. dispatching the delivery note) is left intact.
  */
 function ar_create_invoice(PDO $pdo, int $factory, int $quoteId, int $accountId, int $userId, bool $send = false): array
 {
@@ -769,6 +824,10 @@ function ar_create_invoice(PDO $pdo, int $factory, int $quoteId, int $accountId,
     if ($accountId === $factory) {
         throw new RuntimeException('That order is the factory’s own, so there is no account to invoice.');
     }
+    // Fast path; the authoritative check is repeated under the row lock below.
+    $already = ar_factory_order_invoice_number($pdo, $factory, $quoteId);
+    if ($already !== '') throw new ArAlreadyInvoicedException($already);
+
     $built = ar_invoice_lines_from_order($pdo, $factory, $quoteId);
     if (!$built['lines'])     throw new RuntimeException('This order has no Beverley-owned lines to invoice.');
     if ($built['uncaptured']) throw new RuntimeException('This order predates wholesale-price capture — re-save its lines in the quote before invoicing (a priced option has no wholesale price).');
@@ -805,7 +864,14 @@ function ar_create_invoice(PDO $pdo, int $factory, int $quoteId, int $accountId,
 
     $ownTxn = !$pdo->inTransaction();
     if ($ownTxn) $pdo->beginTransaction();
+    else         $pdo->exec('SAVEPOINT ar_create_invoice');
     try {
+        // Serialise invoicing of this order: a concurrent request waits here
+        // until this one commits, then sees its invoice and stops.
+        $pdo->prepare('SELECT id FROM quotes WHERE id = ? FOR UPDATE')->execute([$quoteId]);
+        $already = ar_factory_order_invoice_number($pdo, $factory, $quoteId);
+        if ($already !== '') throw new ArAlreadyInvoicedException($already);
+
         $invId = 0; $num = '';
         for ($try = 1; $try <= 3; $try++) {
             $num = ar_order_doc_number($pdo, $factory, $quoteId, 'INV', 'factory_ar_invoices', 'inv_number');
@@ -841,7 +907,20 @@ function ar_create_invoice(PDO $pdo, int $factory, int $quoteId, int $accountId,
                 $l['list_trade_unit'], $l['discount_percent'], $l['discount_amount'], $l['sort_order'],
             ]);
         }
-        $pdo->prepare('INSERT INTO factory_ar_invoice_orders (invoice_id, quote_id) VALUES (?, ?)')->execute([$invId, $quoteId]);
+        try {
+            if (ar_io_live_ready($pdo)) {
+                $pdo->prepare('INSERT INTO factory_ar_invoice_orders (invoice_id, quote_id, factory_client_id, live_quote_id) VALUES (?, ?, ?, ?)')
+                    ->execute([$invId, $quoteId, $factory, $quoteId]);
+            } else {
+                $pdo->prepare('INSERT INTO factory_ar_invoice_orders (invoice_id, quote_id) VALUES (?, ?)')->execute([$invId, $quoteId]);
+            }
+        } catch (PDOException $e) {
+            // uq_io_live: another live invoice got there first.
+            if ($e->getCode() === '23000') {
+                throw new ArAlreadyInvoicedException(ar_factory_order_invoice_number($pdo, $factory, $quoteId));
+            }
+            throw $e;
+        }
 
         // The delivery charge fixed at dispatch rides on this order's invoice
         // when its note is the one carrying it (see dc_recalc_delivery).
@@ -858,8 +937,12 @@ function ar_create_invoice(PDO $pdo, int $factory, int $quoteId, int $accountId,
         }
 
         if ($ownTxn) $pdo->commit();
+        else         $pdo->exec('RELEASE SAVEPOINT ar_create_invoice');
     } catch (Throwable $e) {
         if ($ownTxn && $pdo->inTransaction()) $pdo->rollBack();
+        elseif (!$ownTxn && $pdo->inTransaction()) {
+            try { $pdo->exec('ROLLBACK TO SAVEPOINT ar_create_invoice'); } catch (Throwable $e2) { /* caller rolls back */ }
+        }
         throw $e;
     }
 
@@ -1313,6 +1396,11 @@ function ar_void_invoice(PDO $pdo, int $factory, int $invId, string $reason = ''
         }
         $pdo->prepare("UPDATE factory_ar_invoices SET status = 'void', voided_at = NOW(), void_reason = ?, amount_paid = 0 WHERE id = ? AND factory_client_id = ?")
             ->execute([mb_substr($reason, 0, 255), $invId, $factory]);
+        // A void invoice no longer holds its orders' one-live-invoice slot, so
+        // they can be re-invoiced (see migrate_ar_invoice_one_per_order.php).
+        if (ar_io_live_ready($pdo)) {
+            $pdo->prepare('UPDATE factory_ar_invoice_orders SET live_quote_id = NULL WHERE invoice_id = ?')->execute([$invId]);
+        }
 
         if (ar_table_ready($pdo, 'factory_ar_credit_notes')) {
             $cnv = $pdo->prepare(

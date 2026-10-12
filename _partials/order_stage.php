@@ -270,6 +270,8 @@ function os_auto_invoice_on_dispatch(PDO $pdo, int $quoteId, ?int $factory = nul
         if (empty($inv['sent']) && ($inv['send_message'] ?? '') !== '') {
             error_log('os_auto_invoice_on_dispatch: ' . $inv['number'] . ' raised but not emailed — ' . $inv['send_message']);
         }
+    } catch (ArAlreadyInvoicedException $e) {
+        /* raced by another request — the order is invoiced, which is the point */
     } catch (Throwable $e) {
         error_log('os_auto_invoice_on_dispatch failed for quote ' . $quoteId . ': ' . $e->getMessage());
     }
