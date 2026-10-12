@@ -3676,8 +3676,12 @@ if (is_factory_client($clientId) && function_exists('factory_console_user') && f
                 schedulePreview();
             });
         });
-        // Roller multi-blind: typing a "Blind N Width" re-prices the summary.
-        xNodes('[data-extra-code="fascia_blind_width"] input[data-uv-for]').forEach(function (inp) {
+        // Typing in ANY option number box re-prices: a per-unit accessory's Qty,
+        // a custom pelmet size, a roller "Blind N Width". Only the Blind N Width
+        // boxes used to, so ticking Swivel Bracket Extension priced with an empty
+        // Qty, and "Enter a quantity" stayed up after the 3 was typed (John,
+        // 2026-10-12). InstaPrice already listens to all of them.
+        xNodes('input[data-uv-for], input[data-cuv-for]').forEach(function (inp) {
             inp.addEventListener('input', schedulePreview);
         });
         // Reflect the fascia-sizing mode into the Width field + fascia-width box.
