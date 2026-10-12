@@ -1,0 +1,31 @@
+{
+    "note": "Expected invoice for the order-journey test — written by --update-goldens.",
+    "money": {
+        "invoice_net": 135.23,
+        "invoice_vat": 27.05,
+        "invoice_total": 162.28,
+        "invoice_lines": [
+            [
+                "blind",
+                "Bev Roller Blinds — Standard Roller, Opus \/ Beige (Exact or Recess: Recess, Fabric Roll: Normal, Control Options: Side Winder)",
+                1.0,
+                29.24,
+                29.24
+            ],
+            [
+                "blind",
+                "Bev Forest Wood — 50mm Slat, Elegant White (Accessories: Hold-down bracket (4), Accessories: Extra bracket (2), Accessories: Spare wand, Pelmet: Custom size pelmet (1650))",
+                1.0,
+                89.99,
+                89.99
+            ],
+            [
+                "carriage",
+                "Delivery charge — Carrier, <date>",
+                1.0,
+                16.0,
+                16.0
+            ]
+        ]
+    }
+}

@@ -1,0 +1,74 @@
+name: Tests
+
+# The automatic regression tests (tests/README.md). Runs on every pull request
+# and on every push to main, against a throw-away MySQL database inside GitHub —
+# never the live site. Green tick = prices, pages, privacy between companies,
+# catalogue copies and the order journey all still behave; red cross = something
+# broke (click "Details" → the job summary says what in plain English).
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  tests:
+    name: Regression tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        # Same SQL mode as the live server (no ONLY_FULL_GROUP_BY, not strict).
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: '3306'
+      DB_USER: root
+      DB_PASS: root
+      DB_NAME: yb_ci
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'          # what the live server runs
+          extensions: pdo_mysql, mysqli, mbstring, gd, zip, intl, curl
+          coverage: none
+          tools: composer:v2
+
+      - name: Install PHP packages
+        run: composer install --no-interaction --no-progress --prefer-dist
+
+      - name: Set the database to the live server's SQL mode
+        run: |
+          mysql -h 127.0.0.1 -uroot -proot -e "SET GLOBAL sql_mode = 'NO_ZERO_IN_DATE,NO_ZERO_DATE,NO_ENGINE_SUBSTITUTION';"
+
+      - name: Syntax check every PHP file
+        run: |
+          find . -name '*.php' -not -path './vendor/*' -print0 | xargs -0 -n1 -P4 php -l > /tmp/lint.txt 2>&1 || { grep -v '^No syntax errors' /tmp/lint.txt; exit 1; }
+
+      - name: Run the tests
+        run: php tests/run.php
+
+      - name: Keep the logs if anything failed
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: tests/.out/
+          retention-days: 7
