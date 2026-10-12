@@ -41,7 +41,7 @@ $S = [
     ['7', 'Each line has its own status', 'Under that, every line on the order has its own status. A blind made here says Not started, then Being made, three of five, then a tick and Made. A bought-in item says the supplier, not ordered yet, then Waiting on the supplier, with the date it was ordered. So on a mixed order, you can see exactly which part is holding it up.', 7],
     ['8', 'The money on a card', 'Once an order has an invoice, its card shows the money pill. Invoiced, awaiting payment, Part paid, Overdue, or Paid. Under the pill is each invoice number, what is still owed, and when it is due. Once it is paid, it shows the date it was paid instead.', 8],
     ['9', 'Remakes on the board', 'Remakes show up too. A remake\'s line has a purple R after the order number. Hover over the R to see which order it is a remake of. Above the board, the totals say how many remakes are in progress. If any are waiting for approval, a purple link takes you to the Remakes page. Those are not orders yet, so they have no card.', 9],
-    ['10', 'One button: taking it in', 'Each card has one button, and it is always the next step. The same rules as Incoming orders decide it, so the two never disagree. A new order shows Accept. One click takes it in and sends its blinds to the floor. While the floor is making it, the button says View on floor, so you can see how far it has got.', 10],
+    ['10', 'One button: taking it in', 'Each card has one button, and it is always the next step. The same rules as Incoming orders decide it, so the two never disagree. A new order shows Accept. One click takes it in and sends its blinds to the floor. While the floor is making it, the button says See progress, so you can see how far each blind has got.', 10],
     ['11', 'Bought-in items', 'If a line is bought in, the button says Order from, and the supplier\'s name, in red. It opens Order bought-in items, where you tick the supplier and click Order selected. When the goods arrive, click Received from, and the supplier\'s name. Once everything is made and in, the card moves on to Ready to go.', 11],
     ['12', 'Sending it out', 'On a ready order, the button says Add to today\'s run. It takes you to the Dispatch tray, where the van run is ticked and printed, just as before. Once it has gone out, the card moves on to Dispatched, to invoice. If you do not see the money columns, the button simply says Dispatch.', 12],
     ['13', 'Getting paid', 'In the money columns, the button follows the bill. Raise invoice, in green, when it has gone out with no invoice. Record payment, while it is waiting to be paid, or part paid. And Chase payment, in red, once it is overdue. That opens the account, so you can see everything they owe.', 13],
@@ -102,7 +102,7 @@ $CARDS = [
     // C once the Hunter Douglas item is in: the floor is still making the rollers.
     'C2' => ['CST-2026-0009', '&pound;318.60', 'Coastal Shutters', 'CS-120', false, 'Due 14 Oct',
             [['Roller Blind &times; 3', 'Being made &middot; 1 of 3', 'amber'], ['PF Venetian &times; 1', '&#10003; Received from Hunter Douglas', 'ok']],
-            '', [], ['View on floor', 'ghost']],
+            '', [], ['See progress', 'ghost']],
     'D' => ['ABC-2026-0039', '&pound;530.00', 'ABC Blinds', 'PO 4420', false, 'Due 13 Oct',
             [['Vertical Blind &times; 20', '&#10003; Made', 'ok'], ['Forest Wood &times; 2', 'Waiting on Home Creations &middot; ordered 9 Oct', 'bad']],
             '', [], ['Received from Home Creations', 'purple']],
@@ -522,7 +522,7 @@ return [
                   <div class="sct a-fade" style="--d:.2s">One button: taking it in</div>
                   <div class="pbd big" style="margin-top:.4rem">'
                     . $col('new', [$card('A', ['btn' => ['a-press', $d(10, 'A new order shows', 1.5)]])], ['col' => ['a-rise', $d(10, 'A new order shows')]])
-                    . $col('in_production', [$card('C2', ['btn' => ['a-ring', $d(10, 'the button says View')]])], ['col' => ['a-rise', $d(10, 'While the floor')]]) . '
+                    . $col('in_production', [$card('C2', ['btn' => ['a-ring', $d(10, 'the button says See')]])], ['col' => ['a-rise', $d(10, 'While the floor')]]) . '
                   </div>
                   <div class="chips"><span class="chip ok a-pop" style="' . $d(10, 'The same rules') . '">Same rules as <b>Incoming orders</b></span></div>
                 </div>
@@ -700,7 +700,7 @@ return [
             <li><b>Received from &lt;supplier&gt;</b> (purple) &mdash; the bought-in goods have arrived.</li>
             <li><b>Add to today&rsquo;s run &rarr;</b> (blue) &mdash; opens the <b>Dispatch tray</b>, where the van run is ticked and
                 printed. Without the money columns the button is <b>Dispatch</b>.</li>
-            <li><b>View on floor</b> &mdash; the floor is making it; nothing to click but a look.</li>
+            <li><b>See progress</b> &mdash; the floor is making it: opens the order&rsquo;s blinds with the stage each one is at.</li>
             <li><b>Raise invoice</b> (green), <b>Record payment</b> (awaiting or part paid), <b>Chase payment</b> (red, overdue &mdash;
                 opens the account).</li>
           </ul>

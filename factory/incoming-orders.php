@@ -675,7 +675,7 @@ require __DIR__ . '/../_partials/factory_head.php';
                                         return '<form method="post" action="/factory/set-status.php">' . $h
                                              . '<button type="submit" name="status" value="dispatched" class="' . $cls . '" title="Everything is made and received">Dispatch</button></form>';
                                     case 'floor':
-                                        return '<a class="' . ($cls === 'io-btn advance' ? 'io-btn floor' : $cls) . '" href="/factory/order-areas.php?order=' . $qid . '" title="The floor is making these — nothing to click until they\'re done">View on floor</a>';
+                                        return '<a class="' . ($cls === 'io-btn advance' ? 'io-btn floor' : $cls) . '" href="/factory/order-areas.php?order=' . $qid . '" title="The floor is making these — see how far each blind has got">See progress</a>';
                                 }
                                 return '';
                             };
@@ -693,7 +693,7 @@ require __DIR__ . '/../_partials/factory_head.php';
                                     <?php if ($jobs): ?><hr><?php endif; ?>
                                     <a href="/factory/worksheet-print.php?order=<?= $qid ?>" target="_blank" rel="noopener">Worksheet</a>
                                     <a href="/factory/edit-order.php?order=<?= $qid ?>">Edit order</a>
-                                    <?php if ($t['make']['released']): ?><a href="/factory/order-areas.php?order=<?= $qid ?>">View on floor</a><?php endif; ?>
+                                    <?php if ($t['make']['released']): ?><a href="/factory/order-areas.php?order=<?= $qid ?>">See progress</a><?php endif; ?>
                                     <?php if ($fjNow === 'in_production'): ?>
                                         <form method="post" action="/factory/set-status.php"<?php if ($floorOpen > 0): ?> onsubmit="return confirm(<?= e(json_encode('The floor still has ' . $floorOpen . ' of ' . (int) $prog['total'] . ' blind' . ((int) $prog['total'] === 1 ? '' : 's') . ' to finish. Mark the order made anyway? The remaining blinds will be marked complete on the floor.')) ?>)"<?php endif; ?>>
                                             <?= csrf_field() ?>

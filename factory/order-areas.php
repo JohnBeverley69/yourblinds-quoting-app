@@ -106,12 +106,18 @@ if ($rows) {
                 $idx = 0;
                 foreach ($list as $i => $s) { if ($sr && (int) $s['id'] === (int) $sr['route_step_id']) { $idx = $i; break; } }
                 $dc = $idx; $partMade = false; $partStatus = $sr['status'] ?? 'queued';
+                // The stage it's at. A finished stage moves the part ON to the next
+                // one as 'queued' there, so 'queued' past stage one means "waiting at
+                // that stage", not "not started" (it read QUEUED at 67% — John).
+                $stepLbl = $sr ? trim((string) ($list[$idx]['label'] ?? '')) : '';
             }
 
             $entry = $r;
             $entry['_pct']    = $tot > 0 ? (int) round($dc / $tot * 100) : ($partMade ? 100 : 0);
             $entry['_made']   = $partMade;
             $entry['_status'] = $partStatus;
+            $entry['_step']   = $partMade ? '' : ($stepLbl ?? '');
+            $entry['_moved']  = !$partMade && $dc > 0;
             $entry['_part']   = $multi ? (string) $stream : '';   // label only when split
             $byArea[$aid][] = $entry;
             $areaRoll[$aid]['total'] = ($areaRoll[$aid]['total'] ?? 0) + 1;
@@ -206,15 +212,19 @@ require __DIR__ . '/../_partials/factory_head.php';
                     $col = trim((string) $r['fabric_colour_snapshot']);
                     $sys = trim((string) $r['system_name_snapshot']);
                     $part = (string) ($r['_part'] ?? '');
-                    $stCls = $r['_made'] ? 'made' : (($r['_status'] ?? '') === 'in_progress' ? 'work' : 'queue');
-                    $stTxt = $r['_made'] ? ($part !== '' ? $part . ' done' : 'Made') : (($r['_status'] ?? '') === 'in_progress' ? 'In progress' : 'Queued');
+                    $working = ($r['_status'] ?? '') === 'in_progress';
+                    $step    = (string) ($r['_step'] ?? '');
+                    $stCls = $r['_made'] ? 'made' : (($working || !empty($r['_moved'])) ? 'work' : 'queue');
+                    $stTxt = $r['_made'] ? ($part !== '' ? $part . ' done' : 'Made')
+                           : ($working ? ($step !== '' ? 'Working on ' . $step : 'In progress')
+                           : (!empty($r['_moved']) ? ($step !== '' ? 'At ' . $step : 'In progress') : 'Queued'));
                 ?>
                     <tr>
                         <td class="oa-ref"><a class="fl-ref" href="/factory/worksheet-print.php?order=<?= (int) $order ?>" target="_blank" rel="noopener"><?= e($ref) ?></a></td>
                         <td><?= e((string) $r['product_name_snapshot']) ?><?php if ($sys !== ''): ?> <span style="color:var(--text-muted,#667)"><?= e($sys) ?></span><?php endif; ?>
                             <?php if ($part !== ''): ?> <span style="font-size:.7rem;font-weight:700;background:#eef2f6;color:#334155;padding:.05rem .4rem;border-radius:999px"><?= e($part) ?></span><?php endif; ?>
                             <?php if ($fab !== '' || $col !== ''): ?><br><span style="color:var(--text-muted,#667);font-size:.82rem"><?= e(trim($fab . ($col !== '' ? ' / ' . $col : ''))) ?></span><?php endif; ?></td>
-                        <td style="white-space:nowrap"><?= (int) $r['width_mm'] ?> &times; <?= (int) $r['drop_mm'] ?></td>
+                        <td style="white-space:nowrap"><?= (int) $r['width_mm'] > 0 ? (int) $r['width_mm'] . ' &times; ' . (int) $r['drop_mm'] : 'Drop ' . (int) $r['drop_mm'] ?></td>
                         <td><?= e((string) $r['room_name']) ?></td>
                         <td><span class="oa-mini"><span class="t"><span class="f<?= $r['_pct'] >= 100 ? ' full' : '' ?>" style="width:<?= (int) $r['_pct'] ?>%"></span></span><?= (int) $r['_pct'] ?>%</span></td>
                         <td><span class="oa-st <?= $stCls ?>"><?= e($stTxt) ?></span></td>
