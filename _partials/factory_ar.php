@@ -240,8 +240,9 @@ function ar_account_expr(PDO $pdo, string $prefix = 'q.'): string
 /**
  * Placed trade-account orders that contain ≥1 factory-owned line, newest first.
  * Each row: quote id/number/status/date, account id + name, bev_lines, bev_qty,
- * wholesale_total (Σ line_total — the account's sell price), and dn_count (delivery notes
- * already raised for this order). $accountId / $from / $to are optional filters.
+ * wholesale_total (Σ line_total — the account's sell price), dn_count (delivery notes
+ * already raised for this order, draft or dispatched) and dn_dispatched (this
+ * factory's DISPATCHED notes — only those make an order invoiceable). $accountId / $from / $to are optional filters.
  *
  * "Account" is resolved via ar_account_expr(), so Beverley-raised orders FOR an
  * account (client_id = factory, account tagged in account_client_id) are included
@@ -260,6 +261,10 @@ function ar_placed_orders(PDO $pdo, int $factoryId, ?int $accountId = null, ?str
     $dnReady = ar_table_ready($pdo, 'factory_ar_delivery_notes');
     $dnSel   = $dnReady
         ? "(SELECT COUNT(*) FROM factory_ar_delivery_notes dn WHERE dn.source_quote_id = q.id AND dn.status <> 'cancelled')"
+        : '0';
+    // $factoryId is an int, so it's inlined (keeps the placeholder order above).
+    $dnDisp  = $dnReady
+        ? "(SELECT COUNT(*) FROM factory_ar_delivery_notes dd WHERE dd.source_quote_id = q.id AND dd.factory_client_id = " . (int) $factoryId . " AND dd.status = 'dispatched')"
         : '0';
 
     $where = "q.status IN ($in) AND {$acct} <> ?";
@@ -294,7 +299,7 @@ function ar_placed_orders(PDO $pdo, int $factoryId, ?int $accountId = null, ?str
                    + (qi.line_total - ROUND(qi.sell_price, 2) * GREATEST(1, qi.quantity))
               ELSE qi.line_total END";
 
-    $sqlFor = static function (bool $trade) use ($acct, $dnSel, $where, $optJoin, $billExpr): string {
+    $sqlFor = static function (bool $trade) use ($acct, $dnSel, $dnDisp, $where, $optJoin, $billExpr): string {
         return
         "SELECT q.id, q.quote_number, q.status, q.created_at, q.client_id AS quote_client_id,
                 {$acct} AS account_id, c.company_name AS account_name,
@@ -303,7 +308,8 @@ function ar_placed_orders(PDO $pdo, int $factoryId, ?int $accountId = null, ?str
                 COALESCE(SUM(" . ($trade ? $billExpr : 'qi.line_total') . "), 0) AS wholesale_total,
                 " . ($trade ? "q.subtotal AS order_subtotal,
                 (SELECT COALESCE(SUM(a.line_total),0) FROM quote_items a WHERE a.quote_id = q.id) AS order_lines_total," : '') . "
-                $dnSel AS dn_count
+                $dnSel AS dn_count,
+                $dnDisp AS dn_dispatched
            FROM quotes q
            JOIN clients c      ON c.id = {$acct}
            JOIN quote_items qi ON qi.quote_id = q.id
