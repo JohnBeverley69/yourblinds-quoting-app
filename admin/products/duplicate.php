@@ -285,6 +285,16 @@ try {
         $basisSel = $dupHasBasis ? ', per_metre_basis' : '';
         $basisCol = $dupHasBasis ? ', per_metre_basis' : '';
         $basisPh  = $dupHasBasis ? ', ?' : '';
+        // The other optional choice columns the catalogue push also carries: a
+        // choice's own number box (length_input_label — "Qty", "Pelmet size (mm)"),
+        // its per-unit price, code and face-value flag. A duplicate without them
+        // asked for a quantity with no box to type it in (2026-10-12).
+        $dupExtraCols = [];
+        foreach (['length_input_label', 'price_per_unit', 'code', 'face_value'] as $col) {
+            try { $pdo->query("SELECT $col FROM product_extra_choices LIMIT 0"); $dupExtraCols[] = $col; }
+            catch (Throwable $e) { /* column absent on this schema */ }
+        }
+        foreach ($dupExtraCols as $col) { $basisSel .= ", $col"; $basisCol .= ", $col"; $basisPh .= ', ?'; }
 
         $oldExtraIds = array_keys($extrasMap);
         $in = implode(',', array_fill(0, count($oldExtraIds), '?'));
@@ -321,6 +331,7 @@ try {
                 (int) ($c['active'] ?? 1),
             ];
             if ($dupHasBasis) $vals[] = (string) ($c['per_metre_basis'] ?? 'width');
+            foreach ($dupExtraCols as $col) $vals[] = $col === 'face_value' ? (int) ($c[$col] ?? 0) : ($c[$col] ?? null);
             $insChoice->execute($vals);
             $choicesMap[(int) $c['id']] = (int) $pdo->lastInsertId();
         }
