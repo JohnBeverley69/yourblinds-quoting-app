@@ -17,7 +17,9 @@ define('APP_ROOT', __DIR__);
 // ---------------------------------------------------------------------------
 (function (): void {
     $envFile = APP_ROOT . '/.env';
-    if (!is_readable($envFile)) {
+    // The automatic tests (tests/run.php) set YB_IGNORE_DOTENV so a developer's
+    // .env (live mail/SMS/QuickBooks keys) can never leak into a test run.
+    if (getenv('YB_IGNORE_DOTENV') === '1' || !is_readable($envFile)) {
         return;
     }
     $lines = file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);

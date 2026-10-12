@@ -61,3 +61,6 @@ composer.phar
 
 # Tour narration voice samples (tools/tour_voice.php --samples) — local only
 media/tour/samples/
+
+# --- Automatic tests: run output (logs, results) ---
+/tests/.out/
