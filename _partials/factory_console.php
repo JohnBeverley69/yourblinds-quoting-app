@@ -30,6 +30,7 @@ function fc_stage_meta(): array
         'new'           => ['New',            '#b91c1c', '#fee2e2'],
         'confirmed'     => ['Received',       '#5b6b7f', '#e6ebf1'],
         'in_production' => ['In production',  '#b5730f', '#f7ecd6'],
+        'awaiting_supplier' => ['Awaiting supplier', '#7c3aed', '#ede9fe'],
         'ready'         => ['Ready',          '#245ea3', '#dde8f6'],
         'dispatched'    => ['Dispatched',     '#0d7a67', '#d6ece6'],
     ];
@@ -82,7 +83,7 @@ function fc_filter_groups(): array
 {
     $g = [
         ''          => ['open' => 'Open'],
-        'To make'   => ['new' => 'New', 'confirmed' => 'Received', 'in_production' => 'In production', 'ready' => 'Ready to go'],
+        'To make'   => ['new' => 'New', 'confirmed' => 'Received', 'in_production' => 'In production', 'awaiting_supplier' => 'Awaiting supplier', 'ready' => 'Ready to go'],
         'To bill'   => ['needs_invoicing' => 'Needs invoicing', 'awaiting' => 'Awaiting payment', 'overdue' => 'Overdue'],
         'Finished'  => ['done' => 'Done'],
         'Not placed'=> ['notplaced' => 'Quotes'],
@@ -209,7 +210,8 @@ function fc_next_action(array $r): array
     switch ($r['stage']) {
         case 'new':           return ['Mark received',    '/factory/incoming-orders.php', false];
         case 'confirmed':     return ['Start production', '/factory/incoming-orders.php', false];
-        case 'in_production': return fc_making_next($r['tracks'] ?? null);
+        case 'in_production':
+        case 'awaiting_supplier': return fc_making_next($r['tracks'] ?? null);
         case 'ready':         return ['Dispatch', $acct ? '/master-admin/dispatch.php' : '/factory/incoming-orders.php', false];
     }
     switch ($r['money']) {
@@ -237,6 +239,20 @@ function fc_making_next(?array $t): array
         if ($b['state'] === 'ordered') return ['Waiting on ' . $sup, '/factory/incoming-orders.php', false];
     }
     return ['Being made', '', false];
+}
+
+/**
+ * In production but nothing left to make, only a bought-in item still to come
+ * (e.g. 20/20 verticals made, Forest Wood with Home Creations): call it
+ * "Awaiting supplier", the same name as the Incoming orders tab.
+ * fulfilment_stage itself stays 'in_production'; this is display only.
+ */
+function fc_supplier_stage(string $stage, ?array $t): string
+{
+    if (!in_array($stage, ['confirmed', 'in_production'], true) || !$t) return $stage;
+    if ($t['make']['made'] < $t['make']['units']) return $stage;
+    foreach ($t['buy'] as $b) if ($b['state'] !== 'received') return 'awaiting_supplier';
+    return $stage;
 }
 
 /** fc_stage_meta() key from a quote's status, fulfilment_stage and factory_jobs.status. */
@@ -272,6 +288,7 @@ function fc_order_status(PDO $pdo, int $factoryId, array $quote): array
         'tracks'      => ot_order_tracks($pdo, [$id], $factoryId)[$id] ?? null,
         'account_key' => (int) ($quote['account_client_id'] ?? 0) > 0 ? (int) $quote['account_client_id'] : ($own ? 0 : (int) ($quote['client_id'] ?? 0)),
     ];
+    $r['stage'] = fc_supplier_stage($r['stage'], $r['tracks']);
     $r['billed_here'] = !($own && $r['account_key'] === 0);
     $r['money'] = fc_money_state($r);
     $r['done']  = $r['stage'] === 'dispatched' && in_array($r['money'], ['paid', 'none'], true);
@@ -399,6 +416,7 @@ function fc_orders(PDO $pdo, int $factoryId): array
         $r['tracks']    = $tracks[$id] ?? null;
         $own = (int) $r['client_id'] === $factoryId;
         $stage = fc_making_stage((string) $r['status'], (string) ($r['fulfilment_stage'] ?? ''), (string) ($r['factory_status'] ?? ''));
+        $stage = fc_supplier_stage($stage, $r['tracks']);
         $r['stage']   = $stage;
         $r['account'] = trim((string) ($r['account_name'] ?? '')) !== ''
             ? (string) $r['account_name']
