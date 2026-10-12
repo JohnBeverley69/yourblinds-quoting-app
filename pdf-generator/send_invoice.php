@@ -174,7 +174,16 @@ try {
     $adv->execute([$id, $clientId]);
     $advanced = $adv->rowCount() > 0;
 } catch (Throwable $e) {
-    error_log('send_invoice: advance to invoiced failed: ' . $e->getMessage());
+    // The email has already gone, so don't pretend nothing happened — but don't
+    // claim the order moved either. Saying only "Invoice emailed" left the job
+    // at Ordered with nobody told, and it then never showed as invoiced.
+    error_log('send_invoice: quote ' . $id . ' emailed to ' . $to . ' but advance to invoiced failed: ' . $e->getMessage());
+    qb_flash_redirect(
+        $backUrl,
+        'error',
+        'Invoice emailed to ' . $to . ', but the job couldn\'t be marked Invoiced. '
+            . 'Use "Mark as invoiced" on this job so it doesn\'t look unbilled — no need to send it again.'
+    );
 }
 
 qb_flash_redirect(
