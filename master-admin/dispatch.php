@@ -11,8 +11,9 @@ declare(strict_types=1);
  * that is what she picked.
  *
  * Two lists, two buttons, in the order the work actually happens:
- *   1. Ready to go out — tick, print one delivery note each.
- *   2. To invoice      — noted out but not invoiced; tick, raise one invoice each.
+ *   1. Ready to go out — tick, print one delivery note each. Printing counts as
+ *      DISPATCHED (John, 2026-10-12, provisional): the orders printed go out.
+ *   2. To invoice      — dispatched but not invoiced; tick, raise one invoice each.
  *
  * They are separate ON PURPOSE. She does not always print every note, and invoice
  * numbers have to come out in order, so hanging the invoice off the print would
@@ -29,6 +30,7 @@ require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require_once __DIR__ . '/../_partials/factory_ar.php';
 require_once __DIR__ . '/../_partials/order_stage.php';
+require_once __DIR__ . '/../_partials/app_settings.php';   // auto_invoice_on_dispatch
 
 requireFactoryAccounts();   // main factory only — see factory_accounts_user()
 
@@ -136,7 +138,9 @@ function dispatch_to_invoice_orders(PDO $pdo, int $factory): array
     $out = [];
     foreach (ar_placed_orders($pdo, $factory) as $o) {
         $qid = (int) $o['id'];
-        if (((int) ($o['dn_count'] ?? 0)) < 1) continue;          // not noted out yet
+        // Gone out = a DISPATCHED note. A draft note (raised on Wholesale but not
+        // sent) never makes an order invoiceable — it hasn't left the building.
+        if (((int) ($o['dn_dispatched'] ?? 0)) < 1) continue;
         if (ar_order_invoice_number($pdo, $qid) !== '') continue;  // already invoiced
         $out[] = $o;
     }
@@ -239,8 +243,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     };
     $touched = [];   // "acc|date|method" => [acc, date, method] — deliveries to re-work
 
-    $notes = [];
-    $fac   = [];
+    $notes    = [];
+    $printed  = [];   // quote id => delivery note id, for the notes in this PDF
+    $notReady = [];
+    $fac      = [];
     try {
         $fs = $pdo->prepare('SELECT * FROM clients WHERE id = ? LIMIT 1');
         $fs->execute([$factory]);
@@ -250,6 +256,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         foreach ($ids as $qid) {
             if (!isset($allowed[$qid])) continue;
+            // Printing dispatches it (below), so hold it to the same gate as every
+            // other dispatch path — the stored stage could be a moment stale.
+            if (!os_is_ready($pdo, $qid, $factory)) {
+                $notReady[] = (string) $allowed[$qid]['quote_number'];
+                continue;
+            }
             $accountId = (int) $allowed[$qid]['account_id'];
 
             // Reuse the order's existing note if it has one, so re-printing keeps
@@ -342,6 +354,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ],
                 'items' => $items,
             ];
+            $printed[$qid] = $dnId;
         }
     } catch (Throwable $e) {
         $_SESSION['flash_error'] = 'Could not build the delivery notes: ' . $e->getMessage();
@@ -386,6 +399,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($pdf === null) {
         $_SESSION['flash_error'] = 'PDF engine unavailable.';
         header('Location: /master-admin/dispatch.php'); exit;
+    }
+
+    // Printing the run COUNTS AS DISPATCHED (John, 2026-10-12 — provisional, to
+    // review): the notes printed are the ones going on the van, so each order is
+    // dispatched exactly as the Pipeline's Dispatch does it — the note goes to
+    // 'dispatched', the floor record follows, the stage rolls up, and the
+    // invoice is raised + sent only if auto-invoice-on-dispatch is on. Done only
+    // once the PDF exists, so a failed render dispatches nothing.
+    $uid = (int) ($user['user_id'] ?? 0) ?: null;
+    $dispatched = 0; $dispatchFailed = [];
+    foreach ($printed as $qid => $dnId) {
+        try {
+            $pdo->prepare(
+                "UPDATE factory_ar_delivery_notes SET status = 'dispatched', dispatched_at = NOW()
+                  WHERE id = ? AND factory_client_id = ? AND status = 'draft'"
+            )->execute([$dnId, $factory]);
+            os_set_factory_dispatched($pdo, $qid, $uid);
+            recompute_order_stage($pdo, $qid);
+            os_auto_invoice_on_dispatch($pdo, $qid, $factory, $uid);
+            $dispatched++;
+        } catch (Throwable $e) {
+            error_log('dispatch tray: printed but could not dispatch quote ' . $qid . ': ' . $e->getMessage());
+            $dispatchFailed[] = (string) ($allowed[$qid]['quote_number'] ?? $qid);
+        }
+    }
+    // Shown when they come back to the tray (the PDF is this response).
+    $_SESSION['flash_success'] = $dispatched . ' order' . ($dispatched === 1 ? '' : 's')
+        . ' printed and dispatched.' . (app_setting_on('auto_invoice_on_dispatch')
+            ? ' Auto-invoice is on, so their invoices were raised (and emailed where the account has an address) — check Invoices.'
+            : ' They are now under To invoice.');
+    $problems = [];
+    if ($dispatchFailed) $problems[] = 'printed but NOT marked dispatched (try Dispatch on the Pipeline): ' . implode(', ', $dispatchFailed);
+    if ($notReady)       $problems[] = 'not printed — no longer ready: ' . implode(', ', $notReady);
+    if ($problems) {
+        $_SESSION['flash_error'] = trim(($_SESSION['flash_error'] ?? '') . ' ' . ucfirst(implode(' · ', $problems)) . '.');
     }
 
     header('Content-Type: application/pdf');
@@ -471,7 +519,8 @@ $money     = static fn ($n) => '£' . number_format((float) $n, 2);
   <div class="page-head">
     <h1 class="page-title">Dispatch tray</h1>
     <p class="ui-hint">Orders that are ready to go — every blind made and every bought-in item in.
-       Tick the ones going out and print their delivery notes. Invoicing stays a separate step on
+       Tick the ones going out and press <b>Print &amp; dispatch</b>: their delivery notes print and the orders
+       are marked dispatched. Invoicing stays a separate step below. Reprint a note later from
        <a href="/master-admin/wholesale.php">Wholesale</a>.</p>
   </div>
 
@@ -497,13 +546,13 @@ $money     = static fn ($n) => '£' . number_format((float) $n, 2);
         every bought-in item has been received.
       </div></div>
     <?php else: ?>
-      <form method="post">
+      <form method="post" data-confirm="Print the ticked delivery notes and mark those orders DISPATCHED?">
         <?= csrf_field() ?>
         <input type="hidden" name="_action" value="print">
         <div class="dt-bar">
           <label class="dt-count"><input type="checkbox" class="dt-all" data-for="go"> Tick all</label>
           <span class="ui-hint"><?= count($ready) ?> order<?= count($ready) === 1 ? '' : 's' ?> ready</span>
-          <button class="btn btn-primary" style="margin-left:auto">🖨 Print delivery notes</button>
+          <button class="btn btn-primary" style="margin-left:auto">🖨 Print &amp; dispatch</button>
         </div>
 
         <div class="table-wrap">
@@ -606,12 +655,12 @@ $money     = static fn ($n) => '£' . number_format((float) $n, 2);
 
     <h2 class="section-title" id="to-invoice" style="margin:1.6rem 0 .5rem">To invoice</h2>
     <p class="ui-hint" style="margin:0 0 .6rem">
-      Gone out on a delivery note, not invoiced yet. One invoice per order. Raising it does not send
+      Dispatched, not invoiced yet. One invoice per order. Raising it does not send
       it — send from <a href="/master-admin/wholesale.php">Invoices</a> when you are ready.
     </p>
     <?php if (!$toInvoice): ?>
       <div class="card"><div class="dt-empty">
-        Nothing waiting to be invoiced. An order lands here once its delivery note has been raised.
+        Nothing waiting to be invoiced. An order lands here once it has been dispatched (printed here, or Dispatch on the Pipeline).
       </div></div>
     <?php else: ?>
       <form method="post">
@@ -711,5 +760,6 @@ $money     = static fn ($n) => '£' . number_format((float) $n, 2);
   <?php endif; ?>
 </main>
 </div>
+<?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>
 </body>
 </html>
