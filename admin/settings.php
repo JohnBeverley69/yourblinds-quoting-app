@@ -1904,6 +1904,19 @@ $activeNav = 'settings';
                         <label for="reply_to_email">Reply-to email</label>
                         <input id="reply_to_email" name="reply_to_email" type="email" maxlength="150"
                                value="<?= e((string) ($settings['reply_to_email'] ?? '')) ?>">
+                        <?php
+                            // Spam filters distrust "from a business, reply to a free mailbox".
+                            require_once __DIR__ . '/../_partials/tenant_mail.php';
+                            $replyEff = trim((string) ($settings['reply_to_email'] ?? '')) ?: trim((string) ($client['email'] ?? ''));
+                        ?>
+                        <?php if ($replyEff !== '' && tenant_mail_is_freemail($replyEff)): ?>
+                            <p class="ui-hint" style="margin:.4rem 0 0;font-size:.8125rem;color:#92400e;line-height:1.45">
+                                &#9888; Customer replies go to <strong><?= e($replyEff) ?></strong><?= trim((string) ($settings['reply_to_email'] ?? '')) === '' ? ' (your company email)' : '' ?>,
+                                a free email account. Spam filters trust that less, so your quotes and invoices are
+                                more likely to land in your customers' junk folder. If you have an email address on your
+                                own website's domain (e.g. sales@yourcompany.co.uk), put it here.
+                            </p>
+                        <?php endif; ?>
                     </div>
                 </div>
 
