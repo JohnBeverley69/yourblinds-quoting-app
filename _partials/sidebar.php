@@ -300,6 +300,8 @@ if ($isFactoryConsole) {
             'items' => [
                 // John's money page — super-admin only; the office's home is the Pipeline.
                 'factory-dashboard' => ['/factory/dashboard.php', 'Dashboard', $isSuperAdmin],
+                // Orders whose records disagree (factory/checks.php) — also mailed daily.
+                'factory-checks'    => ['/factory/checks.php',    'Order checks', $isSuperAdmin],
                 // Every open order as a card, New → Paid (factory/pipeline.php).
                 'factory-pipeline'  => ['/factory/pipeline.php',  'Pipeline',  true],
                 'factory-orders'    => ['/factory/orders.php',    'Orders',    true],
