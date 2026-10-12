@@ -113,6 +113,7 @@ $tiles = [
     'new'           => ['New',              'Not received on the floor yet',     '/factory/incoming-orders.php'],
     'confirmed'     => ['Received',         'In, not started',                    '/factory/orders.php?stage=confirmed'],
     'in_production' => ['In production',    'Being made',                         '/factory/orders.php?stage=in_production'],
+    'awaiting_supplier' => ['Awaiting supplier', 'Made, waiting on a bought-in item', '/factory/orders.php?stage=awaiting_supplier'],
     'ready'         => ['Ready to dispatch','Everything made and in',             '/master-admin/dispatch.php'],
 ];
 $firstName = trim(explode(' ', (string) ($user['full_name'] ?? ''))[0] ?? '');

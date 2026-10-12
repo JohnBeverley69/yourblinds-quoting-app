@@ -82,6 +82,44 @@ function dispatch_ready_orders(PDO $pdo, int $factory): array
 }
 
 /**
+ * Orders whose made-here blinds are all done but which are still waiting on a
+ * bought-in item (John, 2026-10-12: 20/20 verticals made, Forest Wood still
+ * with Home Creations, and the tray showed nothing). Listed under the Ready
+ * orders so the tray shows everything that's close to going out. They can't be
+ * ticked; marking the item received on Incoming orders makes them Ready.
+ * Each row adds `tracks` (ot_order_tracks()).
+ */
+function dispatch_waiting_orders(PDO $pdo, int $factory): array
+{
+    require_once __DIR__ . '/../_partials/order_tracks.php';
+    $orders = ar_placed_orders($pdo, $factory);
+    if (!$orders) return [];
+    $ids = array_map(static fn ($o) => (int) $o['id'], $orders);
+    $ph  = implode(',', array_fill(0, count($ids), '?'));
+    $stage = [];
+    try {
+        $s = $pdo->prepare("SELECT id, fulfilment_stage, customer_reference FROM quotes WHERE id IN ($ph)");
+        $s->execute($ids);
+        foreach ($s->fetchAll(PDO::FETCH_ASSOC) as $r) $stage[(int) $r['id']] = $r;
+    } catch (Throwable $e) { return []; }
+    $open = array_values(array_filter($ids, static fn ($id) =>
+        in_array((string) ($stage[$id]['fulfilment_stage'] ?? ''), ['confirmed', 'in_production'], true)));
+    if (!$open) return [];
+    $tracks = ot_order_tracks($pdo, $open, $factory);
+    $out = [];
+    foreach ($orders as $o) {
+        $t = $tracks[(int) $o['id']] ?? null;
+        if (!$t || !$t['buy'] || $t['make']['made'] < $t['make']['units']) continue;
+        $pending = array_filter($t['buy'], static fn ($b) => $b['state'] !== 'received');
+        if (!$pending) continue;
+        $o['tracks'] = $t;
+        $o['customer_reference'] = (string) ($stage[(int) $o['id']]['customer_reference'] ?? '');
+        $out[] = $o;
+    }
+    return $out;
+}
+
+/**
  * Orders that have gone out on a note but have not been invoiced yet — the
  * second half of the tray.
  *
@@ -354,6 +392,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $ready     = $dnReady ? dispatch_ready_orders($pdo, $factory) : [];
+$waiting   = dispatch_waiting_orders($pdo, $factory);
 $toInvoice = $dnReady ? dispatch_to_invoice_orders($pdo, $factory) : [];
 
 // ── Delivery charges for the tray (see _partials/delivery_charges.php) ───────
@@ -528,6 +567,37 @@ $money     = static fn ($n) => '£' . number_format((float) $n, 2);
           </table>
         </div>
       </form>
+    <?php endif; ?>
+
+    <?php if ($waiting): ?>
+    <h2 class="section-title" style="margin:1.6rem 0 .5rem">Waiting on suppliers</h2>
+    <p class="ui-hint" style="margin:0 0 .6rem">
+      Everything we make on these is done; they're waiting on a bought-in item. When it arrives, mark it
+      received on <a href="/factory/incoming-orders.php">Incoming orders</a> and the order moves up to <b>Ready to go out</b>.
+    </p>
+    <div class="card"><div class="table-wrap">
+      <table class="table">
+        <thead><tr>
+          <th>Account</th><th>Order</th><th>Their ref</th><th class="num">Blinds</th><th>Made</th><th>Waiting on</th>
+        </tr></thead>
+        <tbody>
+        <?php foreach ($waiting as $o): $t = $o['tracks']; ?>
+          <tr>
+            <td><?= e((string) ($o['account_name'] ?? '')) ?></td>
+            <td><a href="/factory/edit-order.php?order=<?= (int) $o['id'] ?>"><?= e((string) $o['quote_number']) ?></a></td>
+            <td class="dt-po"><?= e((string) ($o['customer_reference'] ?? '')) ?: '—' ?></td>
+            <td class="num"><?= (int) ($o['bev_qty'] ?? 0) ?></td>
+            <td><?= $t['make']['units'] > 0 ? (int) $t['make']['made'] . '/' . (int) $t['make']['units'] . ' made' : 'Nothing to make' ?></td>
+            <td><?php foreach ($t['buy'] as $sup => $b): if ($b['state'] === 'received') continue; ?>
+                <div><?= e($sup) ?> &middot; <?= $b['state'] === 'ordered'
+                    ? 'ordered' . (!empty($b['sent_at']) ? ' ' . e(date('j M', strtotime((string) $b['sent_at']))) : '')
+                    : '<b style="color:#b91c1c">not ordered yet</b>' ?></div>
+              <?php endforeach; ?></td>
+          </tr>
+        <?php endforeach; ?>
+        </tbody>
+      </table>
+    </div></div>
     <?php endif; ?>
 
     <h2 class="section-title" style="margin:1.6rem 0 .5rem">To invoice</h2>
