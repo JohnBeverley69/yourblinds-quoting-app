@@ -104,6 +104,9 @@ require __DIR__ . '/../_partials/factory_head.php';
     .fe-blind-head { display: flex; align-items: center; gap: 0.75rem; margin: 0 0 0.8rem; }
     .fe-blind-head h3 { font-size: 1.05rem; margin: 0; font-weight: 700; }
     .fe-blind-head .prod { color: var(--text-muted, #667); font-weight: 500; font-size: 0.9rem; }
+    .fe-blind-head .fe-bill { margin-left: auto; font-size: 0.875rem; color: var(--text-muted, #667); white-space: nowrap; }
+    .fe-blind-head .fe-bill strong { color: var(--text-primary, #111); }
+    .fe-vat { font-size: 0.75rem; color: var(--text-faint, #94a3b8); }
     .fe-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.7rem 0.9rem; }
     .fe-grid label, .fe-opts label { display: block; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--text-faint, #94a3b8); font-weight: 600; margin: 0 0 0.2rem; }
     .fe-grid input, .fe-grid select, .fe-opts input, .fe-opts select { width: 100%; font: inherit; padding: 0.4rem 0.55rem; border: 1px solid var(--border-strong, #cbd5e1); border-radius: 8px; background: var(--bg-input, #fff); box-sizing: border-box; color: inherit; }
@@ -185,10 +188,26 @@ require __DIR__ . '/../_partials/factory_head.php';
     require_once __DIR__ . '/../_partials/factory_console.php';
     $fcs = fc_order_status($pdo, $MASTER, $order);
     [$nLabel, $nUrl] = $fcs['next'];
+    // What we bill for each blind, the same figures the invoice uses
+    // (ar_invoice_lines_from_order; nothing is saved). Accounts users only, like
+    // the Money pill (fc_money_visible, #1063). John, 2026-10-12: checking an
+    // order from the Dispatch tray showed no prices at all.
+    $billBy = []; $billNet = null;
+    if (fc_money_visible()) {
+        try {
+            $billNet = 0.0;
+            foreach ((ar_invoice_lines_from_order($pdo, $MASTER, $qid)['lines'] ?? []) as $bl) {
+                $billNet += (float) $bl['line_net'];
+                if (!empty($bl['source_quote_item_id'])) $billBy[(int) $bl['source_quote_item_id']] = $bl;
+            }
+        } catch (Throwable $e) { $billBy = []; $billNet = null; }
+    }
+    $gbp = static fn ($n) => '£' . number_format((float) $n, 2);
     ?>
     <p class="fe-sub fe-status">
         <span class="fe-sl">Making</span> <?= fc_stage_pill($fcs['stage']) ?>
         <?php if (fc_money_visible()): ?><span class="fe-sl">Money</span> <?= fc_money_pill($fcs['money']) ?><?php endif; ?>
+        <?php if ($billNet !== null): ?><span class="fe-sl">We bill</span> <strong><?= e($gbp($billNet)) ?></strong> <span class="fe-vat">net</span><?php endif; ?>
         <?php foreach ($fcs['invoices'] as $iv): ?>
             <span class="fe-inv"><?= e($iv['number']) ?><?= $iv['outstanding'] > 0.004 ? ' · £' . e(number_format($iv['outstanding'], 2)) . ' owed' : '' ?></span>
         <?php endforeach; ?>
@@ -230,6 +249,7 @@ require __DIR__ . '/../_partials/factory_head.php';
                 <div class="fe-blind-head">
                     <h3>Blind <?= (int) $it['line_no'] ?></h3>
                     <span class="prod"><?= e((string) ($it['product_name_snapshot'] ?? '')) ?></span>
+                    <?php if (isset($billBy[$iid])): $bl = $billBy[$iid]; ?><span class="fe-bill" title="What we bill the account for this blind"><?= (int) $bl['quantity'] . ' × ' . e($gbp($bl['unit_net'])) ?> = <strong><?= e($gbp($bl['line_net'])) ?></strong></span><?php endif; ?>
                     <?php if ($lineLock === ''): ?><button type="submit" name="del_item" value="<?= $iid ?>" class="fe-btn del" formnovalidate
                             data-confirm="Delete blind <?= (int) $it['line_no'] ?> from this order?">&times; Delete blind</button><?php endif; ?>
                 </div>
