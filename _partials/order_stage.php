@@ -202,14 +202,17 @@ function os_set_factory_dispatched(PDO $pdo, int $quoteId, ?int $userId = null):
  * Bridge: ensure a DISPATCHED delivery note exists for the order — the delivery
  * note is the dispatch artifact. Called when the order is dispatched on the
  * floor, so "one dispatch = one delivery note" holds whichever path is used.
- * Idempotent (dispatches an existing draft, never duplicates) and best-effort.
+ * Idempotent (dispatches an existing draft, never duplicates) and never blocks
+ * the dispatch — but a failure is no longer silent: it is logged and returned
+ * ('' = the order has its dispatched note), and the order shows under
+ * os_paperwork_missing() on the Pipeline and Dispatch tray with a Retry.
  */
-function os_mark_dispatched_dn(PDO $pdo, int $quoteId, ?int $factory = null, ?int $userId = null): void
+function os_mark_dispatched_dn(PDO $pdo, int $quoteId, ?int $factory = null, ?int $userId = null): string
 {
     try {
         $factory = $factory ?? os_factory_id();
         require_once __DIR__ . '/factory_ar.php';
-        if (!function_exists('ar_create_delivery_note')) return;
+        if (!function_exists('ar_create_delivery_note')) return 'the delivery-note module is not available';
 
         $existing = $pdo->prepare(
             "SELECT id, status FROM factory_ar_delivery_notes
@@ -223,7 +226,7 @@ function os_mark_dispatched_dn(PDO $pdo, int $quoteId, ?int $factory = null, ?in
                 $pdo->prepare("UPDATE factory_ar_delivery_notes SET status = 'dispatched', dispatched_at = NOW() WHERE id = ? AND factory_client_id = ?")
                     ->execute([(int) $dn['id'], $factory]);
             }
-            return;
+            return '';
         }
 
         $q = $pdo->prepare('SELECT account_client_id, client_id FROM quotes WHERE id = ? LIMIT 1');
@@ -231,7 +234,64 @@ function os_mark_dispatched_dn(PDO $pdo, int $quoteId, ?int $factory = null, ?in
         $r   = $q->fetch(PDO::FETCH_ASSOC) ?: [];
         $acc = (int) ($r['account_client_id'] ?? 0) ?: (int) ($r['client_id'] ?? 0);
         ar_create_delivery_note($pdo, $factory, $quoteId, $acc, (int) $userId, true);
-    } catch (Throwable $e) { /* non-fatal — never block a dispatch */ }
+        return '';
+    } catch (Throwable $e) {
+        // Never block a dispatch — but say so (it used to vanish here).
+        error_log('os_mark_dispatched_dn failed for quote ' . $quoteId . ': ' . $e->getMessage());
+        return $e->getMessage() !== '' ? $e->getMessage() : get_class($e);
+    }
+}
+
+/**
+ * "Paperwork missing": this factory's placed orders the floor has marked
+ * DISPATCHED that have no dispatched delivery note from this factory — the
+ * delivery note couldn't be made when they went out (os_mark_dispatched_dn), so
+ * nothing will print and the order never reaches "To invoice". Shown with a
+ * Retry on the Pipeline and the Dispatch tray. Derived live, so it clears itself
+ * the moment the note exists. Rows: id, quote_number, status_at.
+ * factory_jobs is keyed per quote, so ownership is the factory-owned-line test.
+ */
+function os_paperwork_missing(PDO $pdo, int $factory): array
+{
+    try {
+        $in = "'" . implode("','", os_placed_statuses()) . "'";
+        $st = $pdo->prepare(
+            "SELECT q.id, q.quote_number, fj.status_at
+               FROM factory_jobs fj
+               JOIN quotes q ON q.id = fj.quote_id
+              WHERE fj.status = 'dispatched' AND q.status IN ($in)
+                AND EXISTS (SELECT 1 FROM quote_items qi JOIN products p ON p.id = qi.product_id
+                             WHERE qi.quote_id = q.id AND COALESCE(NULLIF(p.source_client_id,0), p.client_id) = ?)
+                AND NOT EXISTS (SELECT 1 FROM factory_ar_delivery_notes d
+                                 WHERE d.source_quote_id = q.id AND d.factory_client_id = ? AND d.status = 'dispatched')
+           ORDER BY fj.status_at DESC
+              LIMIT 50"
+        );
+        $st->execute([$factory, $factory]);
+        return $st->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) { return []; }   // pre-migration: nothing to say
+}
+
+/** The "paperwork missing" alert with a Retry per order ('' when there are none). */
+function os_paperwork_missing_banner(PDO $pdo, int $factory, string $back): string
+{
+    $rows = os_paperwork_missing($pdo, $factory);
+    if (!$rows) return '';
+    $h = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
+    $out = '<div class="alert alert-error" role="alert"><strong>Paperwork missing.</strong> '
+         . (count($rows) === 1 ? 'This order is' : 'These orders are')
+         . ' marked dispatched but ' . (count($rows) === 1 ? 'has' : 'have')
+         . ' no delivery note, so ' . (count($rows) === 1 ? 'it' : 'they')
+         . ' can&rsquo;t be invoiced. Retry makes the note.'
+         . '<div style="display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.4rem">';
+    foreach ($rows as $r) {
+        $out .= '<form method="post" action="/factory/retry-paperwork.php" style="display:inline">'
+              . csrf_field()
+              . '<input type="hidden" name="quote_id" value="' . (int) $r['id'] . '">'
+              . '<input type="hidden" name="back" value="' . $h($back) . '">'
+              . '<button class="btn btn-sm">↻ ' . $h($r['quote_number']) . '</button></form>';
+    }
+    return $out . '</div></div>';
 }
 
 /**
