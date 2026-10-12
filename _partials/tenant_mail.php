@@ -45,3 +45,31 @@ function tenant_mail_opts(PDO $pdo, int $clientId): array
     }
     return $cache[$clientId] = $opts;
 }
+
+/**
+ * Is this a free personal mailbox (Gmail, Hotmail, iCloud…)? Spam filters
+ * score "From a business domain, Reply-To a free mailbox" as a likely scam
+ * (SpamAssassin FREEMAIL_FORGED_REPLYTO, 2.5 points — mail-tester, Oct 2026),
+ * so Settings warns a company whose reply address is one. An address on the
+ * company's own domain doesn't trigger it.
+ */
+function tenant_mail_is_freemail(string $email): bool
+{
+    $domain = strtolower(trim((string) substr(strrchr($email, '@') ?: '', 1)));
+    if ($domain === '') return false;
+    $free = [
+        'gmail.com', 'googlemail.com', 'hotmail.com', 'hotmail.co.uk', 'outlook.com', 'outlook.co.uk',
+        'live.com', 'live.co.uk', 'msn.com', 'icloud.com', 'me.com', 'mac.com', 'yahoo.com',
+        'yahoo.co.uk', 'ymail.com', 'aol.com', 'aol.co.uk', 'btinternet.com', 'btopenworld.com',
+        'sky.com', 'talktalk.net', 'virginmedia.com', 'blueyonder.co.uk', 'ntlworld.com',
+        'tiscali.co.uk', 'gmx.com', 'gmx.co.uk', 'mail.com', 'protonmail.com', 'proton.me',
+        'zoho.com', 'yandex.com',
+    ];
+    return in_array($domain, $free, true);
+}
+
+/** The reply address customers' emails will actually use (Reply-to, else company email). */
+function tenant_mail_reply_address(PDO $pdo, int $clientId): string
+{
+    return (string) (tenant_mail_opts($pdo, $clientId)['reply_to_email'] ?? '');
+}
