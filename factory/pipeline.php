@@ -376,5 +376,6 @@ $activeNav = 'factory-pipeline';
 </main>
 </div>
 <?= po_modal(po_skip_summary($pdo, current_factory_id())) ?>
+<?php require_once __DIR__ . '/../_partials/factory_poll_banner.php'; fx_poll_banner(db(), 'pipeline', current_factory_id()); ?>
 </body>
 </html>

@@ -851,7 +851,8 @@ require __DIR__ . '/../_partials/factory_head.php';
 
                     // Safe to auto-refresh: nobody's touched the page recently, or
                     // it's a hidden background tab. New orders then just appear.
-                    if (document.hidden || (Date.now() - lastTouch) > IDLE_MS) {
+                    // Never under an open Process order summary (_partials/process_order.php).
+                    if (!document.querySelector('.po-back:not([hidden])') && (document.hidden || (Date.now() - lastTouch) > IDLE_MS)) {
                         location.reload();
                         return;
                     }
