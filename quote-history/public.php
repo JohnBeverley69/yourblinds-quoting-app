@@ -17,6 +17,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';   // for e()
 require __DIR__ . '/../_partials/legal_text.php';
+require_once __DIR__ . '/../_partials/extra_value.php';
 
 // htmlspecialchars helper — we don't have e() yet outside middleware. Already
 // pulled in via the require above so it's safe to call.
@@ -155,7 +156,7 @@ if ($items) {
     try {
         $st = db()->prepare(
             "SELECT quote_item_id, extra_name_snapshot, choice_label_snapshot,
-                    amount_applied, user_value
+                    amount_applied, user_value, mode
                FROM quote_item_extras
               WHERE quote_item_id IN ($ph)
               ORDER BY id"
@@ -504,9 +505,7 @@ if ($depositStored !== null) {
                             <div class="extras">
                                 <?php foreach ($exs as $ex): ?>
                                     + <?= e((string) $ex['extra_name_snapshot']) ?><?php if (($ex['choice_label_snapshot'] ?? '') !== ''): ?>: <?= e((string) $ex['choice_label_snapshot']) ?><?php endif;
-                                        if (isset($ex['user_value']) && $ex['user_value'] !== null && (float) $ex['user_value'] > 0):
-                                            echo ' &mdash; ' . e(rtrim(rtrim(number_format((float) $ex['user_value'], 2, '.', ''), '0'), '.')) . 'mm';
-                                        endif;
+                                        echo e(extra_value_suffix($ex));   // "× 4" for a quantity, "— 50mm" for a size
                                     ?><br>
                                 <?php endforeach; ?>
                             </div>
