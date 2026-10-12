@@ -29,8 +29,11 @@ declare(strict_types=1);
  * PUBLIC REPO: never put a real Client ID, secret or realm ID in here — the
  * values shown are made-up placeholders.
  *
- * KEEP TRUE: pushing paid sales to QuickBooks is NOT built (on hold), and
- * Xero / Sage have no provider code — there is nothing to paste in for them.
+ * KEEP TRUE (Oct 2026): Intuit approved production on 11 Oct 2026. The live
+ * link (sending paid invoices + payments) is built for the platform's OWN
+ * books only — Factory Console → QuickBooks (settings-accounting guide).
+ * Companies get downloads; their Connect section stays hidden until
+ * platform_config QBO_CLIENT_CONNECT = 1. Xero / Sage have no provider code.
  */
 
 $ptr = '<span class="gd-ptr"><svg viewBox="0 0 16 22" aria-hidden="true"><path d="M1 1 L1 17 L5 13 L8 20 L11 19 L8 12 L14 12 Z"/></svg></span>';
@@ -63,13 +66,13 @@ return [
         'title'   => 'Set up the accounting app keys (platform owner)',
         'eyebrow' => 'Settings · Accounting (platform)',
         'v'       => 2,
-        'blurb'   => 'The one-off job behind every client\'s "Connect to QuickBooks" button: register YourBlinds with Intuit, paste its keys into YourBlinds, check it, then get approved for live. Xero and Sage are not built yet.',
+        'blurb'   => 'The one-off job behind every "Connect to QuickBooks" button: register YourBlinds with Intuit, paste its keys in, check it, then switch to live and connect Beverley Blinds\' real QuickBooks. Xero and Sage are not built yet.',
         'lede'    => 'Before any client can press <b>Connect to QuickBooks</b>, YourBlinds itself has to be registered with Intuit as an
                       <b>app</b>. You do that <b>once, for the whole platform</b>: Intuit gives you a <b>Client ID</b> and <b>Client Secret</b>,
-                      you paste them into YourBlinds, and every account can then link its own QuickBooks company. You start on Intuit&rsquo;s
-                      <b>sandbox</b> (test companies) and move to <b>production</b> (real companies) once Intuit has approved the app.
-                      Remember: sending paid sales into QuickBooks is <b>not built yet</b> &mdash; this only gets the connection working.
-                      Only super-admins see this guide and the keys form.',
+                      you paste them into YourBlinds, and the platform can then link to QuickBooks &mdash; today <b>Beverley Blinds&rsquo; own
+                      books</b>, later each client&rsquo;s. You start on Intuit&rsquo;s <b>sandbox</b> (test companies) and move to
+                      <b>production</b> (real companies). <b>Intuit approved YourBlinds for production on 11 October 2026</b>, so what&rsquo;s
+                      left is the switch to live. Only super-admins see this guide and the keys form.',
         'open'    => '/admin/settings.php#accounting',
         'css'     => '
           .gd .sc{ position:relative; min-height:360px; }
@@ -161,11 +164,11 @@ return [
                   ' . $tabs . '
                   ' . $card('Sandbox (test)', 'Not set up') . '
                   ' . $form(['Sandbox (test)', '<span class="ph">ABxxx&hellip;</span>', '<span class="ph">paste the secret</span>', $redirect]) . '
-                  <p class="scs" style="margin-top:.7rem">Press <b>&#9654; Play</b> below &mdash; ten short chapters. Super-admins only.</p>
+                  <p class="scs" style="margin-top:.7rem">Press <b>&#9654; Play</b> below &mdash; eleven short chapters. Super-admins only.</p>
                 </div>
 
                 <!-- 1 — what this is -->
-                <div class="sc" data-scene="1" data-len="19">
+                <div class="sc" data-scene="1" data-len="23">
                   <div class="sct a-fade" style="--d:.2s">One app, for the whole platform</div>
                   <div class="hub">
                     <div class="node a-pop" style="--d:3s">Intuit<small>registers YourBlinds as an app</small></div>
@@ -267,7 +270,7 @@ redirectUri()           : <span class="a-ring" style="--d:12s">' . $redirect . '
                 </div>
 
                 <!-- 8 — production at Intuit -->
-                <div class="sc" data-scene="8" data-len="17">
+                <div class="sc" data-scene="8" data-len="20">
                   <div class="sct a-fade" style="--d:.2s">Going live: Intuit&rsquo;s production settings</div>
                   <div class="list">
                     <div class="a-fly" style="--d:3s">&#128221; App details &amp; links &mdash; host domain, launch and disconnect URLs, licence, privacy</div>
@@ -275,12 +278,12 @@ redirectUri()           : <span class="a-ring" style="--d:12s">' . $redirect . '
                     <div class="a-fly" style="--d:10s">&#8634; The same redirect address again &mdash; production has its own list</div>
                     <div class="a-fly" style="--d:13s">&#128273; New production Client ID and Secret</div>
                   </div>
-                  <div class="chips"><span class="chip a-pop" style="--d:16s">&#9203; Allow a week or two</span></div>
+                  <div class="chips"><span class="chip ok a-pop" style="--d:15s">&#10003; Approved &mdash; 11 Oct 2026</span></div>
                 </div>
 
                 <!-- 9 — switch YourBlinds to live -->
-                <div class="sc" data-scene="9" data-len="18">
-                  <div class="chips" style="margin:0 0 .5rem"><span class="chip bad a-pop" style="--d:2s">1 &middot; Disconnect sandbox links first</span></div>
+                <div class="sc" data-scene="9" data-len="19">
+                  <div class="chips" style="margin:0 0 .5rem"><span class="chip bad a-pop" style="--d:2s">1 &middot; QuickBooks page: Disconnect the sandbox first</span></div>
                   <div class="a-fade" style="--d:.2s">' . $card($sw('Sandbox (test)', 'Live', 16.5), 'Not connected') . '</div>
                   ' . $form([
                         $sw('Sandbox (test)', 'Production (live)', 7),
@@ -290,14 +293,28 @@ redirectUri()           : <span class="a-ring" style="--d:12s">' . $redirect . '
                     ], 'a-press', '--d:15s') . '
                 </div>
 
-                <!-- 10 — what it is not, yet -->
-                <div class="sc" data-scene="10" data-len="15">
-                  <div class="sct a-fade" style="--d:.2s">What this does &mdash; and doesn&rsquo;t &mdash; yet</div>
-                  ' . $card('Live', 'Not connected') . '
+                <!-- 10 — connect the real company -->
+                <div class="sc" data-scene="10" data-len="19">
+                  <div class="sct a-fade" style="--d:.2s">Then, on the QuickBooks page</div>
+                  <div class="list">
+                    <div class="a-fly" style="--d:3s">1 &middot; <b>Connect to QuickBooks</b> &rarr; Beverley Blinds&rsquo; real company</div>
+                    <div class="a-fly" style="--d:6.5s">2 &middot; <b>Set up mapping</b> &mdash; Blinds, 20.0% S, the bank account</div>
+                    <div class="a-fly" style="--d:8.5s">3 &middot; The office: <b>Match customers</b></div>
+                    <div class="a-fly" style="--d:11s">4 &middot; <b>Send invoices dated from</b> = the swap-over date</div>
+                    <div class="a-fly" style="--d:14s">5 &middot; Tick <b>Sending on</b> &rarr; Save</div>
+                  </div>
+                  <div class="chips"><span class="chip a-pop" style="--d:16s">Guide: &ldquo;QuickBooks live link&rdquo;</span></div>
+                </div>
+
+                <!-- 11 — what it does today -->
+                <div class="sc" data-scene="11" data-len="22">
+                  <div class="sct a-fade" style="--d:.2s">What it does today</div>
+                  ' . $card('Live', '&#9679; Connected') . '
                   <div class="chips">
-                    <span class="chip ok a-pop" style="--d:2s">&#10003; Every client can connect and map</span>
-                    <span class="chip bad a-pop" style="--d:6s">&#10007; Sending paid sales &mdash; not built yet</span>
-                    <span class="chip bad a-pop" style="--d:11s">&#10007; Xero &amp; Sage &mdash; nothing to paste in yet</span>
+                    <span class="chip ok a-pop" style="--d:2s">&#10003; Beverley Blinds&rsquo; own books &mdash; sent when paid</span>
+                    <span class="chip a-pop" style="--d:8s">Companies: downloads on their Accounting tab</span>
+                    <span class="chip a-pop" style="--d:11.5s">Their Connect button: hidden for now</span>
+                    <span class="chip bad a-pop" style="--d:15.5s">&#10007; Xero &amp; Sage &mdash; nothing to paste in yet</span>
                   </div>
                 </div>
 
@@ -306,10 +323,10 @@ redirectUri()           : <span class="a-ring" style="--d:12s">' . $redirect . '
           </div>',
         'body'    => '
           <div class="heads"><span class="hi">&#9888;</span><div><b>Two halves &mdash; this is the platform half.</b> This guide is the
-             <b>one-off setup you do as the owner of YourBlinds</b>. Once it&rsquo;s done, each client links their <em>own</em> QuickBooks
-             company from their Settings &rarr; Accounting tab &mdash; that&rsquo;s the guide <b>&ldquo;Link your accounts package (QuickBooks
-             Online)&rdquo;</b>. Sending paid sales to QuickBooks is <b>not built yet</b>: this setup gets the connection working, ready for
-             when it is.</div></div>
+             <b>one-off setup you do as the owner of YourBlinds</b>. The other half &mdash; connecting Beverley Blinds&rsquo; own QuickBooks,
+             the mapping, matching customers and switching sending on &mdash; is the guide <b>&ldquo;QuickBooks live link (Beverley
+             Blinds&rsquo; own books)&rdquo;</b>. Other companies don&rsquo;t get the live link yet: they use the downloads on their
+             Settings &rarr; Accounting tab, and their own <b>Connect</b> section stays hidden until it&rsquo;s opened to them.</div></div>
 
           <p><b>What you&rsquo;re setting up, in plain words.</b> QuickBooks won&rsquo;t talk to just any website. YourBlinds has to be
              registered with Intuit (the company behind QuickBooks) as an <b>app</b>. Intuit then gives YourBlinds two keys &mdash; a
@@ -370,11 +387,13 @@ redirectUri()           : <span class="a-ring" style="--d:12s">' . $redirect . '
                 <b>Set up mapping</b> and check the lists fill from the sandbox company.</li>
           </ul>
 
-          <p><b>Part 4 &mdash; going live.</b> Allow <b>a week or two</b> in case Intuit asks questions.</p>
+          <p><b>Part 4 &mdash; going live.</b> <b>Done for YourBlinds:</b> Intuit approved production on <b>11 October 2026</b>. The steps
+             are kept here for reference.</p>
           <ul class="steps">
             <li>At Intuit, open your app&rsquo;s <b>production</b> settings and work through getting production keys: app details, host
-                domain <code>www.yourblinds.uk</code>, a launch and a disconnect URL
-                (<code>https://www.yourblinds.uk/admin/settings.php#accounting</code> for both), and links to YourBlinds&rsquo; own
+                domain <code>www.yourblinds.uk</code>, launch URL <code>https://www.yourblinds.uk/</code>, disconnect URL
+                <code>https://www.yourblinds.uk/admin/settings.php</code>, connect / reconnect URL
+                <code>https://www.yourblinds.uk/admin/accounting/connect.php?provider=quickbooks</code> (keep these addresses working), and links to YourBlinds&rsquo; own
                 <b>licence</b> and <b>privacy</b> pages (<code>https://www.yourblinds.uk/legal/licence.php</code>,
                 <code>https://www.yourblinds.uk/legal/privacy.php</code>).</li>
             <li>Complete Intuit&rsquo;s <b>app assessment questionnaire</b>. Honest answers for YourBlinds: sign-in goes through Intuit and we
@@ -382,12 +401,17 @@ redirectUri()           : <span class="a-ring" style="--d:12s">' . $redirect . '
                 any time, and disconnecting revokes access at Intuit.</li>
             <li>Add the <b>same redirect address</b> to the production redirect list &mdash; production has its own.</li>
             <li>Once accepted, Intuit shows a <b>new</b> production Client ID and Secret, different from the sandbox ones.</li>
-            <li><b>Disconnect any sandbox links first</b> (your own test account, at least) &mdash; a link to a sandbox company would show as
-                connected but fail against live QuickBooks.</li>
+            <li><b>Disconnect the sandbox company first</b>: <b>Factory Console &rarr; Accounts &rarr; QuickBooks &rarr; Disconnect</b> &mdash; a
+                link to a sandbox company would show as connected but fail against live QuickBooks. (Matches and the sent list belong to
+                each QuickBooks company, so the real company starts clean.)</li>
             <li>In <b>QuickBooks app credentials</b>: <b>Environment</b> &rarr; <b>Production (live)</b>, paste the production Client ID,
                 <b>type</b> the production secret (don&rsquo;t leave it blank, or the sandbox secret stays), and <b>Save credentials</b>.
                 The card badge now reads <b>Live</b>.</li>
-            <li>Re-check the health page (<b>QUICKBOOKS_ENV: production</b>), then connect your own real company first.</li>
+            <li>Re-check the health page (<b>QUICKBOOKS_ENV: production</b>).</li>
+            <li>Then, on the <b>QuickBooks</b> page: <b>Connect to QuickBooks</b> and pick Beverley Blinds&rsquo; real company;
+                <b>Set up mapping</b> (Blinds, 20.0% S, the bank account); the office matches customers (<b>QuickBooks customers</b>);
+                set <b>Send invoices dated from</b> to the swap-over date; tick <b>Sending on</b> and <b>Save</b>. The guide
+                <b>&ldquo;QuickBooks live link&rdquo;</b> walks through each one.</li>
           </ul>
 
           <p><b>Looking after it.</b> If the secret has ever been exposed, generate a new one at Intuit and paste it in straight away.
@@ -399,15 +423,16 @@ redirectUri()           : <span class="a-ring" style="--d:12s">' . $redirect . '
              same pattern (one developer app, a Client ID and Secret, a registered redirect address) and this guide will be updated. Until
              then, clients on Xero or Sage use the CSV exports on the Payments page.</p>',
         'script'  => [
-            ['1',  'One app, for the whole platform', 'This is the one off job behind every client\'s Connect to QuickBooks button. YourBlinds has to be registered with Intuit, the company behind QuickBooks, as an app. Intuit gives you two keys. You paste them in once, and every client can then link their own company.', 1],
+            ['1',  'One app, for the whole platform', 'This is the one off job behind every client\'s Connect to QuickBooks button. YourBlinds has to be registered with Intuit, the company behind QuickBooks, as an app. Intuit gives you two keys. You paste them in once. Then the platform can link to QuickBooks: today, Beverley Blinds\' own books, and later, each client\'s.', 1],
             ['2',  'Create the app at Intuit',        'Start at developer dot intuit dot com, and create an app for QuickBooks Online. Call it YourBlinds, because clients see that name when they approve the link. When it asks for scopes, tick Accounting only.', 2],
             ['3',  'The redirect address',            'Next, add the redirect address. It is https, www dot yourblinds dot uk, slash admin, slash accounting, slash callback dot p h p. It must match exactly: with the www, and nothing on the end. If it does not, clients get a state mismatch error.', 3],
             ['4',  'Copy the keys',                   'Then open Keys and credentials, and copy the Client ID and the Client Secret. These development keys only work with sandbox test companies. Treat the secret like a password. Never email it, and never put it in the code, because the code is public.', 4],
             ['5',  'The credentials box',             'Now in YourBlinds, go to Settings, the Accounting tab. Under the QuickBooks card is a fold out box called QuickBooks app credentials. Only super admins can see it, and it opens by itself until QuickBooks is set up.', 5],
             ['6',  'Paste and save',                  'Leave Environment on Sandbox. Paste the Client ID, and the Client Secret. Check the Redirect URI matches the one at Intuit. Then press Save credentials. The green bar confirms it, and the card changes from Not set up to Not connected, with a Connect button.', 6],
             ['7',  'Check it works',                  'To check it, open the accounting health page. It never shows the keys, just present or missing. You want both keys present, isConfigured yes, and a redirect address that matches Intuit\'s. Then connect a sandbox company yourself, to prove it end to end.', 7],
-            ['8',  'Going live at Intuit',            'When you are ready for real companies, go back to Intuit and open the production settings. Fill in the app details and links, answer the app assessment questionnaire, and add the same redirect address again. Allow a week or two.', 8],
-            ['9',  'Switch YourBlinds to live',       'Once Intuit approves, you get new production keys. Disconnect any sandbox links first. Then switch Environment to Production, paste the new Client ID, and type in the new secret. Do not leave it blank. Save, and the badge now says Live.', 9],
-            ['10', 'What it does, and does not, yet', 'After that, every client can connect and map their QuickBooks. Remember, sending paid sales across is not built yet. And Xero and Sage have no connection yet either, so there is nothing to paste in for them.', 10],
+            ['8',  'Going live at Intuit',            'For real companies, Intuit needs the production settings: the app details and links, the app assessment questionnaire, and the same redirect address again, in the production list. That is all done. Intuit approved YourBlinds for production in October twenty twenty six.', 8],
+            ['9',  'Switch YourBlinds to live',       'To switch to live, first disconnect the sandbox company on the QuickBooks page. Then, in this box, set Environment to Production, paste the production Client ID, and type in the production secret. Do not leave it blank. Save, and the badge now says Live.', 9],
+            ['10', 'Connect the real company',        'Then go to the QuickBooks page, and connect Beverley Blinds\' real QuickBooks. Set up the mapping. Ask the office to match customers. Last, set the send from date to the swap over date, and tick Sending on. The QuickBooks live link guide shows each step.', 10],
+            ['11', 'What it does today',              'Today, the live link is for Beverley Blinds\' own books only. Paid invoices go across by themselves. Other companies use the downloads on their Accounting tab, and their Connect button stays hidden for now. Xero and Sage have no connection yet, so there is nothing to paste in for them.', 11],
         ],
 ];
