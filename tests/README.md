@@ -13,6 +13,7 @@ for a plain-English list of what broke.
 
 | File | Area | What it proves |
 |---|---|---|
+| `cases/05_schema_current.php` | Set-up | `schema.sql` already includes every migration in `setup/migrations` (else: run `php tests/tools/refresh_schema.php`). |
 | `cases/00_setup_sanity.php` | Set-up | The test database built properly, contains no real e-mail addresses, and a person can log in. |
 | `cases/10_prices.php` | **Prices** | 19 real-world lines are priced from 4 points of view (the factory, a trade account, a salesperson without costs, the factory keying an order *for* the trade account). There are also 240 random lines covering every product. Every figure must match `goldens/prices.json` to the penny. The lines include a roller with a motor, sizes typed in cm/m, Senses fascia oversize, 3 blinds on one fascia, a Vertical with per-metre options, Forest Wood with per-unit accessories and a custom pelmet size, a Venetian, a PF Shutter split into 3 panels, Infusions tape (a supplier list add-on), a trade discount, and supplier price lists converted to trade. |
 | `cases/20_pages_open.php` | **Pages open** | About 20 key screens open with no PHP errors or warnings for the people who use them, and refuse the people who shouldn't see them. Every help guide and every menu link is opened as six kinds of user. |
@@ -53,9 +54,8 @@ move. Commit the new goldens with the change.
 There's no framework, just a small custom runner (`run.php`) and about 150 lines of helpers.
 
 - `schema.sql` is the database structure with no data: every table, after every migration.
-  To regenerate it, run all `setup/migrations/*.php` against a scratch copy, then run
-  `mysqldump --no-data --skip-add-drop-table yb_ci | sed -E 's/ AUTO_INCREMENT=[0-9]+//' > tests/schema.sql`.
-  **A new migration must also be added to `schema.sql`.** Otherwise the tests run without the new column. Add the `CREATE`/`ALTER` by hand, or regenerate the file.
+  **After adding a migration, run `php tests/tools/refresh_schema.php`** and commit
+  `tests/schema.sql`. If you forget, `05_schema_current` goes red and says what's missing.
 - The fixtures come in three files:
   - `fixtures/10_factory_catalogue.sql` is the factory (client 3, renamed "Test Factory Ltd") and its 14 active products, scrubbed. It is generated from the local PII-free test copy by `tools/make_catalogue_fixture.php`.
   - `fixtures/15_catalogue_additions.php` adds the newer features the copy predates: per-unit accessories, a custom pelmet and the panel split.

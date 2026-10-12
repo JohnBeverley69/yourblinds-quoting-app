@@ -9,8 +9,8 @@
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
-
-
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `accounting_connections` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `client_id` int(11) NOT NULL,
@@ -32,9 +32,9 @@ CREATE TABLE `accounting_connections` (
   UNIQUE KEY `uq_client_provider` (`client_id`,`provider`),
   KEY `idx_client` (`client_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `accounting_customer_links` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `client_id` int(11) NOT NULL,
@@ -48,9 +48,9 @@ CREATE TABLE `accounting_customer_links` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_aclink` (`client_id`,`provider`,`realm_id`,`account_client_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `accounting_log` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `client_id` int(11) NOT NULL,
@@ -65,9 +65,9 @@ CREATE TABLE `accounting_log` (
   PRIMARY KEY (`id`),
   KEY `idx_aclog_client_time` (`client_id`,`provider`,`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `accounting_sync` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `client_id` int(11) NOT NULL,
@@ -89,9 +89,9 @@ CREATE TABLE `accounting_sync` (
   UNIQUE KEY `uq_acsync` (`client_id`,`provider`,`realm_id`,`entity`,`local_id`),
   KEY `idx_acsync_status` (`client_id`,`provider`,`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `allowance_rows` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `client_id` int(11) NOT NULL DEFAULT 3,
@@ -106,18 +106,18 @@ CREATE TABLE `allowance_rows` (
   UNIQUE KEY `uq_allowance_client` (`client_id`,`table_name`,`key_norm`),
   KEY `idx_allowance_table` (`table_name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `app_settings` (
   `setting_key` varchar(64) NOT NULL,
   `setting_value` text DEFAULT NULL,
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`setting_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `appointments` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `client_id` int(10) unsigned NOT NULL,
@@ -159,9 +159,9 @@ CREATE TABLE `appointments` (
   CONSTRAINT `fk_appointments_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_appointments_quote` FOREIGN KEY (`quote_id`) REFERENCES `quotes` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `build_rules` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `product_id` int(11) NOT NULL,
@@ -174,9 +174,9 @@ CREATE TABLE `build_rules` (
   PRIMARY KEY (`id`),
   KEY `idx_build_rules_product` (`product_id`,`seq`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `build_variables` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `product_id` int(11) NOT NULL,
@@ -192,9 +192,9 @@ CREATE TABLE `build_variables` (
   UNIQUE KEY `uq_build_var` (`product_id`,`name`),
   KEY `idx_build_var_product` (`product_id`,`seq`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `catalogue_audit` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `client_id` int(10) unsigned NOT NULL,
@@ -215,9 +215,9 @@ CREATE TABLE `catalogue_audit` (
   KEY `idx_ca_entity` (`entity_type`,`entity_id`),
   KEY `idx_ca_actor` (`user_id`,`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `client_discounts` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `client_id` int(10) unsigned NOT NULL,
@@ -235,9 +235,9 @@ CREATE TABLE `client_discounts` (
   CONSTRAINT `fk_client_discounts_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_client_discounts_system` FOREIGN KEY (`system_id`) REFERENCES `product_systems` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `client_library_suppliers` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `client_id` int(11) NOT NULL,
@@ -247,9 +247,9 @@ CREATE TABLE `client_library_suppliers` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uniq_client_supplier` (`client_id`,`supplier_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `client_markups` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `client_id` int(10) unsigned NOT NULL,
@@ -267,9 +267,9 @@ CREATE TABLE `client_markups` (
   CONSTRAINT `fk_client_markups_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_client_markups_system` FOREIGN KEY (`system_id`) REFERENCES `product_systems` (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `client_plan_overrides` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `client_id` int(10) unsigned NOT NULL,
@@ -284,9 +284,9 @@ CREATE TABLE `client_plan_overrides` (
   UNIQUE KEY `uniq_override` (`client_id`,`plan_code`),
   CONSTRAINT `fk_cpo_client` FOREIGN KEY (`client_id`) REFERENCES `clients` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `client_settings` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `client_id` int(10) unsigned NOT NULL,
@@ -357,9 +357,9 @@ CREATE TABLE `client_settings` (
   UNIQUE KEY `uniq_client_settings_client` (`client_id`),
   CONSTRAINT `fk_client_settings_client` FOREIGN KEY (`client_id`) REFERENCES `clients` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `client_user_roles` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `user_id` int(10) unsigned NOT NULL,
@@ -370,9 +370,9 @@ CREATE TABLE `client_user_roles` (
   KEY `idx_cur_user` (`user_id`),
   CONSTRAINT `fk_cur_user` FOREIGN KEY (`user_id`) REFERENCES `client_users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `client_users` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `client_id` int(10) unsigned NOT NULL,
@@ -412,9 +412,9 @@ CREATE TABLE `client_users` (
   KEY `idx_client_users_role` (`role`),
   CONSTRAINT `fk_client_users_client` FOREIGN KEY (`client_id`) REFERENCES `clients` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `clients` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `company_name` varchar(150) NOT NULL,
@@ -446,9 +446,9 @@ CREATE TABLE `clients` (
   KEY `idx_clients_active` (`active`),
   KEY `idx_clients_company` (`company_name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `customer_discounts` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `client_id` int(10) unsigned NOT NULL,
@@ -465,9 +465,9 @@ CREATE TABLE `customer_discounts` (
   CONSTRAINT `fk_discounts_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_discounts_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `customer_markups` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `client_id` int(10) unsigned NOT NULL,
@@ -484,9 +484,9 @@ CREATE TABLE `customer_markups` (
   CONSTRAINT `fk_markups_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_markups_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `customers` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `client_id` int(10) unsigned NOT NULL,
@@ -514,9 +514,9 @@ CREATE TABLE `customers` (
   KEY `idx_customers_client_creator` (`client_id`,`created_by_user_id`),
   CONSTRAINT `fk_customers_client` FOREIGN KEY (`client_id`) REFERENCES `clients` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `email_verifications` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `user_id` int(11) NOT NULL,
@@ -528,9 +528,9 @@ CREATE TABLE `email_verifications` (
   KEY `idx_ev_token` (`token_hash`),
   KEY `idx_ev_user` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `extra_choice_price_rows` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `product_extra_choice_id` int(10) unsigned NOT NULL,
@@ -542,9 +542,9 @@ CREATE TABLE `extra_choice_price_rows` (
   KEY `idx_lookup` (`product_extra_choice_id`,`width_mm`),
   CONSTRAINT `fk_extra_choice_price_rows_choice` FOREIGN KEY (`product_extra_choice_id`) REFERENCES `product_extra_choices` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `fabric_supplier_groups` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `name` varchar(120) NOT NULL,
@@ -552,9 +552,9 @@ CREATE TABLE `fabric_supplier_groups` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uniq_name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `fabric_suppliers` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `name` varchar(120) NOT NULL,
@@ -564,9 +564,9 @@ CREATE TABLE `fabric_suppliers` (
   `group_id` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `factory_ar_account_delivery` (
   `account_client_id` int(11) NOT NULL,
   `delivery_method` varchar(12) NOT NULL DEFAULT 'carrier',
@@ -574,9 +574,9 @@ CREATE TABLE `factory_ar_account_delivery` (
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`account_client_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `factory_ar_credit_note_lines` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `credit_note_id` int(11) NOT NULL,
@@ -591,9 +591,9 @@ CREATE TABLE `factory_ar_credit_note_lines` (
   PRIMARY KEY (`id`),
   KEY `idx_cnl_cn` (`credit_note_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `factory_ar_credit_notes` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `factory_client_id` int(11) NOT NULL,
@@ -619,9 +619,9 @@ CREATE TABLE `factory_ar_credit_notes` (
   KEY `idx_cn_account` (`account_client_id`,`status`),
   KEY `idx_cn_invoice` (`against_invoice_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `factory_ar_delivery_note_lines` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `delivery_note_id` int(11) NOT NULL,
@@ -640,9 +640,9 @@ CREATE TABLE `factory_ar_delivery_note_lines` (
   PRIMARY KEY (`id`),
   KEY `idx_dnl_dn` (`delivery_note_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `factory_ar_delivery_notes` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `factory_client_id` int(11) NOT NULL,
@@ -666,9 +666,9 @@ CREATE TABLE `factory_ar_delivery_notes` (
   KEY `idx_dn_quote` (`source_quote_id`),
   KEY `idx_dn_delivery` (`account_client_id`,`delivery_date`,`delivery_method`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `factory_ar_invoice_lines` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `invoice_id` int(11) NOT NULL,
@@ -689,20 +689,23 @@ CREATE TABLE `factory_ar_invoice_lines` (
   KEY `idx_invl_invoice` (`invoice_id`),
   KEY `idx_invl_srcitem` (`source_quote_item_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `factory_ar_invoice_orders` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `invoice_id` int(11) NOT NULL,
   `quote_id` int(11) NOT NULL,
+  `factory_client_id` int(11) DEFAULT NULL,
+  `live_quote_id` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_inv_order` (`invoice_id`,`quote_id`),
+  UNIQUE KEY `uq_io_live` (`live_quote_id`,`factory_client_id`),
   KEY `idx_io_quote` (`quote_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `factory_ar_invoices` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `factory_client_id` int(11) NOT NULL,
@@ -731,9 +734,9 @@ CREATE TABLE `factory_ar_invoices` (
   KEY `idx_inv_status` (`status`),
   KEY `idx_inv_issue` (`issue_date`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `factory_ar_payment_allocations` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `payment_id` int(11) NOT NULL,
@@ -744,9 +747,9 @@ CREATE TABLE `factory_ar_payment_allocations` (
   KEY `idx_payment` (`payment_id`),
   KEY `idx_invoice` (`invoice_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `factory_ar_payments` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `factory_client_id` int(11) NOT NULL,
@@ -766,9 +769,9 @@ CREATE TABLE `factory_ar_payments` (
   UNIQUE KEY `uq_pay_number` (`factory_client_id`,`pay_number`),
   KEY `idx_acc` (`factory_client_id`,`account_client_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `factory_ar_statement_emails` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `factory_client_id` int(11) NOT NULL,
@@ -783,9 +786,9 @@ CREATE TABLE `factory_ar_statement_emails` (
   KEY `idx_run` (`factory_client_id`,`period_to`),
   KEY `idx_acct` (`factory_client_id`,`account_client_id`,`period_to`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `factory_bank_payer_aliases` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `factory_client_id` int(11) NOT NULL,
@@ -797,9 +800,9 @@ CREATE TABLE `factory_bank_payer_aliases` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_payer` (`factory_client_id`,`payer_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `factory_bank_transactions` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `factory_client_id` int(11) NOT NULL,
@@ -821,9 +824,9 @@ CREATE TABLE `factory_bank_transactions` (
   KEY `idx_bank_date` (`factory_client_id`,`txn_date`),
   KEY `idx_bank_payment` (`payment_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `factory_blind_jobs` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `quote_id` int(11) NOT NULL,
@@ -850,9 +853,9 @@ CREATE TABLE `factory_blind_jobs` (
   KEY `idx_fbj_area` (`area_id`),
   KEY `idx_fbj_marshalled` (`marshalled_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `factory_blind_streams` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `blind_job_id` int(11) NOT NULL,
@@ -874,9 +877,9 @@ CREATE TABLE `factory_blind_streams` (
   KEY `idx_stream_job` (`blind_job_id`),
   KEY `idx_fbs_area` (`area_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `factory_jobs` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `quote_id` int(11) NOT NULL,
@@ -891,18 +894,18 @@ CREATE TABLE `factory_jobs` (
   UNIQUE KEY `uq_factory_jobs_quote` (`quote_id`),
   KEY `idx_factory_jobs_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `factory_kv` (
   `k` varchar(64) NOT NULL,
   `v` text DEFAULT NULL,
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`k`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `factory_office_entries` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `factory_client_id` int(11) NOT NULL,
@@ -924,9 +927,9 @@ CREATE TABLE `factory_office_entries` (
   KEY `idx_oe_open` (`factory_client_id`,`done_at`,`kind`),
   KEY `idx_oe_account` (`account_client_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `factory_remake_items` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `remake_id` int(11) NOT NULL,
@@ -935,9 +938,9 @@ CREATE TABLE `factory_remake_items` (
   PRIMARY KEY (`id`),
   KEY `idx_rmi_remake` (`remake_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `factory_remake_reasons` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `factory_client_id` int(11) NOT NULL,
@@ -948,9 +951,9 @@ CREATE TABLE `factory_remake_reasons` (
   PRIMARY KEY (`id`),
   KEY `idx_rr_factory` (`factory_client_id`,`active`,`sort_order`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `factory_remakes` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `factory_client_id` int(11) NOT NULL,
@@ -984,9 +987,9 @@ CREATE TABLE `factory_remakes` (
   KEY `idx_rm_account` (`account_client_id`),
   KEY `idx_rm_factory_status` (`factory_client_id`,`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `factory_scan_log` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `code` varchar(20) NOT NULL,
@@ -1001,9 +1004,9 @@ CREATE TABLE `factory_scan_log` (
   KEY `idx_scan_recent` (`quote_item_id`,`unit_no`,`created_at`),
   KEY `idx_scan_time` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `help_videos` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `title` varchar(160) NOT NULL,
@@ -1011,9 +1014,9 @@ CREATE TABLE `help_videos` (
   `sort_order` int(11) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `library_fabric_categories` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `fabric_supplier_id` int(11) NOT NULL,
@@ -1023,9 +1026,9 @@ CREATE TABLE `library_fabric_categories` (
   UNIQUE KEY `uniq_sup_name` (`fabric_supplier_id`,`name`),
   KEY `idx_supplier` (`fabric_supplier_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `library_fabrics` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `fabric_supplier_id` int(11) NOT NULL,
@@ -1041,9 +1044,9 @@ CREATE TABLE `library_fabrics` (
   PRIMARY KEY (`id`),
   KEY `idx_supplier` (`fabric_supplier_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `library_suppliers` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `supplier_key` varchar(64) NOT NULL,
@@ -1057,9 +1060,9 @@ CREATE TABLE `library_suppliers` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uniq_supplier_key` (`supplier_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `login_attempts` (
   `id` bigint(20) unsigned NOT NULL AUTO_INCREMENT,
   `ip_address` varchar(45) NOT NULL,
@@ -1071,9 +1074,9 @@ CREATE TABLE `login_attempts` (
   KEY `idx_login_attempts_ip_time` (`ip_address`,`created_at`),
   KEY `idx_login_attempts_created` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `messages` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `client_id` int(11) NOT NULL,
@@ -1105,9 +1108,21 @@ CREATE TABLE `messages` (
   KEY `idx_msg_appt_kind_ref` (`appointment_id`,`kind`,`ref_key`),
   KEY `idx_msg_quote_kind` (`quote_id`,`kind`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `offline_refs` (
+  `client_id` int(10) unsigned NOT NULL,
+  `kind` varchar(16) NOT NULL,
+  `ref` varchar(64) NOT NULL,
+  `target_id` int(10) unsigned DEFAULT NULL,
+  `created_at` datetime NOT NULL,
+  PRIMARY KEY (`client_id`,`kind`,`ref`),
+  KEY `idx_created` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_bin;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `password_resets` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `user_id` int(10) unsigned NOT NULL,
@@ -1121,9 +1136,9 @@ CREATE TABLE `password_resets` (
   KEY `idx_password_resets_expires` (`expires_at`),
   CONSTRAINT `fk_password_resets_user` FOREIGN KEY (`user_id`) REFERENCES `client_users` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `payments` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `client_id` int(10) unsigned NOT NULL,
@@ -1148,9 +1163,9 @@ CREATE TABLE `payments` (
   CONSTRAINT `fk_payments_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_payments_quote` FOREIGN KEY (`quote_id`) REFERENCES `quotes` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `paypal_webhook_log` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `event_type` varchar(80) NOT NULL,
@@ -1169,9 +1184,9 @@ CREATE TABLE `paypal_webhook_log` (
   KEY `idx_pwl_client` (`client_id`,`received_at`),
   KEY `idx_pwl_event_id` (`event_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `plan_pricing` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `plan_code` varchar(32) NOT NULL,
@@ -1183,18 +1198,18 @@ CREATE TABLE `plan_pricing` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uniq_plan_pricing` (`plan_code`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `platform_config` (
   `name` varchar(64) NOT NULL,
   `value` text DEFAULT NULL,
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `price_bump_undo` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `client_id` int(10) unsigned NOT NULL,
@@ -1208,9 +1223,9 @@ CREATE TABLE `price_bump_undo` (
   PRIMARY KEY (`id`),
   KEY `idx_scope` (`client_id`,`scope`,`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `price_change_log` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `client_id` int(11) NOT NULL,
@@ -1223,9 +1238,9 @@ CREATE TABLE `price_change_log` (
   PRIMARY KEY (`id`),
   KEY `idx_client` (`client_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `price_table_rows` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `price_table_id` int(10) unsigned NOT NULL,
@@ -1239,9 +1254,9 @@ CREATE TABLE `price_table_rows` (
   KEY `idx_ptr_table_dims` (`price_table_id`,`width_mm`,`drop_mm`),
   CONSTRAINT `fk_rows_table` FOREIGN KEY (`price_table_id`) REFERENCES `price_tables` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `price_table_undo` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `client_id` int(10) unsigned NOT NULL,
@@ -1254,9 +1269,9 @@ CREATE TABLE `price_table_undo` (
   PRIMARY KEY (`id`),
   KEY `idx_table` (`price_table_id`,`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `price_tables` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `client_id` int(10) unsigned NOT NULL,
@@ -1279,9 +1294,9 @@ CREATE TABLE `price_tables` (
   CONSTRAINT `fk_price_tables_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_price_tables_system` FOREIGN KEY (`system_id`) REFERENCES `product_systems` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `price_undo` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `client_id` int(10) unsigned NOT NULL,
@@ -1296,9 +1311,9 @@ CREATE TABLE `price_undo` (
   PRIMARY KEY (`id`),
   KEY `idx_scope` (`client_id`,`scope`,`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `product_area_map` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `area_id` int(11) NOT NULL,
@@ -1308,9 +1323,9 @@ CREATE TABLE `product_area_map` (
   UNIQUE KEY `uq_pam_product_stream` (`product_id`,`stream`),
   KEY `idx_pam_area` (`area_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `product_categories` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `client_id` int(11) NOT NULL,
@@ -1320,9 +1335,9 @@ CREATE TABLE `product_categories` (
   PRIMARY KEY (`id`),
   KEY `idx_client` (`client_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `product_extra_choice_bands` (
   `choice_id` int(10) unsigned NOT NULL,
   `band_code` varchar(60) NOT NULL,
@@ -1330,9 +1345,9 @@ CREATE TABLE `product_extra_choice_bands` (
   KEY `ix_pecb_band` (`band_code`),
   CONSTRAINT `fk_pecb_choice` FOREIGN KEY (`choice_id`) REFERENCES `product_extra_choices` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `product_extra_choice_options` (
   `choice_id` int(10) unsigned NOT NULL,
   `option_id` int(10) unsigned NOT NULL,
@@ -1341,9 +1356,9 @@ CREATE TABLE `product_extra_choice_options` (
   CONSTRAINT `fk_peco_choice` FOREIGN KEY (`choice_id`) REFERENCES `product_extra_choices` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_peco_option` FOREIGN KEY (`option_id`) REFERENCES `product_options` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `product_extra_choice_systems` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `product_extra_choice_id` int(10) unsigned NOT NULL,
@@ -1356,9 +1371,9 @@ CREATE TABLE `product_extra_choice_systems` (
   CONSTRAINT `fk_pecs_choice` FOREIGN KEY (`product_extra_choice_id`) REFERENCES `product_extra_choices` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_pecs_system` FOREIGN KEY (`product_system_id`) REFERENCES `product_systems` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `product_extra_choices` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `product_extra_id` int(10) unsigned NOT NULL,
@@ -1389,9 +1404,9 @@ CREATE TABLE `product_extra_choices` (
   CONSTRAINT `fk_choices_extra` FOREIGN KEY (`product_extra_id`) REFERENCES `product_extras` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_choices_system` FOREIGN KEY (`system_id`) REFERENCES `product_systems` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `product_extra_parent_choices` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `product_extra_id` int(10) unsigned NOT NULL,
@@ -1404,9 +1419,9 @@ CREATE TABLE `product_extra_parent_choices` (
   CONSTRAINT `fk_pepc_choice` FOREIGN KEY (`product_extra_choice_id`) REFERENCES `product_extra_choices` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_pepc_extra` FOREIGN KEY (`product_extra_id`) REFERENCES `product_extras` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `product_extra_systems` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `product_extra_id` int(10) unsigned NOT NULL,
@@ -1419,9 +1434,9 @@ CREATE TABLE `product_extra_systems` (
   CONSTRAINT `fk_pes_extra` FOREIGN KEY (`product_extra_id`) REFERENCES `product_extras` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_pes_system` FOREIGN KEY (`product_system_id`) REFERENCES `product_systems` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `product_extras` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `client_id` int(10) unsigned NOT NULL,
@@ -1452,18 +1467,18 @@ CREATE TABLE `product_extras` (
   CONSTRAINT `fk_extras_parent_choice` FOREIGN KEY (`parent_choice_id`) REFERENCES `product_extra_choices` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_extras_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `product_lead_times` (
   `product_id` int(11) NOT NULL,
   `lead_days` int(11) NOT NULL DEFAULT 10,
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`product_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `product_options` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `client_id` int(10) unsigned NOT NULL,
@@ -1492,9 +1507,9 @@ CREATE TABLE `product_options` (
   CONSTRAINT `fk_options_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_product_options_system` FOREIGN KEY (`system_id`) REFERENCES `product_systems` (`id`) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `product_route_steps` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `product_id` int(11) NOT NULL,
@@ -1508,9 +1523,9 @@ CREATE TABLE `product_route_steps` (
   KEY `idx_route_product` (`product_id`,`seq`),
   KEY `idx_route_station` (`station_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `product_systems` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `client_id` int(10) unsigned NOT NULL,
@@ -1529,9 +1544,9 @@ CREATE TABLE `product_systems` (
   CONSTRAINT `fk_systems_client` FOREIGN KEY (`client_id`) REFERENCES `clients` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_systems_product` FOREIGN KEY (`product_id`) REFERENCES `products` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `production_areas` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `client_id` int(11) NOT NULL,
@@ -1545,9 +1560,9 @@ CREATE TABLE `production_areas` (
   KEY `idx_pa_client` (`client_id`),
   KEY `idx_pa_scankey` (`scan_key`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `products` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `client_id` int(10) unsigned NOT NULL,
@@ -1579,9 +1594,9 @@ CREATE TABLE `products` (
   KEY `idx_products_source` (`source_client_id`),
   CONSTRAINT `fk_products_client` FOREIGN KEY (`client_id`) REFERENCES `clients` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `quote_item_extras` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `quote_item_id` int(10) unsigned NOT NULL,
@@ -1605,9 +1620,9 @@ CREATE TABLE `quote_item_extras` (
   CONSTRAINT `fk_qie_extra` FOREIGN KEY (`product_extra_id`) REFERENCES `product_extras` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_qie_item` FOREIGN KEY (`quote_item_id`) REFERENCES `quote_items` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `quote_items` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `quote_id` int(10) unsigned NOT NULL,
@@ -1662,9 +1677,9 @@ CREATE TABLE `quote_items` (
   CONSTRAINT `fk_quote_items_quote` FOREIGN KEY (`quote_id`) REFERENCES `quotes` (`id`) ON DELETE CASCADE ON UPDATE CASCADE,
   CONSTRAINT `fk_quote_items_system` FOREIGN KEY (`system_id`) REFERENCES `product_systems` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `quotes` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `client_id` int(10) unsigned NOT NULL,
@@ -1735,9 +1750,9 @@ CREATE TABLE `quotes` (
   CONSTRAINT `fk_quotes_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`) ON DELETE SET NULL ON UPDATE CASCADE,
   CONSTRAINT `fk_quotes_user` FOREIGN KEY (`created_by_user_id`) REFERENCES `client_users` (`id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `sales_consultants` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `name` varchar(150) NOT NULL,
@@ -1747,9 +1762,9 @@ CREATE TABLE `sales_consultants` (
   PRIMARY KEY (`id`),
   KEY `idx_sc_active` (`active`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `supplier_orders` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `client_id` int(11) NOT NULL,
@@ -1765,9 +1780,9 @@ CREATE TABLE `supplier_orders` (
   KEY `idx_quote` (`client_id`,`quote_id`),
   KEY `quote_supplier` (`quote_id`,`supplier_name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `supplier_requests` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `client_id` int(11) NOT NULL,
@@ -1782,9 +1797,9 @@ CREATE TABLE `supplier_requests` (
   PRIMARY KEY (`id`),
   KEY `idx_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `suppliers` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `client_id` int(11) NOT NULL,
@@ -1795,9 +1810,9 @@ CREATE TABLE `suppliers` (
   PRIMARY KEY (`id`),
   UNIQUE KEY `uniq_supplier_per_client` (`client_id`,`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `support_ai_usage` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `conversation_id` varchar(40) NOT NULL,
@@ -1814,9 +1829,9 @@ CREATE TABLE `support_ai_usage` (
   KEY `idx_created` (`created_at`),
   KEY `idx_user_created` (`user_id`,`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `support_tickets` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `client_id` int(11) DEFAULT NULL,
@@ -1843,9 +1858,9 @@ CREATE TABLE `support_tickets` (
   KEY `idx_status_created` (`status`,`created_at`),
   KEY `idx_client` (`client_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `tenant_send_log` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `client_id` int(11) NOT NULL,
@@ -1855,9 +1870,9 @@ CREATE TABLE `tenant_send_log` (
   PRIMARY KEY (`id`),
   KEY `idx_tsl_client_time` (`client_id`,`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `tenant_subscriptions` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `client_id` int(10) unsigned NOT NULL,
@@ -1877,9 +1892,9 @@ CREATE TABLE `tenant_subscriptions` (
   UNIQUE KEY `uniq_tenant_plan` (`client_id`,`plan_code`),
   CONSTRAINT `fk_sub_client` FOREIGN KEY (`client_id`) REFERENCES `clients` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `trade_commissions` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `client_id` int(11) NOT NULL,
@@ -1894,9 +1909,9 @@ CREATE TABLE `trade_commissions` (
   KEY `idx_tc_client` (`client_id`),
   KEY `idx_tc_consultant` (`consultant_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `trade_discount_audit` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `client_id` int(11) NOT NULL,
@@ -1918,9 +1933,9 @@ CREATE TABLE `trade_discount_audit` (
   PRIMARY KEY (`id`),
   KEY `idx_tda_client` (`client_id`,`changed_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `trade_discounts` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `client_id` int(11) NOT NULL,
@@ -1939,9 +1954,9 @@ CREATE TABLE `trade_discounts` (
   KEY `idx_td_client_product` (`client_id`,`product_id`),
   KEY `idx_td_extra` (`extra_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `trade_promotions` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `name` varchar(150) DEFAULT NULL,
@@ -1965,9 +1980,9 @@ CREATE TABLE `trade_promotions` (
   KEY `idx_tp_window` (`active`,`starts_on`,`ends_on`),
   KEY `idx_tp_extra` (`extra_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `trial_grants` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `email_key` char(64) NOT NULL,
@@ -1978,9 +1993,9 @@ CREATE TABLE `trial_grants` (
   KEY `idx_tg_email` (`email_key`),
   KEY `idx_tg_ip_time` (`ip`,`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `user_calendar_tokens` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `user_id` int(10) unsigned NOT NULL,
@@ -1993,9 +2008,9 @@ CREATE TABLE `user_calendar_tokens` (
   UNIQUE KEY `uniq_user` (`user_id`),
   KEY `idx_client` (`client_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `user_production_areas` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `user_id` int(11) NOT NULL,
@@ -2004,9 +2019,9 @@ CREATE TABLE `user_production_areas` (
   UNIQUE KEY `uq_upa` (`user_id`,`area_id`),
   KEY `idx_upa_user` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `worksheet_template_versions` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `template_id` int(11) NOT NULL,
@@ -2020,9 +2035,9 @@ CREATE TABLE `worksheet_template_versions` (
   KEY `idx_wtv_template` (`template_id`,`created_at`),
   KEY `idx_wtv_product` (`product_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `worksheet_templates` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `product_id` int(11) NOT NULL,
@@ -2034,9 +2049,9 @@ CREATE TABLE `worksheet_templates` (
   PRIMARY KEY (`id`),
   KEY `idx_ws_tpl_product` (`product_id`,`is_default`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-
-
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `workstation_streams` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `user_id` int(11) NOT NULL,
@@ -2047,7 +2062,7 @@ CREATE TABLE `workstation_streams` (
   UNIQUE KEY `uq_ws` (`user_id`,`product_id`,`stream`),
   KEY `idx_ws_user` (`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
+/*!40101 SET character_set_client = @saved_cs_client */;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
 /*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
