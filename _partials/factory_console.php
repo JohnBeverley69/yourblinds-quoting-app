@@ -20,6 +20,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/factory_ar.php';
 require_once __DIR__ . '/order_stage.php';
+require_once __DIR__ . '/order_tracks.php';
 
 /** Stage keys shown in the console, in display order => [label, text, background]. */
 function fc_stage_meta(): array
@@ -208,7 +209,7 @@ function fc_next_action(array $r): array
     switch ($r['stage']) {
         case 'new':           return ['Mark received',    '/factory/incoming-orders.php', false];
         case 'confirmed':     return ['Start production', '/factory/incoming-orders.php', false];
-        case 'in_production': return ['Being made',       '', false];
+        case 'in_production': return fc_making_next($r['tracks'] ?? null);
         case 'ready':         return ['Dispatch', $acct ? '/master-admin/dispatch.php' : '/factory/incoming-orders.php', false];
     }
     switch ($r['money']) {
@@ -219,6 +220,23 @@ function fc_next_action(array $r): array
         case 'part_paid': return ['Wait for the rest', $acUrl, false];
     }
     return ['Done', '', false];
+}
+
+/**
+ * Next for an order in production, from ot_order_tracks(): still being made on
+ * the floor → "Being made"; made but a bought-in item not ordered → "Order from
+ * X"; ordered and not received → "Waiting on X". Same wording as Incoming orders.
+ */
+function fc_making_next(?array $t): array
+{
+    if (!$t || $t['make']['made'] < $t['make']['units']) return ['Being made', '', false];
+    foreach ($t['buy'] as $sup => $b) {
+        if ($b['state'] === 'to_order') return ['Order from ' . $sup, '/factory/incoming-orders.php', true];
+    }
+    foreach ($t['buy'] as $sup => $b) {
+        if ($b['state'] === 'ordered') return ['Waiting on ' . $sup, '/factory/incoming-orders.php', false];
+    }
+    return ['Being made', '', false];
 }
 
 /** fc_stage_meta() key from a quote's status, fulfilment_stage and factory_jobs.status. */
@@ -251,6 +269,7 @@ function fc_order_status(PDO $pdo, int $factoryId, array $quote): array
         'status'      => (string) ($quote['status'] ?? ''),
         'stage'       => fc_making_stage((string) ($quote['status'] ?? ''), (string) ($quote['fulfilment_stage'] ?? ''), $fj),
         'invoices'    => fc_money_visible() ? (fc_order_invoices($pdo, $factoryId, [$id])[$id] ?? []) : [],
+        'tracks'      => ot_order_tracks($pdo, [$id], $factoryId)[$id] ?? null,
         'account_key' => (int) ($quote['account_client_id'] ?? 0) > 0 ? (int) $quote['account_client_id'] : ($own ? 0 : (int) ($quote['client_id'] ?? 0)),
     ];
     $r['billed_here'] = !($own && $r['account_key'] === 0);
@@ -369,9 +388,15 @@ function fc_orders(PDO $pdo, int $factoryId): array
     require_once __DIR__ . '/remakes.php';
     $remakeOf = rm_remake_orders($pdo, array_map(static fn ($r) => (int) $r['id'], $rows));
 
+    // Make + buy-in progress for orders still being made, so Next can say what
+    // an order is really waiting on ("Waiting on Home Creations"), not just
+    // "Being made" once the floor has finished. Same helper as Incoming orders.
+    $tracks = ot_order_tracks($pdo, array_map(static fn ($r) => (int) $r['id'], array_filter($rows, static fn ($r) => (string) ($r['fulfilment_stage'] ?? '') !== 'dispatched')), $factoryId);
+
     foreach ($rows as &$r) {
         $id  = (int) $r['id'];
         $r['remake_of'] = $remakeOf[$id] ?? '';
+        $r['tracks']    = $tracks[$id] ?? null;
         $own = (int) $r['client_id'] === $factoryId;
         $stage = fc_making_stage((string) $r['status'], (string) ($r['fulfilment_stage'] ?? ''), (string) ($r['factory_status'] ?? ''));
         $r['stage']   = $stage;
