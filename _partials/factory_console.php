@@ -202,9 +202,21 @@ function fc_money_state(array $r): string
 }
 
 /**
+ * The Pipeline opened on one order (its search finds the order and opens its
+ * card), at a column. The Pipeline is the ONE screen where an order is moved
+ * on (John, 2026-10-12), so every making step's Next link lands there.
+ */
+function fc_pipeline_url(array $r, string $col = ''): string
+{
+    $qn = trim((string) ($r['quote_number'] ?? ''));
+    return '/factory/pipeline.php' . ($qn !== '' ? '?q=' . rawurlencode($qn) : '') . ($col !== '' ? '#col-' . $col : '');
+}
+
+/**
  * The one thing to do next on an order, for its row: [label, url|'' , urgent].
  * Money that's late comes first; otherwise making until it's dispatched, then
- * money. Accounts links only for someone allowed on the accounts pages (#1057).
+ * money. Making steps link to the order's Pipeline card, where the buttons are.
+ * Accounts links only for someone allowed on the accounts pages (#1057).
  */
 function fc_next_action(array $r): array
 {
@@ -215,11 +227,11 @@ function fc_next_action(array $r): array
     if ($r['money'] === 'overdue')   return ['Chase payment', $acUrl, true];
     switch ($r['stage']) {
         // Process order takes the order in, puts it on the floor and emails its
-        // suppliers — same words as the Incoming orders and Pipeline buttons.
-        case 'new':           return ['Process order',    '/factory/incoming-orders.php?lane=new', false];
+        // suppliers — the Pipeline card's button.
+        case 'new':           return ['Process order',    fc_pipeline_url($r, 'new'), false];
         case 'in_production':
-        case 'awaiting_supplier': return fc_making_next($r['tracks'] ?? null);
-        case 'ready':         return ['Dispatch', $acct ? '/master-admin/dispatch.php' : '/factory/incoming-orders.php', false];
+        case 'awaiting_supplier': return fc_making_next($r['tracks'] ?? null, $r);
+        case 'ready':         return ['Dispatch', fc_pipeline_url($r, 'ready'), false];
     }
     switch ($r['money']) {
         case 'needs_invoicing':
@@ -236,19 +248,21 @@ function fc_next_action(array $r): array
  * didn't go → "Couldn't order from X", an item added after processing → "New
  * item to order from X" (both first: they're the office's job, whatever the
  * floor is doing); still being made → "Being made"; ordered and not received →
- * "Waiting on X". Same wording as Incoming orders.
+ * "Waiting on X". Same wording as Incoming orders; the supplier steps link to
+ * the order ($r) on the Pipeline, where its Retry / Received buttons are.
  */
-function fc_making_next(?array $t): array
+function fc_making_next(?array $t, array $r = []): array
 {
+    $pl = fc_pipeline_url($r, 'awaiting_supplier');
     foreach ($t['buy'] ?? [] as $sup => $b) {
         if ($b['state'] !== 'to_order') continue;
-        if (($b['problem'] ?? '') === 'failed') return ["Couldn't order from " . $sup, '/factory/incoming-orders.php?lane=problem', true];
-        if (($b['problem'] ?? '') === 'new_item') return ['New item to order from ' . $sup, '/factory/incoming-orders.php?lane=order', true];
-        return ['Order from ' . $sup, '/factory/incoming-orders.php', true];
+        if (($b['problem'] ?? '') === 'failed') return ["Couldn't order from " . $sup, $pl, true];
+        if (($b['problem'] ?? '') === 'new_item') return ['New item to order from ' . $sup, $pl, true];
+        return ['Order from ' . $sup, $pl, true];
     }
     if (!$t || $t['make']['made'] < $t['make']['units']) return ['Being made', '', false];
     foreach ($t['buy'] as $sup => $b) {
-        if ($b['state'] === 'ordered') return ['Waiting on ' . $sup, '/factory/incoming-orders.php', false];
+        if ($b['state'] === 'ordered') return ['Waiting on ' . $sup, $pl, false];
     }
     return ['Being made', '', false];
 }
@@ -302,6 +316,7 @@ function fc_order_status(PDO $pdo, int $factoryId, array $quote): array
     $own = (int) ($quote['client_id'] ?? 0) === $factoryId;
     $r = [
         'id'          => $id,
+        'quote_number' => (string) ($quote['quote_number'] ?? ''),
         'status'      => (string) ($quote['status'] ?? ''),
         'stage'       => fc_making_stage((string) ($quote['status'] ?? ''), (string) ($quote['fulfilment_stage'] ?? ''), $fj),
         'invoices'    => fc_money_visible() ? (fc_order_invoices($pdo, $factoryId, [$id])[$id] ?? []) : [],

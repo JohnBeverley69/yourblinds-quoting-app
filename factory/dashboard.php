@@ -701,10 +701,10 @@ $activeNav = 'factory-dashboard';
     <p class="fd-hint">Orders placed but not finished with, valued at what they'll be invoiced at. Not tied to the period above.</p>
     <?php
       $wipMeta = [
-          'new'               => ['Not started',        '--s4', '/factory/pipeline.php'],
-          'in_production'     => ['Being made',         '--s1', '/factory/pipeline.php'],
-          'awaiting_supplier' => ['Awaiting supplier',  '--s7', '/factory/pipeline.php'],
-          'ready'             => ['Ready to dispatch',  '--s3', '/master-admin/dispatch.php'],
+          'new'               => ['Not started',        '--s4', '/factory/pipeline.php#col-new'],
+          'in_production'     => ['Being made',         '--s1', '/factory/pipeline.php#col-in_production'],
+          'awaiting_supplier' => ['Awaiting supplier',  '--s7', '/factory/pipeline.php#col-awaiting_supplier'],
+          'ready'             => ['Ready to dispatch',  '--s3', '/factory/pipeline.php#col-ready'],
           'needs_invoicing'   => ['Dispatched, not invoiced', '--s2', '/factory/orders.php?stage=needs_invoicing'],
       ];
       $wipMaking = $wip['new'][1] + $wip['in_production'][1] + $wip['awaiting_supplier'][1] + $wip['ready'][1];

@@ -86,7 +86,7 @@ function dispatch_ready_orders(PDO $pdo, int $factory): array
  * bought-in item (John, 2026-10-12: 20/20 verticals made, Forest Wood still
  * with Home Creations, and the tray showed nothing). Listed under the Ready
  * orders so the tray shows everything that's close to going out. They can't be
- * ticked; marking the item received on Incoming orders makes them Ready.
+ * ticked; marking the item received on the Pipeline makes them Ready.
  * Each row adds `tracks` (ot_order_tracks()).
  */
 function dispatch_waiting_orders(PDO $pdo, int $factory): array
@@ -573,7 +573,7 @@ $money     = static fn ($n) => '£' . number_format((float) $n, 2);
     <h2 class="section-title" style="margin:1.6rem 0 .5rem">Waiting on suppliers</h2>
     <p class="ui-hint" style="margin:0 0 .6rem">
       Everything we make on these is done; they're waiting on a bought-in item. When it arrives, mark it
-      received on <a href="/factory/incoming-orders.php">Incoming orders</a> and the order moves up to <b>Ready to go out</b>.
+      received on the <a href="/factory/pipeline.php#col-awaiting_supplier">Pipeline</a> (<b>Received from &hellip;</b>) and the order moves up to <b>Ready to go out</b>.
     </p>
     <div class="card"><div class="table-wrap">
       <table class="table">

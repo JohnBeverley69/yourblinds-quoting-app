@@ -17,6 +17,11 @@ declare(strict_types=1);
  * bought-in part in Awaiting supplier, which lists each supplier with its own
  * Received / Retry button. Once everything is in it's one card in Ready to go.
  *
+ * This is the ONE screen with action buttons (John, 2026-10-12): Incoming
+ * orders is the workshop's view and the Dashboard and Console Orders link here
+ * (fc_pipeline_url: ?q=<order no.> opens the card, #col-<key> is the column).
+ * A white-label factory gets it too (its sidebar's "Factory pipeline").
+ *
  * Cards move only by their buttons (no dragging). Paid cards drop off after 7
  * days and stay on Orders. The money columns are the accounts side, main
  * factory only (fc_money_visible, #1063). Built on fc_orders().
@@ -396,7 +401,7 @@ $activeNav = 'factory-pipeline';
   <div class="pl-scroll">
     <div class="pl-board">
       <?php foreach ($COLS as $key => [$title, $hint, $col]): $cards = $board[$key]; ?>
-        <section class="pl-col" style="--pl-c:<?= e($col) ?>;background:rgba(<?= e(foc_rgb($col)) ?>,0.07)" aria-label="<?= e($title) ?>">
+        <section class="pl-col" id="col-<?= e($key) ?>" style="--pl-c:<?= e($col) ?>;background:rgba(<?= e(foc_rgb($col)) ?>,0.07)" aria-label="<?= e($title) ?>">
           <header><h2><?= e($title) ?></h2><span class="pl-n"><?= count($cards) ?></span></header>
           <p class="pl-hint"><?= e($hint) ?></p>
           <?php if (!$cards): ?><p class="pl-empty">Nothing here.</p><?php endif; ?>

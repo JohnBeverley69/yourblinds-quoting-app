@@ -54,6 +54,14 @@ if ($factoryIsSuper && $factoryOwnId > 0) {
 // Nav grows as factory features land; the queue is the first.
 $factoryNavItems = [
     'incoming'   => ['/factory/incoming-orders.php', 'Incoming Orders'],
+];
+// The office moves orders on in ONE place, the Pipeline (John, 2026-10-12);
+// Incoming orders only links to it. Office only: pipeline.php is
+// requireFactoryOffice(). Every factory has one, white-label included.
+if (!function_exists('factory_user_is_office') || factory_user_is_office()) {
+    $factoryNavItems['pipeline'] = ['/factory/pipeline.php', 'Pipeline'];
+}
+$factoryNavItems += [
     'floor'      => ['/factory/floor.php',           'Floor'],
     // Points at the scan LOG, not the tablet page — with WiFi scanners the log
     // is the scan surface you actually watch. The tablet page (/factory/scan.php)
