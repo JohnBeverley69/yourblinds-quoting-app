@@ -17,6 +17,9 @@ declare(strict_types=1);
  *
  * Every figure is EX VAT unless it says otherwise (cash received is money in the
  * bank, so it includes VAT). The definitions are printed at the foot of the page.
+ *
+ * No close rate or other quote figures: this is the trade portal, every order
+ * is a close (John, 2026-10-12). Everything is placed orders, invoices, payments.
  */
 
 require __DIR__ . '/../bootstrap.php';
@@ -221,30 +224,6 @@ if ($tbl('factory_ar_payments')) {
         $paidInv = $st->fetchAll(PDO::FETCH_ASSOC);
     } catch (Throwable $e) {}
 }
-
-// --- Close rate: our OWN quotes (trade accounts order straight in, so they
-//     have no quote to win or lose).
-$closeQ = static function (string $a, string $b) use ($pdo, $factory, $col): array {
-    $won = "'accepted','ordered','fitted','invoiced','paid'";
-    $excl = ($col('quotes', 'direct_order') ? ' AND COALESCE(direct_order,0) = 0' : '')
-          . ($col('quotes', 'remake_of_quote_id') ? ' AND remake_of_quote_id IS NULL' : '');
-    try {
-        $st = $pdo->prepare("SELECT SUM(status IN ($won)) AS won, SUM(status IN ($won,'declined')) AS decided, COUNT(*) AS made
-                               FROM quotes WHERE client_id = ? AND created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 DAY) $excl");
-        $st->execute([$factory, $a, $b]);
-        $r = $st->fetch(PDO::FETCH_ASSOC) ?: [];
-    } catch (Throwable $e) { $r = []; }
-    $d = (int) ($r['decided'] ?? 0);
-    return ['won' => (int) ($r['won'] ?? 0), 'decided' => $d, 'made' => (int) ($r['made'] ?? 0),
-            'rate' => $d > 0 ? (int) $r['won'] / $d * 100 : null];
-};
-$close = $closeQ($from, $to); $closeP = $closeQ($pFrom, $pTo);
-$quotesOut = ['n' => 0, 'value' => 0.0];
-try {
-    $st = $pdo->prepare("SELECT COUNT(*), COALESCE(SUM(subtotal),0) FROM quotes WHERE client_id = ? AND status = 'sent'");
-    $st->execute([$factory]);
-    [$quotesOut['n'], $quotesOut['value']] = array_map('floatval', $st->fetch(PDO::FETCH_NUM));
-} catch (Throwable $e) {}
 
 // --- Remakes raised in the period -------------------------------------------
 $remakes = ['raised' => 0, 'approved' => 0, 'declined' => 0, 'charged' => 0.0, 'reasons' => [], 'modes' => []];
@@ -683,8 +662,6 @@ $activeNav = 'factory-dashboard';
         <div class="s"><?= fd_delta($K['aov'], $P['aov']) ?> &middot; was <?= fd_gbp($P['aov'], 2) ?></div></div>
       <div class="fd-kpi"><div class="k">Blinds ordered</div><div class="v"><?= number_format($K['blinds']) ?></div>
         <div class="s"><?= fd_delta((float) $K['blinds'], (float) $P['blinds']) ?> &middot; <?= $K['blinds'] > 0 && $K['rev_costed'] > 0 ? fd_gbp(($K['rev_costed'] + $K['rev_uncosted']) / $K['blinds'], 2) . ' a blind' : '' ?></div></div>
-      <div class="fd-kpi"><div class="k">Close rate</div><div class="v"><?= fd_pct($close['rate'], 0) ?></div>
-        <div class="s"><?= fd_delta($close['rate'], $closeP['rate'], true) ?> &middot; <?= $close['won'] ?> of <?= $close['decided'] ?> own quotes won</div></div>
       <div class="fd-kpi"><div class="k">Owed to you now</div><div class="v"><?= fd_gbp($owed) ?></div>
         <div class="s"><?= $overdue > 0.004 ? '<b style="color:var(--fd-bad)">' . fd_gbp($overdue) . ' overdue</b>' : 'nothing overdue' ?> &middot; inc VAT</div></div>
       <div class="fd-kpi"><div class="k">Days to get paid</div><div class="v"><?= $K['pay_days'] === null ? '—' : number_format($K['pay_days'], 0) ?></div>
@@ -896,7 +873,7 @@ $activeNav = 'factory-dashboard';
 
   <!-- ===== Remakes, delivery, quotes ===== -->
   <section class="fd-sec">
-    <h2>Remakes, delivery and quotes</h2>
+    <h2>Remakes, delivery and credits</h2>
     <p class="fd-hint">For the period above.</p>
     <div class="fd-kpis">
       <div class="fd-kpi"><div class="k">Remakes raised</div><div class="v"><?= $remakes['raised'] ?></div>
@@ -909,8 +886,6 @@ $activeNav = 'factory-dashboard';
         <div class="s">add-ons on the blinds &middot; not costed</div></div>
       <div class="fd-kpi"><div class="k">Credit notes</div><div class="v"><?= fd_gbp($K['credited']) ?></div>
         <div class="s"><?= fd_delta($K['credited'], $P['credited'], false, false) ?></div></div>
-      <div class="fd-kpi"><div class="k">Own quotes out</div><div class="v"><?= fd_gbp($quotesOut['value']) ?></div>
-        <div class="s"><?= (int) $quotesOut['n'] ?> sent, waiting on an answer (now)</div></div>
     </div>
     <?php if ($remakes['reasons']): ?>
       <div class="fd-row" style="margin-top:1rem">
@@ -937,7 +912,6 @@ $activeNav = 'factory-dashboard';
       <dt>Sales invoiced</dt><dd>Net of every invoice raised in the period (not drafts or voided ones), less the net of credit notes issued in the period. One-off retail sales billed from the quote builder aren't factory invoices, so they aren't in here.</dd>
       <dt>Cash received</dt><dd>Payments recorded against trade accounts in the period, as they hit the bank &mdash; so inc VAT.</dd>
       <dt>Gross profit and margin</dt><dd>The same sums as The Numbers: for each blind, its trade price (after your buying discount, before the account's own markup) minus what it costs you &mdash; your cost grid for what you make, the supplier's list less your buying discount for what you buy in. Blinds we can't cost are left out of both sides, never guessed. Options aren't costed, so they aren't in it. Remakes count at what was charged against their full cost.</dd>
-      <dt>Close rate</dt><dd>Our own quotes created in the period that were won (accepted or ordered) ÷ those decided (won or declined). Trade accounts order straight in, so there's no quote of theirs to win.</dd>
       <dt>Work in progress</dt><dd>Open orders now, by stage, at the value they'll be invoiced at. "Dispatched, not invoiced" is gone out the door with no invoice yet.</dd>
       <dt>Days to get paid</dt><dd>For invoices fully paid in the period: days from the invoice date to the last payment on it. "Late" is days past the due date.</dd>
       <dt>Net profit</dt><dd>Not shown &mdash; the system doesn't hold overheads (wages, rent, vans), so anything past gross margin would be a guess.</dd>
