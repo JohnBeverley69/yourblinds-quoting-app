@@ -1843,13 +1843,12 @@ if (is_factory_client($clientId) && function_exists('factory_console_user') && f
                         <a href="/quote-builder/edit.php?id=<?= (int) $quote['id'] ?>"
                            class="btn btn-secondary">Cancel</a>
                     <?php else: ?>
+                        <?php // One button (John, 2026-10-12): "Save" and "Save and add another
+                              // blind" both saved and gave a fresh form; only the scroll
+                              // differed. It stays on the form, ready for the next blind. ?>
                         <button type="submit" class="btn btn-primary item-submit"
-                                name="next_action" value="stop" disabled>
-                            Save
-                        </button>
-                        <button type="submit" class="btn btn-secondary item-submit"
                                 name="next_action" value="more" disabled>
-                            Save and add another blind
+                            Save blind
                         </button>
                     <?php endif; ?>
                 </div>

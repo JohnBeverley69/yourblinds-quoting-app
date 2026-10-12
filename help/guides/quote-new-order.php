@@ -416,7 +416,7 @@ return [
                             . $f('Width (mm) ' . $rq, '<span class="a-type" style="--d:10.4s;--ts:3;--tt:.3s">900</span>')
                             . $f('Drop (mm) ' . $rq, '<span class="a-type" style="--d:11.2s;--ts:4;--tt:.4s">1200</span>') . '</div>
                         <div class="prv ok a-pop" style="--d:13.5s"><b>&pound;41.65</b> per blind</div>
-                        <div class="fact"><span class="btnp a-press" style="--d:16.5s">Save</span><span class="btns">Save and add another blind</span></div>
+                        <div class="fact"><span class="btnp a-press" style="--d:16.5s">Save blind</span></div>
                       </div></div>
                     <div class="pane"><div class="sech">Blinds</div><div class="bl">' . $head . $row1 . '<div class="a-drop" style="--d:17.5s">' . $row2 . '</div></div></div>
                   </div>
@@ -598,7 +598,7 @@ return [
              least one blind on it. <b>View PDF</b> and <b>Download PDF</b> don&rsquo;t appear until the order is placed.</p>
           <ul class="steps">
             <li><b>Adding blinds</b> is exactly as on a quote &mdash; Product, System, Fabric, Room name, Width, Drop, options, the live price, then
-                <b>Save</b> or <b>Save and add another blind</b>. (The guide <b>&ldquo;Building a quote&rdquo;</b> covers it in detail.)</li>
+                <b>Save blind</b>. (The guide <b>&ldquo;Building a quote&rdquo;</b> covers it in detail.)</li>
             <li><b>Your buying price.</b> Every price is what you pay us: your trade discount is already taken off, and <b>no markup and no retail
                 discount</b> are added &mdash; on the live price and when the blind is saved. If your login can see costs, the live price spells it out
                 &mdash; base before the trade discount, the trade discount, then your price, e.g. <em>&ldquo;base &pound;70.00 &middot; trade discount
@@ -678,7 +678,7 @@ return [
             ['6', 'Sold for',                  'Sold for is optional too. It is what your customer is paying you, and it is only for your own figures. We never see it. If you are VAT registered, the inc VAT tick starts on. With a price, the order counts in your Dashboard\'s sales and profit. Leave it blank, and it is kept out. Then press Start order, and a green bar says the order has started.', 6],
             ['7', 'The same order twice',      'It is easy to key the same order in twice, say once in the office, and once by the boss. So if the reference is already on one of your jobs, you are shown them first: the number, where it has got to, and the date it was started. If it really is a new order, press Start order anyway. If not, press Cancel. Change the reference, and it checks again.', 7],
             ['8', 'The order screen',          'Now you are on the order screen. It looks like the quote builder, but it is shaped for an order. The dark bar at the top says Order, with its number, and its status: draft. Under Order actions there is just one button, Place order, and it only appears once there is a blind on it. There are no PDFs until the order is placed.', 8],
-            ['9', 'Adding the blinds',         'Adding blinds works exactly as it does on a quote. Choose the product, then the system and the fabric. Name the room, type the width and the drop, and pick any options. The live price shows before you save. Press Save, or Save and add another blind, and each one is added to the Blinds list.', 9],
+            ['9', 'Adding the blinds',         'Adding blinds works exactly as it does on a quote. Choose the product, then the system and the fabric. Name the room, type the width and the drop, and pick any options. The live price shows before you save. Press Save blind, and each one is added to the Blinds list.', 9],
             ['10', 'Your buying price',        'The prices here are your buying prices. Your trade discount is already taken off, and nothing is added on: no markup, and no retail discount. So the figure you see is what you pay us. The total reads Order total, your price, ex VAT. There is no VAT line on the order itself.', 10],
             ['11', 'No quoting extras',        'Because there is no customer, the quoting extras are gone. There is no W T charge, no override price, and no adjusting the price of one blind. There is no deposit, and no payments panel. There is no Send to customer, no signing, and no customer accepted or declined. Just the blinds, and the order.', 11],
             ['12', 'Order details',            'Further down is a panel called Order details. Here you can change the customer name, the order reference and the notes, and add an additional reference. Open Customer contact and fitting address to add their phone, email and address. Fill these in before you place the order, because the fitting appointment it books picks them up. Then press Save details.', 12],

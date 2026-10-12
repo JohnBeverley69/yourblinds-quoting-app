@@ -331,11 +331,9 @@ try {
     if ($clientRef !== '') {
         $_SESSION['qb_client_refs'] = array_slice(array_merge($_SESSION['qb_client_refs'] ?? [], [$clientRef]), -200);
     }
-    // The form has two submit buttons:
-    //   "Add blind"          → next_action=more  → land back on Add-line
-    //   "Add blind & finish" → next_action=stop  → land at top of editor
-    // so the trade user can either keep adding or pop up to the items
-    // table for a final review.
+    // One button now, "Save blind" (next_action=more → land back on the
+    // Add-line form, ready for the next blind). 'stop' (land at the top of the
+    // editor) is still honoured for anything that posts it.
     $nextAction = (string) ($_POST['next_action'] ?? 'more');
     $anchor     = $nextAction === 'stop' ? '' : '#add-line';
     qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId . $anchor, 'success', $msg);

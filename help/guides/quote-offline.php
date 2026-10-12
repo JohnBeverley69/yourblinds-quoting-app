@@ -393,7 +393,7 @@ return [
             <li><b>Add blinds as normal.</b> Product, system, band and fabric all work from this device&rsquo;s copy. The price is worked out <b>on the
                 tablet</b> and marked <em>&ldquo;offline price &mdash; checked when sent&rdquo;</em>. The first price after the signal drops can take a few
                 seconds &mdash; <em>&ldquo;Getting prices ready on this device&hellip;&rdquo;</em> &mdash; after that every price is instant.</li>
-            <li><b>Save</b> (or <b>Save and add another blind</b>): <em>&ldquo;&#10003; Kept on this device &mdash; it&rsquo;ll be added when the signal is back
+            <li><b>Save blind</b>: <em>&ldquo;&#10003; Kept on this device &mdash; it&rsquo;ll be added when the signal is back
                 (the server checks the price then).&rdquo;</em> The blind goes into a yellow list above the form, <em>&ldquo;Kept on this device, not on the quote
                 yet (1)&rdquo;</em>, with its offline price. The form keeps the product, fabric and options and clears the room, sizes and notes, ready for the
                 next window. Each kept blind has <b>Put back in the form</b> (to change it) and <b>Delete</b>.</li>
