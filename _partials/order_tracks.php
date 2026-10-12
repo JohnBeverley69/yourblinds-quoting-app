@@ -111,7 +111,11 @@ function ot_order_tracks(PDO $pdo, array $quoteIds, int $factoryId): array
             $f = $floor[$iid] ?? null;
             if ($f !== null && $f['total'] > 0) {
                 $o['make']['released'] = true;
-                $o['make']['made'] += min($qty, $f['done']);
+                // Normally one floor job per unit (total = qty). Orders released
+                // before per-unit jobs have ONE job for the whole line, so a
+                // finished line counts in full — BEV-2026-0002 read "1/3 made"
+                // while its line said Made.
+                $o['make']['made'] += $f['done'] >= $f['total'] ? $qty : min($qty, $f['done']);
                 $status = $f['done'] >= $f['total'] ? 'Made'
                         : 'In production (' . $f['done'] . '/' . $f['total'] . ')';
             } else {
