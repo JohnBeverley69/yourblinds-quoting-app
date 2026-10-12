@@ -293,7 +293,8 @@ if ($isFactoryConsole) {
         [
             'name'  => 'Work',
             'items' => [
-                'factory-dashboard' => ['/factory/dashboard.php', 'Dashboard', true],
+                // John's money page — super-admin only; the office's home is the Pipeline.
+                'factory-dashboard' => ['/factory/dashboard.php', 'Dashboard', $isSuperAdmin],
                 // Every open order as a card, New → Paid (factory/pipeline.php).
                 'factory-pipeline'  => ['/factory/pipeline.php',  'Pipeline',  true],
                 'factory-orders'    => ['/factory/orders.php',    'Orders',    true],
@@ -326,8 +327,7 @@ if ($isFactoryConsole) {
                 'qbo-customers'  => ['/master-admin/quickbooks-customers.php', 'QuickBooks customers', !$isSuperAdmin && $isFactoryAccounts],
                 'statement-run'  => ['/master-admin/statement-run.php',  'Statements',     $isFactoryAccounts],
                 'commissions'    => ['/master-admin/commissions.php',    'Commissions',    $isFactoryAccounts],
-                // Real manufacturing cost → super-admin only (factory/profit.php requires it).
-                'profit'         => ['/factory/profit.php',              'The Numbers',    $isSuperAdmin],
+                // "The Numbers" (factory/profit.php) is folded into the Dashboard, which links to it.
             ],
         ],
         [
@@ -424,7 +424,7 @@ window.addEventListener('pageshow', function (e) {
 
     <aside class="app-sidebar" aria-label="Primary navigation">
         <div class="app-sidebar-brand">
-            <a href="<?= $isFactoryConsole ? '/factory/dashboard.php' : '/calendar/index.php' ?>" class="app-brand-mark">Your<span class="accent">Blinds</span></a>
+            <a href="<?= $isFactoryConsole ? factory_console_home() : '/calendar/index.php' ?>" class="app-brand-mark">Your<span class="accent">Blinds</span></a>
             <span class="app-brand-tag"><?= e($dashTag) ?></span>
         </div>
         <div class="app-sidebar-user">

@@ -607,6 +607,16 @@ function factory_console_user(): bool
 }
 
 /**
+ * Where a Factory Console user's home is. The console Dashboard is John's
+ * money page (super-admin only, John 2026-10-12), so the office lands on the
+ * Pipeline — the board they work from — and a super-admin on the Dashboard.
+ */
+function factory_console_home(): string
+{
+    return is_super_admin() ? '/factory/dashboard.php' : '/factory/pipeline.php';
+}
+
+/**
  * The retail-shaped screens a Factory Console user is sent away from, and where
  * they land: path => console path. The four callers of
  * factory_console_redirect() read it, and so does help/index.php — a guide for
@@ -619,7 +629,7 @@ function factory_console_user(): bool
 function factory_console_screens(): array
 {
     return [
-        '/dashboard/index.php' => '/factory/dashboard.php',
+        '/dashboard/index.php' => factory_console_home(),
         '/calendar/index.php'  => '/factory/calendar.php',
         '/orders/index.php'    => '/factory/orders.php',
         '/orders/pipeline.php' => '/factory/orders.php',
@@ -843,7 +853,7 @@ function redirect_after_login(): void
 
     // Factory office staff on the factory account land on the Factory Console home.
     if ($user && factory_console_user()) {
-        header('Location: /factory/dashboard.php');
+        header('Location: ' . factory_console_home());
         exit;
     }
 
