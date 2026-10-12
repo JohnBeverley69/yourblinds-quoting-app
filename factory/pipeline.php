@@ -51,6 +51,14 @@ if ($money) {
     $COLS['dispatched'] = ['Dispatched', 'Gone out in the last 7 days', '#0d7a67'];
 }
 
+// Each column's colour is the factory's own choice (Factory → Settings →
+// Pipeline colours, _partials/factory_order_colours.php).
+require_once __DIR__ . '/../_partials/factory_order_colours.php';
+foreach (fpc_colours($pdo, current_factory_id()) as $ck => $cv) {
+    $k = substr($ck, 3);
+    if (isset($COLS[$k])) $COLS[$k][2] = $cv['color'];
+}
+
 $weekAgo = date('Y-m-d', strtotime('-7 days'));
 $colFor = static function (array $r) use ($money, $weekAgo): ?string {
     if ($r['stage'] !== 'dispatched') return $r['stage'];
@@ -299,13 +307,14 @@ $activeNav = 'factory-pipeline';
     <div class="pl-tools">
       <button type="button" class="btn btn-sm" onclick="document.querySelectorAll('.pl-card').forEach(function(d){d.open=true})">Open all</button>
       <button type="button" class="btn btn-sm" onclick="document.querySelectorAll('.pl-card').forEach(function(d){d.open=false})">Close all</button>
+      <a class="btn btn-sm" href="/factory/settings.php" title="Change the column colours">Colours</a>
     </div>
   </div>
 
   <div class="pl-scroll">
     <div class="pl-board">
       <?php foreach ($COLS as $key => [$title, $hint, $col]): $cards = $board[$key]; ?>
-        <section class="pl-col" style="--pl-c:<?= e($col) ?>" aria-label="<?= e($title) ?>">
+        <section class="pl-col" style="--pl-c:<?= e($col) ?>;background:rgba(<?= e(foc_rgb($col)) ?>,0.07)" aria-label="<?= e($title) ?>">
           <header><h2><?= e($title) ?></h2><span class="pl-n"><?= count($cards) ?></span></header>
           <p class="pl-hint"><?= e($hint) ?></p>
           <?php if (!$cards): ?><p class="pl-empty">Nothing here.</p><?php endif; ?>

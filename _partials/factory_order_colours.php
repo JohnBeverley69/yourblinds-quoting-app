@@ -63,11 +63,59 @@ function foc_state_for_order(?string $fulfilmentStage, ?string $quoteStatus): st
     return 'new';   // confirmed / not yet started
 }
 
-/** Persist a colour map (only valid #rrggbb for known states are kept). */
-function foc_save(PDO $pdo, int $clientId, array $colours): void
+/**
+ * The Factory Pipeline's columns (factory/pipeline.php), each with its own
+ * editable colour: the column's top bar, count and a faint wash. Stored in the
+ * same per-factory JSON as the order colours, under "pl_" keys, so the two
+ * sets save and reset independently.
+ */
+function fpc_default_columns(): array
 {
-    $clean = [];
-    foreach (foc_default_states() as $k => $_meta) {
+    return [
+        'pl_new'               => ['label' => 'New',                     'color' => '#b91c1c'],
+        'pl_confirmed'         => ['label' => 'Received',                'color' => '#5b6b7f'],
+        'pl_in_production'     => ['label' => 'In production',           'color' => '#b5730f'],
+        'pl_awaiting_supplier' => ['label' => 'Awaiting supplier',       'color' => '#7c3aed'],
+        'pl_ready'             => ['label' => 'Ready to go',             'color' => '#245ea3'],
+        'pl_to_invoice'        => ['label' => 'Dispatched · to invoice', 'color' => '#0d7a67'],
+        'pl_to_pay'            => ['label' => 'Awaiting payment',        'color' => '#1d4f8c'],
+        'pl_paid'              => ['label' => 'Paid',                    'color' => '#0d7a67'],
+        'pl_dispatched'        => ['label' => 'Dispatched (white-label factories)', 'color' => '#0d7a67'],
+    ];
+}
+
+/** The factory's pipeline colours → [key => [label, color]] (stored over defaults). */
+function fpc_colours(PDO $pdo, int $clientId): array
+{
+    $stored = foc_stored($pdo, $clientId);
+    $out = [];
+    foreach (fpc_default_columns() as $k => $meta) {
+        $c = (isset($stored[$k]) && foc_is_hex((string) $stored[$k])) ? strtolower((string) $stored[$k]) : $meta['color'];
+        $out[$k] = ['label' => $meta['label'], 'color' => $c];
+    }
+    return $out;
+}
+
+/** The raw stored colour map ({} when nothing is stored or not migrated). */
+function foc_stored(PDO $pdo, int $clientId): array
+{
+    try {
+        $s = $pdo->prepare('SELECT factory_order_colours FROM client_settings WHERE client_id = ? LIMIT 1');
+        $s->execute([$clientId]);
+        $j = (string) ($s->fetchColumn() ?: '');
+        $d = $j !== '' ? json_decode($j, true) : null;
+        return is_array($d) ? $d : [];
+    } catch (Throwable $e) { return []; }
+}
+
+/** Persist a colour map (only valid #rrggbb for known states are kept). */
+function foc_save(PDO $pdo, int $clientId, array $colours, ?array $set = null): void
+{
+    // $set = which keys this save owns (default: the order states). The other
+    // set's stored colours are kept — the Pipeline colours share this JSON.
+    $set   = $set ?? foc_default_states();
+    $clean = array_diff_key(foc_stored($pdo, $clientId), $set);
+    foreach ($set as $k => $_meta) {
         if (isset($colours[$k]) && foc_is_hex((string) $colours[$k])) {
             $clean[$k] = strtolower((string) $colours[$k]);
         }
@@ -80,11 +128,14 @@ function foc_save(PDO $pdo, int $clientId, array $colours): void
 }
 
 /** Reset to built-in defaults (clears the stored overrides). */
-function foc_reset(PDO $pdo, int $clientId): void
+function foc_reset(PDO $pdo, int $clientId, ?array $set = null): void
 {
+    // Only this set's keys go back to default; the other set is kept.
+    $set  = $set ?? foc_default_states();
+    $keep = array_diff_key(foc_stored($pdo, $clientId), $set);
     try {
-        $pdo->prepare('UPDATE client_settings SET factory_order_colours = NULL WHERE client_id = ?')
-            ->execute([$clientId]);
+        $pdo->prepare('UPDATE client_settings SET factory_order_colours = ? WHERE client_id = ?')
+            ->execute([$keep ? json_encode($keep) : null, $clientId]);
     } catch (Throwable $e) { /* nothing stored / column absent — already default */ }
 }
 

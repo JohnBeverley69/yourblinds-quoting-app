@@ -34,6 +34,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (Throwable $e) {
             $_SESSION['flash_success'] = 'Could not save — run setup/migrations/migrate_floor_sees_lanes.php first.';
         }
+    } elseif (isset($_POST['pipeline_colours_form'])) {
+        // Factory Pipeline column colours (same store, "pl_" keys).
+        if (isset($_POST['reset'])) {
+            foc_reset($pdo, $MASTER, fpc_default_columns());
+            $_SESSION['flash_success'] = 'Pipeline colours reset to the defaults.';
+        } else {
+            foc_save($pdo, $MASTER, (array) ($_POST['colour'] ?? []), fpc_default_columns());
+            $_SESSION['flash_success'] = 'Pipeline colours saved.';
+        }
     } elseif (isset($_POST['reset'])) {
         foc_reset($pdo, $MASTER);
         $_SESSION['flash_success'] = 'Order colours reset to the defaults.';
@@ -50,6 +59,7 @@ $flashOk = (string) ($_SESSION['flash_success'] ?? '');
 unset($_SESSION['flash_success']);
 
 $colours = foc_colours($pdo, $MASTER);
+$plColours = fpc_colours($pdo, $MASTER);
 
 $floorSeesLanes = null;   // null = column not migrated yet
 try {
@@ -127,6 +137,33 @@ require __DIR__ . '/../_partials/factory_head.php';
             <button type="submit" class="fs-btn primary">Save colours</button>
             <button type="submit" name="reset" value="1" class="fs-btn secondary"
                     onclick="return confirm('Reset all order colours to the defaults?');">Reset to defaults</button>
+        </div>
+    </form>
+</div>
+
+<div class="fs-card" style="margin-top:1rem">
+    <h2>Pipeline colours</h2>
+    <p class="fs-note">The colour of each column on the <strong>Pipeline</strong> board: its top bar, its count and a faint tint behind the column. Pick any colour you like for each one.</p>
+
+    <form method="post" action="/factory/settings.php">
+        <?= csrf_field() ?>
+        <input type="hidden" name="pipeline_colours_form" value="1">
+        <?php foreach ($plColours as $key => $c): $hex = $c['color']; ?>
+            <div class="foc-row" style="<?= e('border-top:4px solid ' . $hex . ';background:rgba(' . foc_rgb($hex) . ',0.10);') ?>">
+                <div class="foc-when">
+                    <div class="foc-label"><?= e($c['label']) ?></div>
+                </div>
+                <input type="color" name="colour[<?= e($key) ?>]" value="<?= e($hex) ?>"
+                       oninput="var s=this.closest('.foc-row'); s.style.borderTop='4px solid '+this.value; var m=this.value.match(/#(..)(..)(..)/); if(m){s.style.background='rgba('+parseInt(m[1],16)+','+parseInt(m[2],16)+','+parseInt(m[3],16)+',0.10)';} this.nextElementSibling.textContent=this.value;"
+                       aria-label="Colour for the <?= e($c['label']) ?> column">
+                <span class="foc-hex"><?= e($hex) ?></span>
+            </div>
+        <?php endforeach; ?>
+
+        <div class="fs-actions">
+            <button type="submit" class="fs-btn primary">Save pipeline colours</button>
+            <button type="submit" name="reset" value="1" class="fs-btn secondary"
+                    onclick="return confirm('Reset the pipeline colours to the defaults?');">Reset to defaults</button>
         </div>
     </form>
 </div>
