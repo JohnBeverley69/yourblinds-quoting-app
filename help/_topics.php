@@ -88,8 +88,8 @@ return [
       <li><strong>Width</strong>, <strong>Drop</strong>, <strong>Quantity</strong>, an optional internal
       <strong>Notes</strong> line, then any <strong>Options</strong> that product offers.</li></ul>
       <p>The price box underneath reads <em>&ldquo;Pick a product, fabric and dimensions to see the price&rdquo;</em>
-      until it has enough to work with. Then press <strong>Save</strong>, or <strong>Save and add another
-      blind</strong> to stay on the form for the next window.</p>
+      until it has enough to work with. Then press <strong>Save blind</strong>; the form stays ready for
+      the next window.</p>
       <p>Saved blinds are listed under <strong>Blinds</strong>. Each row has <strong>Edit</strong>,
       <strong>Dup</strong> (copies the fabric, system and options, ready for you to change the size &mdash; the
       quick way to do six similar windows) and a <strong>&times;</strong> to remove it.</p>'],

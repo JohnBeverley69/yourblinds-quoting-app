@@ -12,8 +12,8 @@ declare(strict_types=1);
  * (/quote-builder/edit.php + add_item.php) up to the point the quote is built:
  * the sticky bar, Quote actions, the Add blind form (Product / System / Band,
  * Fabric search, Room name, Measurement, Width / Drop / Quantity / Notes,
- * Adjust price for this blind, the cost eye (customer view), Options, the live price box, Save / Save and
- * add another blind), the Blinds list and its totals rows, the unsaved-blind
+ * Adjust price for this blind, the cost eye (customer view), Options, the live price box, the single
+ * Save blind button, the Blinds list and its totals rows, the unsaved-blind
  * restore bar, and the locked-quote rule. Sending, accepting, ordering,
  * invoicing and payments each have their own guide. Every label, button and
  * message is copied from those files.
@@ -54,7 +54,7 @@ $eyeTap = static fn (string $r, string $p1, string $p2 = ''): string =>
     . ($p2 !== '' ? '<span class="eyew a-press" style="--d:' . $p2 . 's">' . $eye . '</span>' : $eye) . '</span></span>';
 
 $saveBtns = static fn (string $cls = 'off', string $extra = ''): string =>
-    '<div class="fact"><span class="btnp ' . $cls . '" ' . $extra . '>Save</span><span class="btns ' . $cls . '">Save and add another blind</span></div>';
+    '<div class="fact"><span class="btnp ' . $cls . '" ' . $extra . '>Save blind</span></div>';
 
 return [
         'aud'     => 'admin',
@@ -453,7 +453,7 @@ return [
                 <div class="sc" data-scene="14" data-len="25">
                   <div class="sct a-fade" style="--d:.2s">Save, and the blinds list</div>
                   <div class="bnr a-pop" style="--d:2.2s">Blind 1 added (&pound;77.00).</div>
-                  <div class="fact" style="margin:0 0 .5rem"><span class="btnp a-press" style="--d:0.5s">Save</span><span class="btns a-ring" style="--d:12.3s">Save and add another blind</span></div>
+                  <div class="fact" style="margin:0 0 .5rem"><span class="btnp a-press" style="--d:0.5s">Save blind</span></div>
                   <div class="sech">Blinds (1)</div>
                   <div class="bl" style="position:relative">' . $head . '<div class="a-drop" style="--d:2.7s">' . $row() . '</div></div>
                   <div class="chips">
@@ -553,7 +553,7 @@ return [
              trade line reads e.g. <em>&ldquo;base &pound;23.56 &middot; trade discount 15% &middot; &pound;20.03 per blind&rdquo;</em>, the buying price last) &mdash; but <b>those start hidden every time the page opens</b>, because quotes are often built
              with the customer looking at the screen. A small, unlabelled <b>eye</b> icon at the end of the line shows
              them; tap it again to hide them. It is never remembered, so the next page starts hidden again.
-             <b>Both save buttons stay greyed out until the box is green</b> &mdash; a blind with no price cannot go on a quote.</p>
+             <b>The Save blind button stays greyed out until the box is green</b> &mdash; a blind with no price cannot go on a quote.</p>
 
           <div class="oops"><b>&ldquo;No price table for Roller Blind band A on system &lsquo;Grip Fit&rsquo;.&rdquo;</b> The slip everybody makes once. The
              <b>Band</b> box only <b>filters the fabric list</b> &mdash; it does not promise a price. The price lives on the <b>combination</b> of product +
@@ -572,7 +572,7 @@ return [
              size &mdash; the roller <b>Fascia Options</b> and <b>Fascia Sizing</b> &mdash; sit between the top row and <b>Width</b>. The option grid never
              shows a price; the money shows in the live price line and on the saved blind.</p>
 
-          <p><b>Save</b>, or <b>Save and add another blind</b> to keep the form going for the next window. You get <em>&ldquo;Blind 1 added
+          <p><b>Save blind</b>, and the form stays ready for the next window. You get <em>&ldquo;Blind 1 added
              (&pound;77.00).&rdquo;</em> Each blind lands in <b>Blinds (N)</b> &mdash; columns <b>#</b>, <b>Description</b>, <b>Size</b>, <b>Qty</b>,
              <b>Unit</b>, <b>Total</b>: the <b>room</b> in bold, the product and system, <em>Band A &mdash; Louvolite &mdash; Sunset / Ivory</em>, the options
              folded under <b>&#9656; 2 options</b> (<b>Show all options</b> opens them all), and your note in italics. Then <b>Edit</b>, <b>Dup</b>
@@ -611,11 +611,11 @@ return [
             ['7', 'Finding the fabric',              'Click the fabric box, and type part of a name, a colour, or a code. A panel drops down. Each row shows the name and colour, with the supplier and code underneath, so you can be sure it is the right one. Click it. If nothing matches, it says so: no matching fabrics. Click the box without typing, to see the ones used recently.', 7],
             ['8', 'Name the room',                   'Next, the Room name. Click the box, or the little arrow, and a list of rooms opens, like Living Room, Kitchen, or Landing. Pick one, or type your own. The room is only a label, but it matters. It is what the fitter and the workshop read on the ticket, so always fill it in. Blind three helps nobody, on a landing with four windows.', 8],
             ['9', 'The sizes',                       'Now the sizes. Measurement sets the unit for the whole quote, and you can change it at any time. You can also type a unit on the end, like one hundred and fifty c m, and it is read for you. Quantity is how many identical blinds. And Notes is for you: an internal note for your own paperwork. It never shows on the customer\'s quote.', 9],
-            ['10', 'The live price',                 'Under the form is the live price box, and it does the checking. Grey means it is still waiting, and it tells you what for. Still need: drop. Green means it has a price. Seventy seven pounds per blind. The save buttons stay greyed out until it is green. If you can see costs, they start hidden, in case the customer is watching. Tap the small eye at the end of the line to show them, and tap it again to hide them.', 10],
+            ['10', 'The live price',                 'Under the form is the live price box, and it does the checking. Grey means it is still waiting, and it tells you what for. Still need: drop. Green means it has a price. Seventy seven pounds per blind. The Save blind button stays greyed out until it is green. If you can see costs, they start hidden, in case the customer is watching. Tap the small eye at the end of the line to show them, and tap it again to hide them.', 10],
             ['11', 'The slip everybody makes once',  'Here is the slip everyone makes once. The box goes red: no price table for Roller Blind band A, on system Grip Fit. The band box only narrows the fabric list. It never promises a price. The price belongs to the product, the system, and the band, together. So change the system to one that is priced for that band, and pick the fabric again.', 11],
             ['12', 'No price for this size',          'You may also see: no price for this size. It is outside the price table. Before you blame the price list, check the unit. One hundred and fifty, typed in a millimetre quote, is a fifteen centimetre blind. A size between two rows of the table is fine. It simply rounds up to the next one. Only a size past the end of the table stops it.', 12],
             ['13', 'Options',                        'Then the options. They look different on every product, because each product has its own. Some are a dropdown, some are tick boxes where you can pick more than one, and some are just a number to type. Some only appear once you have picked the fabric or the system. And a few, like the roller fascia, sit above the size, because you need them first.', 13],
-            ['14', 'Save, and the blinds list',      'When the price is green, click Save. The blind lands in the list on the right, with the room in bold, then the product, the fabric, and its options folded underneath. Or click Save and add another blind, to keep going. Beside each blind are Edit, and Dup, which copies it, so you only change the size. The cross removes it, after asking.', 14],
+            ['14', 'Save, and the blinds list',      'When the price is green, click Save blind. The blind lands in the list on the right, with the room in bold, then the product, the fabric, and its options folded underneath. The form stays ready for the next blind. Beside each blind are Edit, and Dup, which copies it, so you only change the size. The cross removes it, after asking.', 14],
             ['15', 'One blind, or the whole job',    'There are two ways to change a price. For one blind, tap the eye first, and Adjust price for this blind appears, with its own discount and markup. Leave them blank to use the product\'s rates. For the whole job, the Override price row, under the totals, takes the price you agreed, before VAT. The difference shows as a discount, so the sums still add up.', 15],
             ['16', 'Two safety nets',                'Two safety nets. If the page reloads, or the tablet dies, halfway through a blind, a yellow bar offers to put it back. Nothing is lost. And once a quote has been sent, it is locked, so it cannot change behind the customer\'s back. To change it, use Reopen as draft, make your change, and then send it again.', 16],
         ],
