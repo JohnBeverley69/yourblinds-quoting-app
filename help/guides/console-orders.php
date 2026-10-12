@@ -55,7 +55,7 @@ $S = [
     ['13', 'The filter chips', 'Across the top are the filter chips, in groups, each with a count. Open is everything not yet both dispatched and paid, and that is where the list starts. To make has New, Received, In production, Awaiting supplier and Ready to go. To bill has Needs invoicing, Awaiting payment and Overdue. Finished has Done. Not placed has Quotes. And All shows every order.', 13],
     ['14', 'Finding an order', 'To find one order, use the account picker and the search box. Choose an account, and you see only their orders. Or type in the search box. An order number, the account, their reference, the name for the labels, or an invoice number all work. Then click Search.', 14],
     ['15', 'Making and Money', 'Each row shows the order number, the account, their reference, the date, how many of our blinds are on it, and its value. Then Making is where the blinds are, and Money is where the bill is. Under the money pill is each invoice number, what is still owed, and when it is due. A purple REMAKE badge marks a remake of an earlier order.', 15],
-    ['16', 'What to do next', 'The Next column tells you the one thing to do next. While it is being made, that is Mark received, Start production, Being made, Order from a supplier, or Waiting on a supplier, then Dispatch. After that comes the money. Raise invoice, Wait for payment, or Wait for the rest. If a payment is late, Chase payment comes first, in red. Done means dispatched and paid. Click it to go to the right screen.', 16],
+    ['16', 'What to do next', 'The Next column tells you the one thing to do next. While it is being made, that is Accept, Being made, Order from a supplier, or Waiting on a supplier, then Dispatch. After that comes the money. Raise invoice, Wait for payment, or Wait for the rest. If a payment is late, Chase payment comes first, in red. Done means dispatched and paid. Click it to go to the right screen.', 16],
     ['17', 'Opening an order', 'Click the order number to open it. An order an account placed opens in the factory\'s Edit order screen. Our own orders, and quotes not placed yet, open in the quote builder. In the Next column of every placed order is a Remake link. That is the quickest way to raise a remake, and the Remakes guide explains the rest.', 17],
 ];
 $len = static fn (int $n): string => (string) round(mb_strlen($S[$n - 1][2]) / 13.6, 1);
@@ -134,7 +134,7 @@ $tile = static fn (string $label, string $val, string $sub, string $col = 'var(-
 $ROWS = [
     // number, sub (label name), account, their ref, date, blinds, value, making, money,
     // invoices [[number, owed line]], next [label, urgent, link], remake?
-    ['ABC-2026-0041',    'Mrs Patel', 'ABC Blinds',       'PO 4471', '8 Oct 2026',  6, '&pound;412.80', 'new',           'not_invoiced',    [], ['Mark received', false, true], false],
+    ['ABC-2026-0041',    'Mrs Patel', 'ABC Blinds',       'PO 4471', '8 Oct 2026',  6, '&pound;412.80', 'new',           'not_invoiced',    [], ['Accept', false, true], false],
     ['HUG-2026-0012',    '',          'Hughes Interiors', 'Kitchen', '7 Oct 2026',  2, '&pound;101.15', 'in_production', 'not_invoiced',    [], ['Being made', false, false], false],
     ['ABC-2026-0038-R1', '',          'ABC Blinds',       'PO 4402', '6 Oct 2026',  1, '&pound;0.00',   'ready',         'not_invoiced',    [], ['Dispatch', false, true], true],
     ['CST-2026-0007',    'The Lodge', 'Coastal Shutters', 'CS-118',  '2 Oct 2026',  4, '&pound;286.40', 'dispatched',    'awaiting',        [['INV-BEV-2026-0007', '&pound;343.68 owed, due 1 Nov']], ['Wait for payment', false, true], false],
@@ -642,8 +642,7 @@ return [
                   <div class="otab" style="margin:.4rem 0 .7rem">' . $thead . $row($ROWS[0]) . $row($ROWS[6]) . $row($ROWS[5]) . $row($ROWS[7]) . '</div>
                   <div class="two">
                     <div class="card a-rise" style="' . $d(16, 'While it is being made') . '"><h4>While it&rsquo;s being made</h4>
-                      <div class="nseq">' . $next('Mark received', false, true, 'a-pop', $d(16, 'Mark received,')) . '<i>&rarr;</i>'
-                        . $next('Start production', false, true, 'a-pop', $d(16, 'Start production,')) . '<i>&rarr;</i>'
+                      <div class="nseq">' . $next('Accept', false, true, 'a-pop', $d(16, 'Accept,')) . '<i>&rarr;</i>'
                         . $next('Being made', false, false, 'a-pop', $d(16, 'Being made,')) . '<i>&rarr;</i>'
                         . $next('Order from Hunter Douglas', true, true, 'a-pop', $d(16, 'Order from a supplier')) . '<i>or</i>'
                         . $next('Waiting on Hunter Douglas', false, true, 'a-pop', $d(16, 'Waiting on a supplier')) . '<i>&rarr;</i>'
@@ -743,7 +742,7 @@ return [
                 <b>Invoiced &middot; awaiting payment</b>, <b>Part paid</b>, <b>Overdue</b>, <b>Paid</b>. Under it, each invoice number
                 (opens the PDF) with what&rsquo;s owed and when it&rsquo;s due &mdash; e.g. <em>INV-BEV-2026-0007 &middot; &pound;343.68
                 owed, due 1 Nov</em>.</li>
-            <li><b>Next</b> &mdash; the one thing to do next: <b>Mark received</b>, <b>Start production</b>, <b>Being made</b>, <b>Order from &lt;supplier&gt;</b> (red) or <b>Waiting on &lt;supplier&gt;</b> once the floor is done,
+            <li><b>Next</b> &mdash; the one thing to do next: <b>Accept</b>, <b>Being made</b>, <b>Order from &lt;supplier&gt;</b> (red) or <b>Waiting on &lt;supplier&gt;</b> once the floor is done,
                 <b>Dispatch</b>, then <b>Raise invoice</b>, <b>Wait for payment</b> or <b>Wait for the rest</b>, and <b>Done</b> once
                 dispatched and paid. A late payment shows <b>Chase payment</b> first. <b>Raise invoice</b> and <b>Chase payment</b> are red.
                 A quote not placed yet shows <b>Place the order</b>. Click it to go to the right screen.</li>
