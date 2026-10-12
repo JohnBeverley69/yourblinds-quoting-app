@@ -48,7 +48,9 @@ function fx_poll_banner(PDO $pdo, string $what, int $factoryId): void
             .then(function (r) { return r.ok ? r.json() : null; })
             .then(function (j) {
                 if (!j || !j.v || j.v === 'x' || j.v === mine) return;
-                if (document.hidden || (Date.now() - lastTouch) > IDLE_MS) { location.reload(); return; }
+                // Never reload under an open Process order summary (_partials/process_order.php).
+                var busy = !!document.querySelector('.po-back:not([hidden])');
+                if (!busy && (document.hidden || (Date.now() - lastTouch) > IDLE_MS)) { location.reload(); return; }
                 var a = (mine.match(/^i(\d+)/) || [])[1], b = (j.v.match(/^i(\d+)/) || [])[1];
                 var n = (a !== undefined && b !== undefined) ? (parseInt(b, 10) - parseInt(a, 10)) : 0;
                 text.textContent = n > 0 ? (n === 1 ? '1 new order has come in.' : n + ' new orders have come in.') : 'Orders have changed.';

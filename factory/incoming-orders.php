@@ -11,10 +11,12 @@ declare(strict_types=1);
  *
  * Each order has two tracks (_partials/order_tracks.php): lines we MAKE, which
  * go to the floor, and lines we BUY IN from a supplier, which are ordered then
- * received. The tabs are the next jobs (New to accept · To make · To order ·
- * Awaiting supplier · Ready to dispatch), and an order sits in every tab where it
- * still has work. Each row has one main button for that tab; the rest are under
- * "⋯". Route A of the factory order-flow rethink (John, 2026-10-12).
+ * received. The tabs are the next jobs (New to process · To make · Couldn't
+ * order · New items to order · Awaiting supplier · Ready to dispatch), and an
+ * order sits in every tab where it still has work. Each row has one main button
+ * for that tab; the rest are under "⋯". Route A of the factory order-flow
+ * rethink (John, 2026-10-12). A new order's one button is Process order
+ * (_partials/process_order.php): take it in, floor, supplier POs, in one go.
  */
 
 require __DIR__ . '/../bootstrap.php';
@@ -22,6 +24,7 @@ require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/blind_jobs.php';
 require __DIR__ . '/../_partials/factory_poll.php';
 require __DIR__ . '/../_partials/order_tracks.php';
+require __DIR__ . '/../_partials/process_order.php';
 
 requireFactory();
 
@@ -229,9 +232,12 @@ foreach ($orders as $o) {
 // venetian still to order from Hunter Douglas is in both To make and To order.
 $tracks = !empty($ids) ? ot_order_tracks($pdo, $ids, $MASTER) : [];
 $LANES = [
-    'new'        => 'New to accept',
+    'new'        => 'New to process',
     'make'       => 'To make',
-    'order'      => 'To order from suppliers',
+    // The two supplier exceptions after Process: shown only when they have
+    // something (or are open), so the normal tabs stay short.
+    'problem'    => "Couldn't order",
+    'order'      => 'New items to order',
     'awaiting'   => 'Awaiting supplier',
     'ready'      => 'Ready to dispatch',
     'open'       => 'All open',
@@ -253,10 +259,11 @@ foreach ($orders as $o) {
         $ls = ['dispatched'];
     } else {
         $ls = ['open'];
+        // A new order's only job is Process order (it sends the POs too).
         if ($fj === '') $ls[] = 'new';
         if ($fj !== '' && $t['make']['made'] < $t['make']['units']) $ls[] = 'make';
-        foreach ($t['buy'] as $b) {
-            if ($b['state'] === 'to_order') $ls[] = 'order';
+        foreach ($fj !== '' ? $t['buy'] : [] as $b) {
+            if ($b['state'] === 'to_order') $ls[] = $b['problem'] === 'failed' ? 'problem' : 'order';
             if ($b['state'] === 'ordered')  $ls[] = 'awaiting';
         }
         if ($fs === 'ready') $ls[] = 'ready';
@@ -393,6 +400,8 @@ require __DIR__ . '/../_partials/factory_head.php';
     .io-btn { font: inherit; font-size: 0.8125rem; font-weight: 600; cursor: pointer; border: none; border-radius: 8px; padding: 0.35rem 0.8rem; }
     .io-btn.advance { background: #1f2a37; color: #fff; }
     .io-btn.advance:hover { background: #111a24; }
+    .io-btn.retry { background: #b91c1c; color: #fff; }
+    .io-btn.retry:hover { background: #991b1b; }
     .io-btn.worksheet { background: #2563eb; color: #fff; text-decoration: none; }
     .io-btn.worksheet:hover { background: #1d4ed8; }
     .io-btn.edit { background: var(--bg-subtle, #f1f5f9); color: #334155; text-decoration: none; border: 1px solid var(--border, #e5e7eb); }
@@ -407,6 +416,11 @@ require __DIR__ . '/../_partials/factory_head.php';
     .io-lanes a .n { font-variant-numeric: tabular-nums; color: var(--text-muted, #667); font-weight: 700; }
     .io-lanes a.active { background: #1f2a37; border-color: #1f2a37; color: #fff; }
     .io-lanes a.active .n { color: #cbd5e1; }
+    /* "Couldn't order" with something in it: a supplier PO didn't go. Never quiet. */
+    .io-lanes a.alarm:not(.active) { background: #fee2e2; border-color: #fca5a5; color: #991b1b; }
+    .io-lanes a.alarm:not(.active) .n { color: #991b1b; }
+    .io-lanes a.alarm.active { background: #b91c1c; border-color: #b91c1c; }
+    .io-problem { flex-basis: 100%; font-size: 0.75rem; font-weight: 600; color: #991b1b; }
     .io-lanes .sep { width: 1px; background: var(--border, #e5e7eb); margin: 0.2rem 0.2rem; }
 
     /* The two tracks: MAKE (to the floor) and one chip per BUY-IN supplier. */
@@ -485,9 +499,10 @@ require __DIR__ . '/../_partials/factory_head.php';
 <?php if ($showLanes): ?>
 <nav class="io-lanes" aria-label="Show orders by their next job">
     <?php foreach ($LANES as $k => $label):
+        if (($k === 'problem' || $k === 'order') && $laneCount[$k] === 0 && $lane !== $k) continue;
         $href = '/factory/incoming-orders.php' . ($k === 'open' ? '' : '?lane=' . $k); ?>
         <?php if ($k === 'open'): ?><span class="sep" aria-hidden="true"></span><?php endif; ?>
-        <a href="<?= e($href) ?>" class="<?= $lane === $k ? 'active' : '' ?>"<?= $lane === $k ? ' aria-current="page"' : '' ?>><?= e($label) ?> <span class="n"><?= (int) $laneCount[$k] ?></span></a>
+        <a href="<?= e($href) ?>" class="<?= $lane === $k ? 'active' : '' ?><?= $k === 'problem' && $laneCount[$k] > 0 ? ' alarm' : '' ?>"<?= $lane === $k ? ' aria-current="page"' : '' ?>><?= e($label) ?> <span class="n"><?= (int) $laneCount[$k] ?></span></a>
     <?php endforeach; ?>
 </nav>
 <?php endif; ?>
@@ -612,10 +627,16 @@ require __DIR__ . '/../_partials/factory_head.php';
                             foreach ($showLanes ? $t['buy'] : [] as $supName => $b):
                                 $bCls = $b['state'] === 'received' ? 't-done' : ($b['state'] === 'ordered' ? 't-wait' : 't-todo');
                                 $bTxt = $b['state'] === 'received' ? 'received'
-                                      : ($b['state'] === 'ordered' ? 'ordered ' . date('j M', strtotime((string) $b['sent_at'])) : $b['units'] . ' to order');
+                                      : ($b['state'] === 'ordered' ? 'ordered ' . date('j M', strtotime((string) $b['sent_at']))
+                                      : ($b['problem'] === 'failed' ? "couldn't order"
+                                      : ($b['problem'] === 'new_item' ? $b['new_units'] . ' new item' . ($b['new_units'] === 1 ? '' : 's') . ' to order'
+                                      : $b['units'] . ' to order')));
                                 $noMail = $b['state'] === 'to_order' && !$b['has_email'];
                         ?>
-                            <span class="io-track <?= $bCls ?>" title="<?= (int) $b['units'] ?> bought in from <?= e($supName) ?><?= $noMail ? ' — no order email set for this supplier (Settings › Suppliers), so it can\'t be sent automatically' : '' ?>"><span class="k">BUY</span> <?= e($supName) ?> · <?= e($bTxt) ?><?php if ($noMail): ?> <span class="warn">· no email set</span><?php endif; ?></span>
+                            <span class="io-track <?= $bCls ?>" title="<?= (int) $b['units'] ?> bought in from <?= e($supName) ?><?= $noMail ? ' — no valid order email set for this supplier (Settings › Suppliers), so it can\'t be ordered' : '' ?>"><span class="k">BUY</span> <?= e($supName) ?> · <?= e($bTxt) ?><?php if ($noMail && $b['problem'] !== 'failed'): ?> <span class="warn">· no email set</span><?php endif; ?></span>
+                        <?php endforeach; ?>
+                        <?php foreach ($showLanes && $fjNow !== '' ? $t['buy'] : [] as $supName => $b): if ($b['problem'] !== 'failed') continue; ?>
+                            <span class="io-problem">&#9888; Couldn't order from <?= e($supName) ?>: <?= e($b['reason']) ?></span>
                         <?php endforeach; ?>
                         <?php
                             // "Waiting on …" — the outstanding parts by bench/stream, so
@@ -651,17 +672,19 @@ require __DIR__ . '/../_partials/factory_head.php';
                             }
                             $backQ = '&back=' . rawurlencode($lane);
                             // Render one job as a button (main) or a menu item.
-                            $jobHtml = static function (array $j, int $qid, string $lane, string $cls, string $backQ): string {
+                            $jobHtml = static function (array $j, int $qid, string $lane, string $cls, string $backQ) use ($ref, $t): string {
                                 $h  = csrf_field() . '<input type="hidden" name="quote_id" value="' . $qid . '">'
                                     . '<input type="hidden" name="back" value="' . e($lane) . '">';
                                 $sup = (string) ($j['supplier'] ?? '');
                                 switch ($j['kind']) {
-                                    case 'accept':
-                                        // Accept = take it on AND put its blinds on the floor
-                                        // (set-status.php, accept=1). All bought-in: just accepted.
-                                        return '<form method="post" action="/factory/set-status.php">' . $h
-                                             . '<input type="hidden" name="accept" value="1">'
-                                             . '<button type="submit" name="status" value="received" class="' . $cls . '" title="Take the order on and put its blinds on the floor">Accept</button></form>';
+                                    case 'process':
+                                        // Take it in, blinds on the floor, POs to suppliers —
+                                        // after a summary (or straight away, per the setting).
+                                        return po_button($qid, $ref, $t, $lane, $cls, 'Process order', null, 'Take the order in, put its blinds on the floor and email its suppliers');
+                                    case 'retry':
+                                        return po_button($qid, $ref, $t, $lane, $cls === '' ? '' : 'io-btn retry', 'Retry ' . $sup, $sup, $t['buy'][$sup]['reason'] ?? '');
+                                    case 'order_new':
+                                        return po_button($qid, $ref, $t, $lane, $cls, 'Order new item from ' . $sup, $sup, 'A bought-in item was added after the order was processed');
                                     case 'start':
                                         return '<form method="post" action="/factory/set-status.php">' . $h
                                              . '<button type="submit" name="status" value="in_production" class="' . $cls . '" title="Put the blinds we make on the floor">Start production</button></form>';
@@ -694,6 +717,7 @@ require __DIR__ . '/../_partials/factory_head.php';
                                     <a href="/factory/worksheet-print.php?order=<?= $qid ?>" target="_blank" rel="noopener">Worksheet</a>
                                     <a href="/factory/edit-order.php?order=<?= $qid ?>">Edit order</a>
                                     <?php if ($t['make']['released']): ?><a href="/factory/order-areas.php?order=<?= $qid ?>">See progress</a><?php endif; ?>
+                                    <?php if ($fjNow !== '' && $t['buy']): /* the backstop: re-send a supplier's whole PO by hand */ ?><a href="/factory/order-suppliers.php?id=<?= $qid ?><?= e($backQ) ?>">Re-send to a supplier&hellip;</a><?php endif; ?>
                                     <?php if ($fjNow === 'in_production'): ?>
                                         <form method="post" action="/factory/set-status.php"<?php if ($floorOpen > 0): ?> onsubmit="return confirm(<?= e(json_encode('The floor still has ' . $floorOpen . ' of ' . (int) $prog['total'] . ' blind' . ((int) $prog['total'] === 1 ? '' : 's') . ' to finish. Mark the order made anyway? The remaining blinds will be marked complete on the floor.')) ?>)"<?php endif; ?>>
                                             <?= csrf_field() ?>
@@ -827,7 +851,8 @@ require __DIR__ . '/../_partials/factory_head.php';
 
                     // Safe to auto-refresh: nobody's touched the page recently, or
                     // it's a hidden background tab. New orders then just appear.
-                    if (document.hidden || (Date.now() - lastTouch) > IDLE_MS) {
+                    // Never under an open Process order summary (_partials/process_order.php).
+                    if (!document.querySelector('.po-back:not([hidden])') && (document.hidden || (Date.now() - lastTouch) > IDLE_MS)) {
                         location.reload();
                         return;
                     }
@@ -854,4 +879,5 @@ require __DIR__ . '/../_partials/factory_head.php';
 })();
 </script>
 
+<?php if ($ioOffice) echo po_modal(po_skip_summary($pdo, $MASTER)); ?>
 <?php require __DIR__ . '/../_partials/factory_foot.php'; ?>
