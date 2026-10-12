@@ -27,7 +27,10 @@ declare(strict_types=1);
  *     yet" line, the rest-of-the-day tiles, Latest orders, Busiest accounts;
  *   - factory/orders.php — the grouped chips, account picker, search, the
  *     Making / Money / Next columns, invoice lines, REMAKE badge and the
- *     ↻ Remake link.
+ *     ↻ Remake link;
+ *   - master-admin/dispatch.php — the "Waiting on suppliers" list (#1073);
+ *     the Awaiting supplier stage/chip/tile and Next's "Order from X" /
+ *     "Waiting on X" (#1072/#1073). The Pipeline has its own guide.
  * Every label, button and message is copied from those files.
  *
  * v2: one SCENE per script line (data-scene = the line's step). Start times are
@@ -38,21 +41,22 @@ declare(strict_types=1);
 // ── The voice-over first: scene timings are read from it ───────────────
 $S = [
     ['1', 'Why there is a Factory Console', 'When a trade account places an order on their own portal, it is stored as their order, not ours. So the old sales screens, which only listed the factory\'s own jobs, could never show it. The Factory Console fixes that. It finds every order with our blinds on it, whoever placed it, and puts them all in one place for the office.', 1],
-    ['2', 'Signing in', 'The console is for the office staff of the factory. When you sign in, you land straight on the console Dashboard, and the menu says Factory Console under the logo. If you open one of the old screens, like the sales dashboard, the Pipeline or the old orders list, it simply takes you to the console version instead.', 2],
-    ['3', 'The Work menu', 'The menu has its own sections. Work comes first. Dashboard is your home page. Orders is the one list of everything placed with us. Quotes is that same list, filtered to our own quotes that have not been placed as orders yet. Remakes is where faults and remakes are handled, and Calendar is the office\'s shared calendar. When something needs you, the menu says so. For example, Remakes, two to approve, or Calendar, three due.', 3],
+    ['2', 'Signing in', 'The console is for the office staff of the factory. When you sign in, you land straight on the console Dashboard, and the menu says Factory Console under the logo. If you open one of the old screens, like the sales dashboard, the sales Pipeline or the old orders list, it simply takes you to the console version instead.', 2],
+    ['3', 'The Work menu', 'The menu has its own sections. Work comes first. Dashboard is your home page. Pipeline shows every open order as a card, from New to Paid, and has its own guide. Orders is the one list of everything placed with us, and Quotes is our own quotes not placed yet. Remakes is for faults and remakes, and Calendar is the office\'s shared calendar. When something needs you, the menu says so, like Remakes, two to approve.', 3],
     ['4', 'Production and Accounts', 'Under Production are the factory screens you already know: Incoming orders, the Floor, and Dispatch. Under Accounts are Invoices, Bank, Statements and Commissions. Trade accounts and The Numbers are there too, but only for the super admin. Setup and Platform sit at the bottom, for the people allowed to use them.', 4],
-    ['5', 'The four stage tiles', 'The top row of the Dashboard counts orders by stage. New means an order has come in, but has not been received on the floor yet. Received means it is in, but not started. In production means it is being made. Ready to dispatch means everything is made and in. Click a tile to open it. New opens Incoming orders, and Ready to dispatch opens Dispatch.', 5],
-    ['6', 'The money tiles', 'The second row counts the money. Needs invoicing means an order has been dispatched, but has no invoice yet. Awaiting payment means it is invoiced, but not paid yet. Overdue means it is past the invoice due date. Click a tile to see those orders in the Orders list. The money tiles, and the Money column, only show on the main factory account.', 6],
-    ['7', 'Quotes not placed yet', 'Just under those tiles, you may see a line saying how many of our own quotes are not placed yet. These are quotes the office has keyed in, which have not been turned into orders. Click the line, and you see them in the Orders list, under Quotes.', 7],
-    ['8', 'The rest of the day', 'The next row is the rest of the day at a glance. Calendar shows how many reminders and callbacks are due now. Remakes shows how many are in progress, and how many are waiting for approval. Blinds to make counts the blinds on orders that are not ready yet. And Out today counts the delivery notes dispatched today.', 8],
-    ['9', 'This week so far', 'Two more tiles look at the week so far. Orders this week counts the orders placed since Monday. Invoiced this week is the net value of the invoices raised since Monday. Underneath it, owed is everything still unpaid on our invoices. Click it to open Invoices. Like the money tiles, it is only on the main factory account.', 9],
-    ['10', 'Latest orders and busiest accounts', 'Below the tiles are two panels. Latest orders shows the eight newest orders, with the account, the number of blinds, where the making is up to, and the money. Click an order number to open it, or See all for the whole list. Busiest accounts shows who has ordered the most over the last thirty days, by value.', 10],
-    ['11', 'One Orders list', 'Orders, in the Work menu, is the heart of the console. It is one list of every order placed with us, whoever placed it. From their portal, as a direct order, or keyed in here by the office. To key one in yourself, use the New order button at the top right.', 11],
-    ['12', 'The filter chips', 'Across the top are the filter chips, in groups, each with a count. Open is everything not yet both dispatched and paid, and that is where the list starts. To make has New, Received, In production and Ready to go. To bill has Needs invoicing, Awaiting payment and Overdue. Finished has Done. Not placed has Quotes. And All shows every order.', 12],
-    ['13', 'Finding an order', 'To find one order, use the account picker and the search box. Choose an account, and you see only their orders. Or type in the search box. An order number, the account, their reference, the name for the labels, or an invoice number all work. Then click Search.', 13],
-    ['14', 'Making and Money', 'Each row shows the order number, the account, their reference, the date, how many of our blinds are on it, and its value. Then Making is where the blinds are, and Money is where the bill is. Under the money pill is each invoice number, what is still owed, and when it is due. A purple REMAKE badge marks a remake of an earlier order.', 14],
-    ['15', 'What to do next', 'The Next column tells you the one thing to do next. While it is being made, that is Mark received, Start production, Being made, then Dispatch. After that comes the money. Raise invoice, Wait for payment, or Wait for the rest. If a payment is late, Chase payment comes first, in red. Done means dispatched and paid. Click it to go to the right screen.', 15],
-    ['16', 'Opening an order', 'Click the order number to open it. An order an account placed opens in the factory\'s Edit order screen. Our own orders, and quotes not placed yet, open in the quote builder. In the Next column of every placed order is a Remake link. That is the quickest way to raise a remake, and the Remakes guide explains the rest.', 16],
+    ['5', 'The stage tiles', 'The top row counts orders by stage. New means it has come in, but is not received on the floor yet. Received means it is in, but not started. In production means it is being made. Awaiting supplier means our part is made, but a bought-in item has not arrived. Ready to dispatch means everything is made and in. Click a tile to open it. New opens Incoming orders, and Ready to dispatch opens Dispatch.', 5],
+    ['6', 'Waiting on suppliers', 'Orders that are awaiting a supplier are listed on the Dispatch tray too, under Waiting on suppliers. Each row shows the account, the order, their reference, how many are made, and which supplier it is waiting on, with the date it was ordered, or not ordered yet. When the item arrives, mark it received on Incoming orders, and the order moves up to Ready to go out.', 6],
+    ['7', 'The money tiles', 'The second row counts the money. Needs invoicing means an order has been dispatched, but has no invoice yet. Awaiting payment means it is invoiced, but not paid yet. Overdue means it is past the invoice due date. Click a tile to see those orders in the Orders list. The money tiles, and the Money column, only show on the main factory account.', 7],
+    ['8', 'Quotes not placed yet', 'Just under those tiles, you may see a line saying how many of our own quotes are not placed yet. These are quotes the office has keyed in, which have not been turned into orders. Click the line, and you see them in the Orders list, under Quotes.', 8],
+    ['9', 'The rest of the day', 'The next row is the rest of the day at a glance. Calendar shows how many reminders and callbacks are due now. Remakes shows how many are in progress, and how many are waiting for approval. Blinds to make counts the blinds on orders that are not ready yet. And Out today counts the delivery notes dispatched today.', 9],
+    ['10', 'This week so far', 'Two more tiles look at the week so far. Orders this week counts the orders placed since Monday. Invoiced this week is the net value of the invoices raised since Monday. Underneath it, owed is everything still unpaid on our invoices. Click it to open Invoices. Like the money tiles, it is only on the main factory account.', 10],
+    ['11', 'Latest orders and busiest accounts', 'Below the tiles are two panels. Latest orders shows the eight newest orders, with the account, the number of blinds, where the making is up to, and the money. Click an order number to open it, or See all for the whole list. Busiest accounts shows who has ordered the most over the last thirty days, by value.', 11],
+    ['12', 'One Orders list', 'Orders, in the Work menu, is the heart of the console. It is one list of every order placed with us, whoever placed it. From their portal, as a direct order, or keyed in here by the office. To key one in yourself, use the New order button at the top right.', 12],
+    ['13', 'The filter chips', 'Across the top are the filter chips, in groups, each with a count. Open is everything not yet both dispatched and paid, and that is where the list starts. To make has New, Received, In production, Awaiting supplier and Ready to go. To bill has Needs invoicing, Awaiting payment and Overdue. Finished has Done. Not placed has Quotes. And All shows every order.', 13],
+    ['14', 'Finding an order', 'To find one order, use the account picker and the search box. Choose an account, and you see only their orders. Or type in the search box. An order number, the account, their reference, the name for the labels, or an invoice number all work. Then click Search.', 14],
+    ['15', 'Making and Money', 'Each row shows the order number, the account, their reference, the date, how many of our blinds are on it, and its value. Then Making is where the blinds are, and Money is where the bill is. Under the money pill is each invoice number, what is still owed, and when it is due. A purple REMAKE badge marks a remake of an earlier order.', 15],
+    ['16', 'What to do next', 'The Next column tells you the one thing to do next. While it is being made, that is Mark received, Start production, Being made, Order from a supplier, or Waiting on a supplier, then Dispatch. After that comes the money. Raise invoice, Wait for payment, or Wait for the rest. If a payment is late, Chase payment comes first, in red. Done means dispatched and paid. Click it to go to the right screen.', 16],
+    ['17', 'Opening an order', 'Click the order number to open it. An order an account placed opens in the factory\'s Edit order screen. Our own orders, and quotes not placed yet, open in the quote builder. In the Next column of every placed order is a Remake link. That is the quickest way to raise a remake, and the Remakes guide explains the rest.', 17],
 ];
 $len = static fn (int $n): string => (string) round(mb_strlen($S[$n - 1][2]) / 13.6, 1);
 /** Seconds into line $n at which $phrase is spoken (+ $add). */
@@ -71,6 +75,7 @@ $PILL = [
     'new'           => ['New',           '#b91c1c', '#fee2e2'],
     'confirmed'     => ['Received',      '#5b6b7f', '#e6ebf1'],
     'in_production' => ['In production', '#b5730f', '#f7ecd6'],
+    'awaiting_supplier' => ['Awaiting supplier', '#7c3aed', '#ede9fe'],
     'ready'         => ['Ready',         '#245ea3', '#dde8f6'],
     'dispatched'    => ['Dispatched',    '#0d7a67', '#d6ece6'],
 ];
@@ -103,7 +108,7 @@ $rmb = '<span class="rmb">REMAKE</span>';
  */
 $menu = static function (array $ring = [], string $rem = 'Remakes', string $cal = 'Calendar') : string {
     $sec = [
-        'Work'       => [$cal, 'Dashboard', 'Orders', 'Quotes', $rem],   // A to Z, as the real menu
+        'Work'       => [$cal, 'Dashboard', 'Orders', 'Pipeline', 'Quotes', $rem],   // A to Z, as the real menu
         'Production' => ['Dispatch', 'Floor', 'Incoming orders'],
         'Accounts'   => ['Bank', 'Commissions', 'Invoices', 'Statements', 'The Numbers', 'Trade accounts'],
         'Setup'      => [],
@@ -162,7 +167,7 @@ $thead = '<div class="orow th"><span>Order</span><span>Account</span><span class
  */
 $CHIPS = [
     ''           => ['open' => ['Open', 34]],
-    'To make'    => ['new' => ['New', 3], 'confirmed' => ['Received', 5], 'in_production' => ['In production', 12], 'ready' => ['Ready to go', 6]],
+    'To make'    => ['new' => ['New', 3], 'confirmed' => ['Received', 5], 'in_production' => ['In production', 12], 'awaiting_supplier' => ['Awaiting supplier', 1], 'ready' => ['Ready to go', 6]],
     'To bill'    => ['needs_invoicing' => ['Needs invoicing', 2], 'awaiting' => ['Awaiting payment', 5], 'overdue' => ['Overdue', 1]],
     'Finished'   => ['done' => ['Done', 140]],
     'Not placed' => ['notplaced' => ['Quotes', 1]],
@@ -194,7 +199,8 @@ $ph = static fn (string $t): string => '<span class="gph">' . $t . '</span>';
 
 /** The four stage tiles and the three money tiles, at rest. */
 $stageTiles = $tile('New', '3', 'Not received on the floor yet', '#b91c1c') . $tile('Received', '5', 'In, not started', '#5b6b7f')
-            . $tile('In production', '12', 'Being made', '#b5730f') . $tile('Ready to dispatch', '6', 'Everything made and in', '#245ea3');
+            . $tile('In production', '12', 'Being made', '#b5730f') . $tile('Awaiting supplier', '1', 'Made, waiting on a bought-in item', '#7c3aed')
+            . $tile('Ready to dispatch', '6', 'Everything made and in', '#245ea3');
 $moneyTiles = $tile('Needs invoicing', '2', 'Dispatched, no invoice yet', '#b91c1c') . $tile('Awaiting payment', '5', 'Invoiced, not paid yet', '#245ea3')
             . $tile('Overdue', '1', 'Past the invoice due date', '#b91c1c');
 
@@ -262,6 +268,7 @@ return [
           /* dashboard tiles */
           .gd .fgrid{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:.5rem; margin-bottom:.6rem; }
           .gd .fgrid.g3{ grid-template-columns:repeat(3,minmax(0,1fr)); }
+          .gd .fgrid.g5{ grid-template-columns:repeat(5,minmax(0,1fr)); }
           .gd .fgrid.g2{ grid-template-columns:repeat(2,minmax(0,1fr)); max-width:26rem; }
           .gd .ftile{ background:var(--surface); border:1px solid var(--line); border-top:3px solid var(--fc); border-radius:10px; padding:.5rem .6rem; min-width:0; }
           .gd .ftile .fl{ font-size:.54rem; text-transform:uppercase; letter-spacing:.05em; color:var(--faint); font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
@@ -284,6 +291,8 @@ return [
           .gd .mt{ font-size:.62rem; }
           .gd .mt div{ display:grid; grid-template-columns:1.9fr 1.5fr .6fr 1.1fr 1.7fr; gap:.25rem; padding:.22rem 0; border-top:1px solid var(--line); align-items:center; color:var(--ink); }
           .gd .mt.b div{ grid-template-columns:2fr .8fr 1.2fr; }
+          .gd .mt.w div{ grid-template-columns:1.3fr 1.3fr .8fr .5fr 1fr 2fr; } .gd .mt.w div > :nth-child(5){ padding-left:.6rem; }
+          .gd .mt.r div{ grid-template-columns:.35fr 1.3fr 1.4fr .8fr .5fr .7fr; }
           .gd .mt div:first-child{ border-top:0; font-weight:700; color:var(--soft); font-size:.54rem; text-transform:uppercase; letter-spacing:.04em; }
           .gd .mt .n{ text-align:right; font-variant-numeric:tabular-nums; }
 
@@ -324,7 +333,7 @@ return [
             .gd .sc{ min-height:560px; }
             .gd .two, .gd .cols, .gd .flow, .gd .mwrap{ grid-template-columns:1fr; }
             .gd .flow .arrow i{ display:inline-block; transform:rotate(90deg); font-style:normal; line-height:1; }
-            .gd .fgrid, .gd .fgrid.g3{ grid-template-columns:repeat(2,minmax(0,1fr)); }
+            .gd .fgrid, .gd .fgrid.g3, .gd .fgrid.g5{ grid-template-columns:repeat(2,minmax(0,1fr)); }
             .gd .orow{ grid-template-columns:1.9fr 1.3fr .5fr 1.1fr 1.8fr 1.5fr; min-width:34rem; }
             .gd .pnl{ overflow-x:auto; } .gd .mt div{ min-width:24rem; }
             .gd .orow .hs{ display:none; }
@@ -338,7 +347,7 @@ return [
               <div class="side">
                 <div class="logo">Your<b>Blinds</b></div><small>FACTORY CONSOLE</small>
                 <div class="navh">Work</div>
-                <a>Calendar</a><a class="on">Dashboard</a><a>Orders</a><a>Quotes</a><a>Remakes</a>
+                <a>Calendar</a><a class="on">Dashboard</a><a>Orders</a><a>Pipeline</a><a>Quotes</a><a>Remakes</a>
                 <div class="navh">Production</div>
                 <a>Dispatch</a><a>Floor</a><a>Incoming orders</a>
                 <div class="navh">Accounts</div>
@@ -349,7 +358,7 @@ return [
                 <!-- 0 — poster -->
                 <div class="sc" data-scene="0">
                   ' . $dashHead . '
-                  <div class="fgrid">' . $stageTiles . '</div>
+                  <div class="fgrid g5">' . $stageTiles . '</div>
                   <div class="fgrid g3">' . $moneyTiles . '</div>
                   <div class="otab">' . $thead . $row($ROWS[0]) . $row($ROWS[3]) . $row($ROWS[5]) . '</div>
                   <p class="scs" style="margin-top:.8rem">Press <b>&#9654; Play</b> below &mdash; sixteen short chapters, at an easy pace.</p>
@@ -385,7 +394,7 @@ return [
                     <div class="scr a-rise" style="' . $d(2, 'If you open') . '"><b>Old screens take you to the console</b>
                       <div class="redir">
                         <span class="chip a-pop" style="' . $d(2, 'sales dashboard') . '">Sales dashboard</span><span class="arrow a-fade" style="' . $d(2, 'sales dashboard', .4) . '">&rarr;</span><span class="chip ok a-pop" style="' . $d(2, 'sales dashboard', .7) . '">Dashboard</span>
-                        <span class="chip a-pop" style="' . $d(2, 'the Pipeline') . '">Pipeline</span><span class="arrow a-fade" style="' . $d(2, 'the Pipeline', .4) . '">&rarr;</span><span class="chip ok a-pop" style="' . $d(2, 'the Pipeline', .7) . '">Orders</span>
+                        <span class="chip a-pop" style="' . $d(2, 'the sales Pipeline') . '">Sales pipeline</span><span class="arrow a-fade" style="' . $d(2, 'the sales Pipeline', .4) . '">&rarr;</span><span class="chip ok a-pop" style="' . $d(2, 'the sales Pipeline', .7) . '">Orders</span>
                         <span class="chip a-pop" style="' . $d(2, 'old orders list') . '">Orders &amp; quotes lists</span><span class="arrow a-fade" style="' . $d(2, 'old orders list', .4) . '">&rarr;</span><span class="chip ok a-pop" style="' . $d(2, 'old orders list', .7) . '">Orders</span>
                         <span class="chip a-pop" style="' . $d(2, 'console version') . '">Calendar</span><span class="arrow a-fade" style="' . $d(2, 'console version', .4) . '">&rarr;</span><span class="chip ok a-pop" style="' . $d(2, 'console version', .7) . '">office Calendar</span>
                       </div></div>
@@ -399,15 +408,16 @@ return [
                     ' . $menu([
                         '§Work'     => ['a-ring', $d(3, 'Work comes')],
                         'Dashboard' => ['a-sel', $d(3, 'Dashboard is')],
+                        'Pipeline'  => ['a-sel', $d(3, 'Pipeline shows')],
                         'Orders'    => ['a-sel', $d(3, 'Orders is')],
-                        'Quotes'    => ['a-sel', $d(3, 'Quotes is')],
+                        'Quotes'    => ['a-sel', $d(3, 'and Quotes is')],
                         'Remakes (2 to approve)'  => ['a-sel', $d(3, 'Remakes is')],
                         'Calendar (3 due)' => ['a-sel', $d(3, 'and Calendar')],
                     ], 'Remakes (2 to approve)', 'Calendar (3 due)') . '
                     <div class="mnote">
                       <span class="chip a-pop" style="' . $d(3, 'Dashboard is') . '"><b>Dashboard</b> &mdash; your home page</span>
-                      <span class="chip a-pop" style="' . $d(3, 'Orders is') . '"><b>Orders</b> &mdash; everything placed with us</span>
-                      <span class="chip a-pop" style="' . $d(3, 'Quotes is') . '"><b>Quotes</b> &mdash; our own, not placed yet</span>
+                      <span class="chip a-pop" style="' . $d(3, 'Pipeline shows') . '"><b>Pipeline</b> &mdash; every open order as a card</span>                      <span class="chip a-pop" style="' . $d(3, 'Orders is') . '"><b>Orders</b> &mdash; everything placed with us</span>
+                      <span class="chip a-pop" style="' . $d(3, 'and Quotes is') . '"><b>Quotes</b> &mdash; our own, not placed yet</span>
                       <span class="chip a-pop" style="' . $d(3, 'Remakes is') . '"><b>Remakes</b> &mdash; faults and remakes</span>
                       <span class="chip a-pop" style="' . $d(3, 'and Calendar') . '"><b>Calendar</b> &mdash; the office&rsquo;s shared calendar</span>
                       <span class="chip ok a-pop" style="' . $d(3, 'When something') . '">The label tells you when something needs you</span>
@@ -442,206 +452,227 @@ return [
                   </div>
                 </div>
 
-                <!-- 5 — the four stage tiles -->
+                <!-- 5 — the stage tiles -->
                 <div class="sc" data-scene="5" data-len="' . $len(5) . '">
-                  <div class="sct a-fade" style="--d:.2s">The four stage tiles</div>
+                  <div class="sct a-fade" style="--d:.2s">The stage tiles</div>
                   ' . $dashHead . '
-                  <div class="fgrid">
+                  <div class="fgrid g5">
                     <div class="a-drop" style="' . $d(5, 'New means') . '">' . $tile('New', '3', 'Not received on the floor yet', '#b91c1c') . '<span class="goes a-fade" style="' . $d(5, 'New opens') . '">&rarr; Incoming orders</span></div>
                     <div class="a-drop" style="' . $d(5, 'Received means') . '">' . $tile('Received', '5', 'In, not started', '#5b6b7f') . '<span class="goes a-fade" style="' . $d(5, 'Click a tile') . '">&rarr; Orders &middot; Received</span></div>
                     <div class="a-drop" style="' . $d(5, 'In production means') . '">' . $tile('In production', '12', 'Being made', '#b5730f') . '<span class="goes a-fade" style="' . $d(5, 'Click a tile') . '">&rarr; Orders &middot; In production</span></div>
+                    <div class="a-drop" style="' . $d(5, 'Awaiting supplier means') . '">' . $tile('Awaiting supplier', '1', 'Made, waiting on a bought-in item', '#7c3aed') . '<span class="goes a-fade" style="' . $d(5, 'Click a tile') . '">&rarr; Orders &middot; Awaiting supplier</span></div>
                     <div class="a-drop" style="' . $d(5, 'Ready to dispatch means') . '">' . $tile('Ready to dispatch', '6', 'Everything made and in', '#245ea3') . '<span class="goes a-fade" style="' . $d(5, 'Ready to dispatch opens') . '">&rarr; Dispatch</span></div>
                   </div>
                   <div class="a-move" style="--fx:60%;--fy:95%;--tx:8%;--ty:6.8rem;' . $d(5, 'Click a tile') . ';--md:1.5s">' . $ptr . '</div>
                 </div>
 
-                <!-- 6 — the money tiles -->
+                <!-- 6 — waiting on suppliers (Dispatch tray) -->
                 <div class="sc" data-scene="6" data-len="' . $len(6) . '">
-                  <div class="sct a-fade" style="--d:.2s">The money tiles</div>
-                  ' . $dashHead . '
-                  <div class="fgrid">' . $stageTiles . '</div>
-                  <div class="fgrid g3">
-                    <div class="a-drop" style="' . $d(6, 'Needs invoicing means') . '">' . $tile('Needs invoicing', '2', 'Dispatched, no invoice yet', '#b91c1c') . '<span class="goes a-fade" style="' . $d(6, 'Click a tile') . '">&rarr; Orders &middot; Needs invoicing</span></div>
-                    <div class="a-drop" style="' . $d(6, 'Awaiting payment means') . '">' . $tile('Awaiting payment', '5', 'Invoiced, not paid yet', '#245ea3') . '<span class="goes a-fade" style="' . $d(6, 'Click a tile', .4) . '">&rarr; Orders &middot; Awaiting payment</span></div>
-                    <div class="a-drop" style="' . $d(6, 'Overdue means') . '">' . $tile('Overdue', '1', 'Past the invoice due date', '#b91c1c') . '<span class="goes a-fade" style="' . $d(6, 'Click a tile', .8) . '">&rarr; Orders &middot; Overdue</span></div>
-                  </div>
-                  <span class="chip bad a-pop" style="' . $d(6, 'The money tiles, and') . '">Money tiles and the Money column: main factory account only</span>
-                  <div class="a-move" style="--fx:60%;--fy:95%;--tx:10%;--ty:10.6rem;' . $d(6, 'Click a tile') . ';--md:1.5s">' . $ptr . '</div>
+                  <div class="sct a-fade" style="--d:.2s">Waiting on suppliers</div>
+                  <p class="scs a-fade" style="--d:.6s">Production &rarr; Dispatch &middot; the Dispatch tray</p>
+                  <div class="pnl a-rise" style="' . $d(6, 'Orders that are') . '"><h5>Ready to go out</h5>
+                    <div class="mt r"><div><span></span><span>Account</span><span>Order</span><span>Their ref</span><span class="n">Blinds</span><span class="n">Value</span></div>
+                      <div><span class="tick"></span><span>ABC Blinds</span><b class="lnk">ABC-2026-0038-R1</b><span>PO 4402</span><span class="n">1</span><span class="n">&pound;0.00</span></div></div></div>
+                  <div class="pnl a-rise" style="' . $d(6, 'under Waiting on suppliers') . ';margin-top:.6rem"><h5 class="a-ring" style="' . $d(6, 'under Waiting on suppliers', .4) . ';border-radius:4px">Waiting on suppliers</h5>
+                    <div class="phint" style="margin-top:0">Everything we make on these is done; they&rsquo;re waiting on a bought-in item. When it arrives, mark it
+                      received on <b class="lnk">Incoming orders</b> and the order moves up to <b>Ready to go out</b>.</div>
+                    <div class="mt w"><div><span>Account</span><span>Order</span><span>Their ref</span><span class="n">Blinds</span><span>Made</span><span>Waiting on</span></div>
+                      <div class="a-fly" style="' . $d(6, 'Each row shows') . '"><span>ABC Blinds</span><b class="lnk">ABC-2026-0039</b><span>PO 4420</span><span class="n">22</span><span class="a-ring" style="' . $d(6, 'how many are made') . ';border-radius:4px">20/20 made</span><span class="a-ring" style="' . $d(6, 'with the date') . ';border-radius:4px">Home Creations &middot; ordered 9 Oct</span></div>
+                      <div class="a-fly" style="' . $d(6, 'Each row shows', .6) . '"><span>Coastal Shutters</span><b class="lnk">CST-2026-0010</b><span>CS-121</span><span class="n">1</span><span>Nothing to make</span><span class="a-ring" style="' . $d(6, 'or not ordered yet') . ';border-radius:4px">Hunter Douglas &middot; <b style="color:#b91c1c">not ordered yet</b></span></div>
+                    </div></div>
+                  <div class="chips"><span class="chip ok a-pop" style="' . $d(6, 'When the item arrives') . '">Received on <b>Incoming orders</b> &rarr; up to <b>Ready to go out</b></span></div>
                 </div>
 
-                <!-- 7 — not placed -->
+                <!-- 7 — the money tiles -->
                 <div class="sc" data-scene="7" data-len="' . $len(7) . '">
+                  <div class="sct a-fade" style="--d:.2s">The money tiles</div>
+                  ' . $dashHead . '
+                  <div class="fgrid g5">' . $stageTiles . '</div>
+                  <div class="fgrid g3">
+                    <div class="a-drop" style="' . $d(7, 'Needs invoicing means') . '">' . $tile('Needs invoicing', '2', 'Dispatched, no invoice yet', '#b91c1c') . '<span class="goes a-fade" style="' . $d(7, 'Click a tile') . '">&rarr; Orders &middot; Needs invoicing</span></div>
+                    <div class="a-drop" style="' . $d(7, 'Awaiting payment means') . '">' . $tile('Awaiting payment', '5', 'Invoiced, not paid yet', '#245ea3') . '<span class="goes a-fade" style="' . $d(7, 'Click a tile', .4) . '">&rarr; Orders &middot; Awaiting payment</span></div>
+                    <div class="a-drop" style="' . $d(7, 'Overdue means') . '">' . $tile('Overdue', '1', 'Past the invoice due date', '#b91c1c') . '<span class="goes a-fade" style="' . $d(7, 'Click a tile', .8) . '">&rarr; Orders &middot; Overdue</span></div>
+                  </div>
+                  <span class="chip bad a-pop" style="' . $d(7, 'The money tiles, and') . '">Money tiles and the Money column: main factory account only</span>
+                  <div class="a-move" style="--fx:60%;--fy:95%;--tx:10%;--ty:10.6rem;' . $d(7, 'Click a tile') . ';--md:1.5s">' . $ptr . '</div>
+                </div>
+
+                <!-- 8 — not placed -->
+                <div class="sc" data-scene="8" data-len="' . $len(8) . '">
                   <div class="sct a-fade" style="--d:.2s">Quotes not placed yet</div>
                   ' . $dashHead . '
-                  <div class="fgrid">' . $stageTiles . '</div>
+                  <div class="fgrid g5">' . $stageTiles . '</div>
                   <div class="fgrid g3">' . $moneyTiles . '</div>
-                  <p class="npl a-rise" style="' . $d(7, 'you may see') . '"><b class="a-ring" style="' . $d(7, 'Click the line') . '">1 of our own quote</b> not placed yet.</p>
-                  <div class="a-rise" style="' . $d(7, 'you see them') . '">
+                  <p class="npl a-rise" style="' . $d(8, 'you may see') . '"><b class="a-ring" style="' . $d(8, 'Click the line') . '">1 of our own quote</b> not placed yet.</p>
+                  <div class="a-rise" style="' . $d(8, 'you see them') . '">
                     ' . $chips('notplaced') . '
                     <div class="otab">' . $thead . $row($ROWS[4]) . '</div>
                   </div>
                 </div>
 
-                <!-- 8 — the rest of the day -->
-                <div class="sc" data-scene="8" data-len="' . $len(8) . '">
+                <!-- 9 — the rest of the day -->
+                <div class="sc" data-scene="9" data-len="' . $len(9) . '">
                   <div class="sct a-fade" style="--d:.2s">The rest of the day</div>
                   <p class="scs a-fade" style="--d:.6s">The rest of the day at a glance.</p>
                   <div class="fgrid">
-                    ' . $tile('Calendar', '3', '<b style="color:#b91c1c">due now</b> &middot; reminders, callbacks, remakes', '#b91c1c', 'a-drop', $d(8, 'Calendar shows'))
-                      . $tile('Remakes', '4', '<b style="color:#7c3aed">2 waiting for approval</b>', '#7c3aed', 'a-drop', $d(8, 'Remakes shows'))
-                      . $tile('Blinds to make', '86', 'On orders not yet ready', 'var(--line)', 'a-drop', $d(8, 'Blinds to make'))
-                      . $tile('Out today', '7', 'Delivery notes dispatched', 'var(--line)', 'a-drop', $d(8, 'Out today')) . '
+                    ' . $tile('Calendar', '3', '<b style="color:#b91c1c">due now</b> &middot; reminders, callbacks, remakes', '#b91c1c', 'a-drop', $d(9, 'Calendar shows'))
+                      . $tile('Remakes', '4', '<b style="color:#7c3aed">2 waiting for approval</b>', '#7c3aed', 'a-drop', $d(9, 'Remakes shows'))
+                      . $tile('Blinds to make', '86', 'On orders not yet ready', 'var(--line)', 'a-drop', $d(9, 'Blinds to make'))
+                      . $tile('Out today', '7', 'Delivery notes dispatched', 'var(--line)', 'a-drop', $d(9, 'Out today')) . '
                   </div>
                   <div class="chips">
-                    <span class="chip a-pop" style="' . $d(8, 'and how many are waiting') . '">Nothing waiting? It says <b>In progress &middot; none waiting</b></span>
-                    <span class="chip a-pop" style="' . $d(8, 'Calendar shows', 3) . '">Nothing due? It says <b>Nothing due</b></span>
+                    <span class="chip a-pop" style="' . $d(9, 'and how many are waiting') . '">Nothing waiting? It says <b>In progress &middot; none waiting</b></span>
+                    <span class="chip a-pop" style="' . $d(9, 'Calendar shows', 3) . '">Nothing due? It says <b>Nothing due</b></span>
                   </div>
                 </div>
 
-                <!-- 9 — this week -->
-                <div class="sc" data-scene="9" data-len="' . $len(9) . '">
+                <!-- 10 — this week -->
+                <div class="sc" data-scene="10" data-len="' . $len(10) . '">
                   <div class="sct a-fade" style="--d:.2s">This week so far</div>
                   <div class="fgrid g2" style="margin-top:.6rem">
-                    ' . $tile('Orders this week', '23', 'Placed since Monday', 'var(--line)', 'a-drop', $d(9, 'Orders this week'))
-                      . '<div class="a-drop" style="' . $d(9, 'Invoiced this week') . '"><div class="ftile" style="--fc:var(--line)"><div class="fl">Invoiced this week</div><div class="fv" style="font-size:1.1rem">&pound;4,812.60</div><div class="fs">Net, since Monday &middot; <b class="a-ring" style="' . $d(9, 'owed is') . ';border-radius:4px">owed &pound;9,205.18</b></div></div></div>' . '
+                    ' . $tile('Orders this week', '23', 'Placed since Monday', 'var(--line)', 'a-drop', $d(10, 'Orders this week'))
+                      . '<div class="a-drop" style="' . $d(10, 'Invoiced this week') . '"><div class="ftile" style="--fc:var(--line)"><div class="fl">Invoiced this week</div><div class="fv" style="font-size:1.1rem">&pound;4,812.60</div><div class="fs">Net, since Monday &middot; <b class="a-ring" style="' . $d(10, 'owed is') . ';border-radius:4px">owed &pound;9,205.18</b></div></div></div>' . '
                   </div>
-                  <div class="a-move" style="--fx:20%;--fy:95%;--tx:55%;--ty:5.6rem;' . $d(9, 'Click it') . ';--md:1.3s">' . $ptr . '</div>
+                  <div class="a-move" style="--fx:20%;--fy:95%;--tx:55%;--ty:5.6rem;' . $d(10, 'Click it') . ';--md:1.3s">' . $ptr . '</div>
                   <div class="chips">
-                    <span class="chip ok a-pop" style="' . $d(9, 'Click it', 1.3) . '">&rarr; Accounts &middot; Invoices</span>
-                    <span class="chip bad a-pop" style="' . $d(9, 'Like the money tiles') . '">Invoiced this week: main factory account only</span>
+                    <span class="chip ok a-pop" style="' . $d(10, 'Click it', 1.3) . '">&rarr; Accounts &middot; Invoices</span>
+                    <span class="chip bad a-pop" style="' . $d(10, 'Like the money tiles') . '">Invoiced this week: main factory account only</span>
                   </div>
                 </div>
 
-                <!-- 10 — panels -->
-                <div class="sc" data-scene="10" data-len="' . $len(10) . '">
+                <!-- 11 — panels -->
+                <div class="sc" data-scene="11" data-len="' . $len(11) . '">
                   <div class="sct a-fade" style="--d:.2s">Latest orders and busiest accounts</div>
                   <div class="cols" style="margin-top:.5rem">
-                    <div class="pnl a-rise" style="' . $d(10, 'Latest orders shows') . '"><h5>Latest orders <span class="a-ring" style="' . $d(10, 'or See all') . ';border-radius:4px">See all</span></h5>
-                      <div class="mt"><div><span>Order</span><span>Account</span><span class="n">Blinds</span><span><span class="a-ring" style="' . $d(10, 'where the making') . ';border-radius:4px">Making</span></span><span><span class="a-ring" style="' . $d(10, 'and the money') . ';border-radius:4px">Money</span></span></div>
-                        <div class="a-fly" style="' . $d(10, 'eight newest', .3) . '"><b class="lnk a-ring" style="' . $d(10, 'Click an order') . ';border-radius:4px">ABC-2026-0041</b><span>ABC Blinds</span><span class="n">6</span><span>' . $pill('new') . '</span><span>' . $mpill('not_invoiced') . '</span></div>
-                        <div class="a-fly" style="' . $d(10, 'eight newest', .6) . '"><b class="lnk">HUG-2026-0012</b><span>Hughes Interiors</span><span class="n">2</span><span>' . $pill('in_production') . '</span><span>' . $mpill('not_invoiced') . '</span></div>
-                        <div class="a-fly" style="' . $d(10, 'eight newest', .9) . '"><b class="lnk">ABC-2026-0038-R1</b><span>ABC Blinds</span><span class="n">1</span><span>' . $pill('ready') . '</span><span>' . $mpill('not_invoiced') . '</span></div>
-                        <div class="a-fly" style="' . $d(10, 'eight newest', 1.2) . '"><b class="lnk">CST-2026-0006</b><span>Coastal Shutters</span><span class="n">2</span><span>' . $pill('dispatched') . '</span><span>' . $mpill('needs_invoicing') . '</span></div>
+                    <div class="pnl a-rise" style="' . $d(11, 'Latest orders shows') . '"><h5>Latest orders <span class="a-ring" style="' . $d(11, 'or See all') . ';border-radius:4px">See all</span></h5>
+                      <div class="mt"><div><span>Order</span><span>Account</span><span class="n">Blinds</span><span><span class="a-ring" style="' . $d(11, 'where the making') . ';border-radius:4px">Making</span></span><span><span class="a-ring" style="' . $d(11, 'and the money') . ';border-radius:4px">Money</span></span></div>
+                        <div class="a-fly" style="' . $d(11, 'eight newest', .3) . '"><b class="lnk a-ring" style="' . $d(11, 'Click an order') . ';border-radius:4px">ABC-2026-0041</b><span>ABC Blinds</span><span class="n">6</span><span>' . $pill('new') . '</span><span>' . $mpill('not_invoiced') . '</span></div>
+                        <div class="a-fly" style="' . $d(11, 'eight newest', .6) . '"><b class="lnk">HUG-2026-0012</b><span>Hughes Interiors</span><span class="n">2</span><span>' . $pill('in_production') . '</span><span>' . $mpill('not_invoiced') . '</span></div>
+                        <div class="a-fly" style="' . $d(11, 'eight newest', .9) . '"><b class="lnk">ABC-2026-0038-R1</b><span>ABC Blinds</span><span class="n">1</span><span>' . $pill('ready') . '</span><span>' . $mpill('not_invoiced') . '</span></div>
+                        <div class="a-fly" style="' . $d(11, 'eight newest', 1.2) . '"><b class="lnk">CST-2026-0006</b><span>Coastal Shutters</span><span class="n">2</span><span>' . $pill('dispatched') . '</span><span>' . $mpill('needs_invoicing') . '</span></div>
                       </div></div>
-                    <div class="pnl a-rise" style="' . $d(10, 'Busiest accounts') . '"><h5>Busiest accounts <small>last 30 days</small></h5>
+                    <div class="pnl a-rise" style="' . $d(11, 'Busiest accounts') . '"><h5>Busiest accounts <small>last 30 days</small></h5>
                       <div class="mt b"><div><span>Account</span><span class="n">Orders</span><span class="n">Value</span></div>
-                        <div class="a-fly" style="' . $d(10, 'Busiest accounts', .5) . '"><span>ABC Blinds</span><span class="n">14</span><span class="n">&pound;6,140.20</span></div>
-                        <div class="a-fly" style="' . $d(10, 'Busiest accounts', .8) . '"><span>Coastal Shutters</span><span class="n">9</span><span class="n">&pound;3,882.00</span></div>
-                        <div class="a-fly" style="' . $d(10, 'Busiest accounts', 1.1) . '"><span>Hughes Interiors</span><span class="n">6</span><span class="n">&pound;1,240.75</span></div>
+                        <div class="a-fly" style="' . $d(11, 'Busiest accounts', .5) . '"><span>ABC Blinds</span><span class="n">14</span><span class="n">&pound;6,140.20</span></div>
+                        <div class="a-fly" style="' . $d(11, 'Busiest accounts', .8) . '"><span>Coastal Shutters</span><span class="n">9</span><span class="n">&pound;3,882.00</span></div>
+                        <div class="a-fly" style="' . $d(11, 'Busiest accounts', 1.1) . '"><span>Hughes Interiors</span><span class="n">6</span><span class="n">&pound;1,240.75</span></div>
                       </div></div>
                   </div>
                 </div>
 
-                <!-- 11 — one Orders list -->
-                <div class="sc" data-scene="11" data-len="' . $len(11) . '">
+                <!-- 12 — one Orders list -->
+                <div class="sc" data-scene="12" data-len="' . $len(12) . '">
                   <div class="dh a-fade" style="--d:.2s">
                     <div><div class="pt">Orders</div>
-                      <div class="phint a-fade" style="' . $d(11, 'It is one list') . '">Every order placed with us, whoever placed it: from their portal, as a direct order, or keyed in here. <b>Making</b> is where the blinds are, <b>Money</b> is where the bill is, and <b>Open</b> is anything not yet both dispatched and paid.</div></div>
-                    <span class="btnp a-ring" style="' . $d(11, 'use the New order') . '">+ New order</span></div>
+                      <div class="phint a-fade" style="' . $d(12, 'It is one list') . '">Every order placed with us, whoever placed it: from their portal, as a direct order, or keyed in here. <b>Making</b> is where the blinds are, <b>Money</b> is where the bill is, and <b>Open</b> is anything not yet both dispatched and paid.</div></div>
+                    <span class="btnp a-ring" style="' . $d(12, 'use the New order') . '">+ New order</span></div>
                   <div class="chips" style="margin:0 0 .6rem">
-                    <span class="chip a-pop" style="' . $d(11, 'From their portal') . '">from their portal</span>
-                    <span class="chip a-pop" style="' . $d(11, 'as a direct order') . '">as a direct order</span>
-                    <span class="chip a-pop" style="' . $d(11, 'keyed in here') . '">keyed in here by the office</span>
+                    <span class="chip a-pop" style="' . $d(12, 'From their portal') . '">from their portal</span>
+                    <span class="chip a-pop" style="' . $d(12, 'as a direct order') . '">as a direct order</span>
+                    <span class="chip a-pop" style="' . $d(12, 'keyed in here') . '">keyed in here by the office</span>
                   </div>
-                  <div class="otab a-rise" style="' . $d(11, 'It is one list') . '">' . $thead . $row($ROWS[0]) . $row($ROWS[1]) . $row($ROWS[3]) . '</div>
+                  <div class="otab a-rise" style="' . $d(12, 'It is one list') . '">' . $thead . $row($ROWS[0]) . $row($ROWS[1]) . $row($ROWS[3]) . '</div>
                 </div>
 
-                <!-- 12 — chips -->
-                <div class="sc" data-scene="12" data-len="' . $len(12) . '">
+                <!-- 13 — chips -->
+                <div class="sc" data-scene="13" data-len="' . $len(13) . '">
                   <div class="sct a-fade" style="--d:.2s">The filter chips</div>
                   <p class="scs a-fade" style="--d:.6s">In groups, each with its own count. The list starts on <b>Open</b>.</p>
                   ' . $chips('open', [
-                        'new'             => $at(12, 'New, Received'),
-                        'confirmed'       => $at(12, 'Received, In'),
-                        'in_production'   => $at(12, 'In production and'),
-                        'ready'           => $at(12, 'Ready to go'),
-                        'needs_invoicing' => $at(12, 'Needs invoicing,'),
-                        'awaiting'        => $at(12, 'Awaiting payment and'),
-                        'overdue'         => $at(12, 'Overdue. Finished'),
-                        'done'            => $at(12, 'Done. Not'),
-                        'notplaced'       => $at(12, 'Quotes. And'),
-                        'all'             => $at(12, 'All shows'),
+                        'new'             => $at(13, 'New, Received'),
+                        'confirmed'       => $at(13, 'Received, In'),
+                        'in_production'   => $at(13, 'In production, Awaiting'),
+                        'awaiting_supplier' => $at(13, 'Awaiting supplier and'),
+                        'ready'           => $at(13, 'Ready to go'),
+                        'needs_invoicing' => $at(13, 'Needs invoicing,'),
+                        'awaiting'        => $at(13, 'Awaiting payment and'),
+                        'overdue'         => $at(13, 'Overdue. Finished'),
+                        'done'            => $at(13, 'Done. Not'),
+                        'notplaced'       => $at(13, 'Quotes. And'),
+                        'all'             => $at(13, 'All shows'),
                     ], [
-                        'To make'    => $at(12, 'To make has'),
-                        'To bill'    => $at(12, 'To bill has'),
-                        'Finished'   => $at(12, 'Finished has'),
-                        'Not placed' => $at(12, 'Not placed has'),
+                        'To make'    => $at(13, 'To make has'),
+                        'To bill'    => $at(13, 'To bill has'),
+                        'Finished'   => $at(13, 'Finished has'),
+                        'Not placed' => $at(13, 'Not placed has'),
                     ]) . '
-                  <span class="chip a-pop" style="' . $d(12, 'Open is') . ';margin:0 0 .6rem"><b>Open</b> = not yet both dispatched and paid</span>
+                  <span class="chip a-pop" style="' . $d(13, 'Open is') . ';margin:0 0 .6rem"><b>Open</b> = not yet both dispatched and paid</span>
                   <div class="otab">' . $thead . $row($ROWS[1]) . $row($ROWS[6]) . $row($ROWS[5]) . '</div>
                 </div>
 
-                <!-- 13 — finding one -->
-                <div class="sc" data-scene="13" data-len="' . $len(13) . '">
+                <!-- 14 — finding one -->
+                <div class="sc" data-scene="14" data-len="' . $len(14) . '">
                   <div class="sct a-fade" style="--d:.2s">Finding an order</div>
                   ' . $chips('open') . '
                   <div class="ffil">
-                    <span class="ib grow"><span class="swap"><span class="gph a-out" style="' . $d(13, 'Or type') . '">Search order number, account, their reference, label name or invoice</span>
-                      <span class="a-fade" style="' . $d(13, 'Or type') . '"><span class="a-type" style="' . $d(13, 'Or type', .2) . ';--ts:7;--tt:.8s">PO 4471</span></span></span></span>
-                    <span class="ib sel a-ring" style="' . $d(13, 'Choose an account') . '"><span class="swap"><span class="a-out" style="' . $d(13, 'Choose an account', .8) . '">All accounts</span><span class="a-fade" style="' . $d(13, 'Choose an account', .8) . '">ABC Blinds</span></span></span>
-                    <span class="btns a-press" style="' . $d(13, 'Then click Search') . '">Search</span>
+                    <span class="ib grow"><span class="swap"><span class="gph a-out" style="' . $d(14, 'Or type') . '">Search order number, account, their reference, label name or invoice</span>
+                      <span class="a-fade" style="' . $d(14, 'Or type') . '"><span class="a-type" style="' . $d(14, 'Or type', .2) . ';--ts:7;--tt:.8s">PO 4471</span></span></span></span>
+                    <span class="ib sel a-ring" style="' . $d(14, 'Choose an account') . '"><span class="swap"><span class="a-out" style="' . $d(14, 'Choose an account', .8) . '">All accounts</span><span class="a-fade" style="' . $d(14, 'Choose an account', .8) . '">ABC Blinds</span></span></span>
+                    <span class="btns a-press" style="' . $d(14, 'Then click Search') . '">Search</span>
                   </div>
-                  <div class="otab">' . $thead . $row($ROWS[0]) . $row($ROWS[1], 'a-out', $d(13, 'Choose an account', 1)) . $row($ROWS[3], 'a-out', $d(13, 'Choose an account', 1)) . '</div>
+                  <div class="otab">' . $thead . $row($ROWS[0]) . $row($ROWS[1], 'a-out', $d(14, 'Choose an account', 1)) . $row($ROWS[3], 'a-out', $d(14, 'Choose an account', 1)) . '</div>
                   <div class="chips">
-                    <span class="chip a-pop" style="' . $d(13, 'An order number') . '">order number</span><span class="chip a-pop" style="' . $d(13, 'the account,') . '">account</span>
-                    <span class="chip a-pop" style="' . $d(13, 'their reference') . '">their reference</span><span class="chip a-pop" style="' . $d(13, 'the name for') . '">name for the labels</span>
-                    <span class="chip a-pop" style="' . $d(13, 'an invoice number') . '">invoice number</span>
+                    <span class="chip a-pop" style="' . $d(14, 'An order number') . '">order number</span><span class="chip a-pop" style="' . $d(14, 'the account,') . '">account</span>
+                    <span class="chip a-pop" style="' . $d(14, 'their reference') . '">their reference</span><span class="chip a-pop" style="' . $d(14, 'the name for') . '">name for the labels</span>
+                    <span class="chip a-pop" style="' . $d(14, 'an invoice number') . '">invoice number</span>
                   </div>
                 </div>
 
-                <!-- 14 — Making and Money -->
-                <div class="sc" data-scene="14" data-len="' . $len(14) . '">
+                <!-- 15 — Making and Money -->
+                <div class="sc" data-scene="15" data-len="' . $len(15) . '">
                   <div class="sct a-fade" style="--d:.2s">Making and Money</div>
                   <div class="otab" style="margin-top:.4rem">' . $thead
-                    . str_replace('<small class="fiv">', '<small class="fiv a-ring" style="' . $d(14, 'Under the money pill') . '">', $row($ROWS[3], 'a-fly', $d(14, 'Each row')))
-                    . $row($ROWS[2], 'a-fly', $d(14, 'A purple REMAKE')) . '</div>
+                    . str_replace('<small class="fiv">', '<small class="fiv a-ring" style="' . $d(15, 'Under the money pill') . '">', $row($ROWS[3], 'a-fly', $d(15, 'Each row')))
+                    . $row($ROWS[2], 'a-fly', $d(15, 'A purple REMAKE')) . '</div>
                   <div class="chips">
-                    <span class="chip a-pop" style="' . $d(14, 'the order number') . '">order &middot; account &middot; their ref &middot; date</span>
-                    <span class="chip a-pop" style="' . $d(14, 'how many of our') . '">our blinds &middot; value</span>
-                    <span class="chip a-pop" style="' . $d(14, 'Under the money pill') . '">invoice &middot; what&rsquo;s owed &middot; when it&rsquo;s due</span>
-                    <span class="chip a-pop" style="' . $d(14, 'A purple REMAKE') . ';border-color:#7c3aed">REMAKE &mdash; a remake of an earlier order</span>
+                    <span class="chip a-pop" style="' . $d(15, 'the order number') . '">order &middot; account &middot; their ref &middot; date</span>
+                    <span class="chip a-pop" style="' . $d(15, 'how many of our') . '">our blinds &middot; value</span>
+                    <span class="chip a-pop" style="' . $d(15, 'Under the money pill') . '">invoice &middot; what&rsquo;s owed &middot; when it&rsquo;s due</span>
+                    <span class="chip a-pop" style="' . $d(15, 'A purple REMAKE') . ';border-color:#7c3aed">REMAKE &mdash; a remake of an earlier order</span>
                   </div>
-                  <div class="legend a-rise" style="' . $d(14, 'Then Making is') . '"><b>Making</b> &mdash; where the blinds are
-                    <div class="chips" style="margin-top:.25rem">' . $pill('new', 'a-pop', $d(14, 'Then Making is', .3)) . $pill('confirmed', 'a-pop', $d(14, 'Then Making is', .6)) . $pill('in_production', 'a-pop', $d(14, 'Then Making is', .9)) . $pill('ready', 'a-pop', $d(14, 'Then Making is', 1.2)) . $pill('dispatched', 'a-pop', $d(14, 'Then Making is', 1.5)) . '</div></div>
-                  <div class="legend a-rise" style="' . $d(14, 'and Money is') . '"><b>Money</b> &mdash; where the bill is
-                    <div class="chips" style="margin-top:.25rem">' . $mpill('not_invoiced', 'a-pop', $d(14, 'and Money is', .3)) . $mpill('needs_invoicing', 'a-pop', $d(14, 'and Money is', .6)) . $mpill('awaiting', 'a-pop', $d(14, 'and Money is', .9)) . $mpill('part_paid', 'a-pop', $d(14, 'and Money is', 1.2)) . $mpill('overdue', 'a-pop', $d(14, 'and Money is', 1.5)) . $mpill('paid', 'a-pop', $d(14, 'and Money is', 1.8)) . '</div></div>
+                  <div class="legend a-rise" style="' . $d(15, 'Then Making is') . '"><b>Making</b> &mdash; where the blinds are
+                    <div class="chips" style="margin-top:.25rem">' . $pill('new', 'a-pop', $d(15, 'Then Making is', .3)) . $pill('confirmed', 'a-pop', $d(15, 'Then Making is', .6)) . $pill('in_production', 'a-pop', $d(15, 'Then Making is', .9)) . $pill('awaiting_supplier', 'a-pop', $d(15, 'Then Making is', 1.2)) . $pill('ready', 'a-pop', $d(15, 'Then Making is', 1.5)) . $pill('dispatched', 'a-pop', $d(15, 'Then Making is', 1.8)) . '</div></div>
+                  <div class="legend a-rise" style="' . $d(15, 'and Money is') . '"><b>Money</b> &mdash; where the bill is
+                    <div class="chips" style="margin-top:.25rem">' . $mpill('not_invoiced', 'a-pop', $d(15, 'and Money is', .3)) . $mpill('needs_invoicing', 'a-pop', $d(15, 'and Money is', .6)) . $mpill('awaiting', 'a-pop', $d(15, 'and Money is', .9)) . $mpill('part_paid', 'a-pop', $d(15, 'and Money is', 1.2)) . $mpill('overdue', 'a-pop', $d(15, 'and Money is', 1.5)) . $mpill('paid', 'a-pop', $d(15, 'and Money is', 1.8)) . '</div></div>
                 </div>
 
-                <!-- 15 — what to do next -->
-                <div class="sc" data-scene="15" data-len="' . $len(15) . '">
+                <!-- 16 — what to do next -->
+                <div class="sc" data-scene="16" data-len="' . $len(16) . '">
                   <div class="sct a-fade" style="--d:.2s">What to do next</div>
                   <div class="otab" style="margin:.4rem 0 .7rem">' . $thead . $row($ROWS[0]) . $row($ROWS[6]) . $row($ROWS[5]) . $row($ROWS[7]) . '</div>
                   <div class="two">
-                    <div class="card a-rise" style="' . $d(15, 'While it is being made') . '"><h4>While it&rsquo;s being made</h4>
-                      <div class="nseq">' . $next('Mark received', false, true, 'a-pop', $d(15, 'Mark received,')) . '<i>&rarr;</i>'
-                        . $next('Start production', false, true, 'a-pop', $d(15, 'Start production,')) . '<i>&rarr;</i>'
-                        . $next('Being made', false, false, 'a-pop', $d(15, 'Being made,')) . '<i>&rarr;</i>'
-                        . $next('Dispatch', false, true, 'a-pop', $d(15, 'then Dispatch')) . '</div></div>
-                    <div class="card a-rise" style="' . $d(15, 'After that comes') . '"><h4>Then the money</h4>
-                      <div class="nseq">' . $next('Raise invoice', true, true, 'a-pop', $d(15, 'Raise invoice,')) . '<i>&rarr;</i>'
-                        . $next('Wait for payment', false, true, 'a-pop', $d(15, 'Wait for payment,')) . '<i>or</i>'
-                        . $next('Wait for the rest', false, true, 'a-pop', $d(15, 'Wait for the rest')) . '</div></div>
+                    <div class="card a-rise" style="' . $d(16, 'While it is being made') . '"><h4>While it&rsquo;s being made</h4>
+                      <div class="nseq">' . $next('Mark received', false, true, 'a-pop', $d(16, 'Mark received,')) . '<i>&rarr;</i>'
+                        . $next('Start production', false, true, 'a-pop', $d(16, 'Start production,')) . '<i>&rarr;</i>'
+                        . $next('Being made', false, false, 'a-pop', $d(16, 'Being made,')) . '<i>&rarr;</i>'
+                        . $next('Order from Hunter Douglas', true, true, 'a-pop', $d(16, 'Order from a supplier')) . '<i>or</i>'
+                        . $next('Waiting on Hunter Douglas', false, true, 'a-pop', $d(16, 'Waiting on a supplier')) . '<i>&rarr;</i>'
+                        . $next('Dispatch', false, true, 'a-pop', $d(16, 'then Dispatch')) . '</div></div>
+                    <div class="card a-rise" style="' . $d(16, 'After that comes') . '"><h4>Then the money</h4>
+                      <div class="nseq">' . $next('Raise invoice', true, true, 'a-pop', $d(16, 'Raise invoice,')) . '<i>&rarr;</i>'
+                        . $next('Wait for payment', false, true, 'a-pop', $d(16, 'Wait for payment,')) . '<i>or</i>'
+                        . $next('Wait for the rest', false, true, 'a-pop', $d(16, 'Wait for the rest')) . '</div></div>
                   </div>
                   <div class="chips">
-                    <span class="chip bad a-pop" style="' . $d(15, 'If a payment is late') . '">Payment late? <b>Chase payment</b> comes first</span>
-                    <span class="chip ok a-pop" style="' . $d(15, 'Done means') . '"><b>Done</b> = dispatched and paid</span>
+                    <span class="chip bad a-pop" style="' . $d(16, 'If a payment is late') . '">Payment late? <b>Chase payment</b> comes first</span>
+                    <span class="chip ok a-pop" style="' . $d(16, 'Done means') . '"><b>Done</b> = dispatched and paid</span>
                   </div>
-                  <div class="a-move" style="--fx:20%;--fy:95%;--tx:86%;--ty:5rem;' . $d(15, 'Click it to go') . ';--md:1.3s">' . $ptr . '</div>
+                  <div class="a-move" style="--fx:20%;--fy:95%;--tx:86%;--ty:5rem;' . $d(16, 'Click it to go') . ';--md:1.3s">' . $ptr . '</div>
                 </div>
 
-                <!-- 16 — opening an order -->
-                <div class="sc" data-scene="16" data-len="' . $len(16) . '">
+                <!-- 17 — opening an order -->
+                <div class="sc" data-scene="17" data-len="' . $len(17) . '">
                   <div class="sct a-fade" style="--d:.2s">Opening an order</div>
                   <div class="otab" style="margin:.4rem 0 .8rem">' . $thead
                     . str_replace(['<b class="lnk">ABC-2026-0041</b>', '<span class="frm">&#8635; Remake</span>'],
-                                  ['<b class="lnk a-ring" style="' . $d(16, 'Click the order') . '">ABC-2026-0041</b>', '<span class="frm a-ring" style="' . $d(16, 'Remake link') . '">&#8635; Remake</span>'], $row($ROWS[0]))
+                                  ['<b class="lnk a-ring" style="' . $d(17, 'Click the order') . '">ABC-2026-0041</b>', '<span class="frm a-ring" style="' . $d(17, 'Remake link') . '">&#8635; Remake</span>'], $row($ROWS[0]))
                     . $row($ROWS[4]) . '</div>
                   <div class="two">
-                    <div class="card a-rise" style="' . $d(16, 'An order an account') . '"><h4>An account&rsquo;s order</h4>opens in the factory&rsquo;s <b>Edit order</b> screen</div>
-                    <div class="card a-rise" style="' . $d(16, 'Our own orders') . '"><h4>Our own orders &middot; Quotes</h4>open in the <b>quote builder</b></div>
+                    <div class="card a-rise" style="' . $d(17, 'An order an account') . '"><h4>An account&rsquo;s order</h4>opens in the factory&rsquo;s <b>Edit order</b> screen</div>
+                    <div class="card a-rise" style="' . $d(17, 'Our own orders') . '"><h4>Our own orders &middot; Quotes</h4>open in the <b>quote builder</b></div>
                   </div>
-                  <span class="chip a-pop" style="' . $d(16, 'the Remakes guide') . ';margin-top:.7rem;border-color:#7c3aed">&#8635; Remake &mdash; see &ldquo;Remakes&rdquo;</span>
-                  <div class="a-move" style="--fx:70%;--fy:90%;--tx:6%;--ty:4.3rem;' . $d(16, 'Click the order', -.8) . ';--md:1s">' . $ptr . '</div>
+                  <span class="chip a-pop" style="' . $d(17, 'the Remakes guide') . ';margin-top:.7rem;border-color:#7c3aed">&#8635; Remake &mdash; see &ldquo;Remakes&rdquo;</span>
+                  <div class="a-move" style="--fx:70%;--fy:90%;--tx:6%;--ty:4.3rem;' . $d(17, 'Click the order', -.8) . ';--md:1s">' . $ptr . '</div>
                 </div>
 
               </div>
@@ -657,11 +688,11 @@ return [
 
           <p><b>Who gets it.</b> The office staff signed in to the factory account. When you sign in you land on
              <b>Work &rarr; Dashboard</b>, and the menu reads <b>Factory Console</b> under the logo. Open one of the old screens and it takes
-             you to the console one instead: the sales dashboard &rarr; <b>Dashboard</b>; the orders and quotes lists and the Pipeline &rarr;
+             you to the console one instead: the sales dashboard &rarr; <b>Dashboard</b>; the orders and quotes lists and the sales Pipeline &rarr;
              <b>Orders</b> (quotes land on <b>Quotes</b>); the old calendar &rarr; the office <b>Calendar</b>. Nobody else is affected.</p>
 
           <ul class="steps">
-            <li><b>Work</b> &mdash; <b>Dashboard</b>, <b>Orders</b>, <b>Quotes</b> (our own, not placed yet), <b>Remakes</b> (reads <b>Remakes (2 to approve)</b> when accounts are
+            <li><b>Work</b> &mdash; <b>Dashboard</b>, <b>Pipeline</b> (every open order as a card, New to Paid &mdash; see the <b>Factory Pipeline</b> guide), <b>Orders</b>, <b>Quotes</b> (our own, not placed yet), <b>Remakes</b> (reads <b>Remakes (2 to approve)</b> when accounts are
                 waiting), <b>Calendar</b> (reads <b>Calendar (3 due)</b> when reminders, callbacks or remakes are due).</li>
             <li><b>Production</b> &mdash; <b>Incoming orders</b>, <b>Floor</b>, <b>Dispatch</b>.</li>
             <li><b>Accounts</b> &mdash; <b>Trade accounts</b> (super-admin only), <b>Invoices</b>, <b>Bank</b>, <b>Statements</b>,
@@ -673,8 +704,8 @@ return [
           <p><b>The Dashboard.</b> A greeting and today&rsquo;s date, an <b>All orders</b> button, then the tiles:</p>
           <ul class="steps">
             <li><b>New</b> &mdash; <em>Not received on the floor yet</em> (opens <b>Incoming orders</b>). <b>Received</b> &mdash; <em>In, not
-                started</em>. <b>In production</b> &mdash; <em>Being made</em>. <b>Ready to dispatch</b> &mdash; <em>Everything made and in</em>
-                (opens <b>Dispatch</b>). Received and In production open the Orders list on that chip.</li>
+                started</em>. <b>In production</b> &mdash; <em>Being made</em>. <b>Awaiting supplier</b> &mdash; <em>Made, waiting on a bought-in item</em>. <b>Ready to dispatch</b> &mdash; <em>Everything made and in</em>
+                (opens <b>Dispatch</b>). Received, In production and Awaiting supplier open the Orders list on that chip.</li>
             <li>The money tiles: <b>Needs invoicing</b> &mdash; <em>Dispatched, no invoice yet</em>. <b>Awaiting payment</b> &mdash;
                 <em>Invoiced, not paid yet</em>. <b>Overdue</b> &mdash; <em>Past the invoice due date</em>. Each opens the Orders list on
                 that chip.</li>
@@ -696,7 +727,7 @@ return [
              direct order, or keyed in here.</em> <b>+ New order</b> (top right) keys one in.</p>
           <ul class="steps">
             <li><b>Chips</b>, in groups, each with a count: <b>Open</b> (anything not yet both dispatched and paid &mdash; where the
-                list starts); <b>To make</b> &mdash; <b>New</b>, <b>Received</b>, <b>In production</b>, <b>Ready to go</b>;
+                list starts); <b>To make</b> &mdash; <b>New</b>, <b>Received</b>, <b>In production</b>, <b>Awaiting supplier</b>, <b>Ready to go</b>;
                 <b>To bill</b> &mdash; <b>Needs invoicing</b>, <b>Awaiting payment</b> (part paid too), <b>Overdue</b> (these two
                 show red while they have any); <b>Finished</b> &mdash; <b>Done</b> (dispatched and paid); <b>Not placed</b> &mdash;
                 <b>Quotes</b>; and <b>All</b>.</li>
@@ -706,13 +737,13 @@ return [
             <li>Columns: <b>Order</b> (with the label name under it), <b>Account</b>, <b>Their ref</b>, <b>Date</b>, <b>Blinds</b> (ours on
                 it), <b>Value</b> (what the invoice bills), <b>Making</b>, <b>Money</b>, <b>Next</b>. On a narrower screen Their ref
                 and Date are hidden, and on a phone Value too.</li>
-            <li><b>Making</b> &mdash; where the blinds are: <b>Quotes</b>, <b>New</b>, <b>Received</b>, <b>In production</b>,
+            <li><b>Making</b> &mdash; where the blinds are: <b>Quotes</b>, <b>New</b>, <b>Received</b>, <b>In production</b>, <b>Awaiting supplier</b> (our part made, a bought-in item still to come),
                 <b>Ready</b>, <b>Dispatched</b>.</li>
             <li><b>Money</b> &mdash; where the bill is: <b>Not invoiced</b>, <b>Needs invoicing</b> (dispatched, no invoice yet),
                 <b>Invoiced &middot; awaiting payment</b>, <b>Part paid</b>, <b>Overdue</b>, <b>Paid</b>. Under it, each invoice number
                 (opens the PDF) with what&rsquo;s owed and when it&rsquo;s due &mdash; e.g. <em>INV-BEV-2026-0007 &middot; &pound;343.68
                 owed, due 1 Nov</em>.</li>
-            <li><b>Next</b> &mdash; the one thing to do next: <b>Mark received</b>, <b>Start production</b>, <b>Being made</b>,
+            <li><b>Next</b> &mdash; the one thing to do next: <b>Mark received</b>, <b>Start production</b>, <b>Being made</b>, <b>Order from &lt;supplier&gt;</b> (red) or <b>Waiting on &lt;supplier&gt;</b> once the floor is done,
                 <b>Dispatch</b>, then <b>Raise invoice</b>, <b>Wait for payment</b> or <b>Wait for the rest</b>, and <b>Done</b> once
                 dispatched and paid. A late payment shows <b>Chase payment</b> first. <b>Raise invoice</b> and <b>Chase payment</b> are red.
                 A quote not placed yet shows <b>Place the order</b>. Click it to go to the right screen.</li>
@@ -726,6 +757,13 @@ return [
 
           <p><b>Where an order opens.</b> An order an account placed opens in the factory&rsquo;s <b>Edit order</b> screen. Our own orders
              (one-off sales) and anything on the <b>Quotes</b> chip open in the <b>quote builder</b>.</p>
+
+          <p><b>Waiting on suppliers.</b> An order whose own blinds are all made but which is still waiting on a bought-in item reads
+             <b>Awaiting supplier</b> (display only &mdash; it is still in production underneath). The <b>Dispatch tray</b>
+             (<b>Production &rarr; Dispatch</b>) lists these under <b>Waiting on suppliers</b>, below <b>Ready to go out</b>: Account, Order,
+             Their ref, Blinds, Made (e.g. <em>20/20 made</em>, or <em>Nothing to make</em>) and Waiting on (e.g. <em>Home Creations &middot;
+             ordered 9 Oct</em>, or <em>not ordered yet</em> in red). They can&rsquo;t be ticked; when the item arrives, mark it received on
+             <b>Incoming orders</b> and the order moves up to <b>Ready to go out</b>.</p>
 
           <div class="heads"><span class="hi">&#9432;</span><div><b>Nothing here changes an order.</b> The Dashboard and the Orders list
              only read &mdash; Making moves on from the floor, dispatch and delivery notes, and Money from the invoices and payments,
