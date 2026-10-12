@@ -5,12 +5,17 @@ declare(strict_types=1);
  * Factory · mark an order's bought-in items as RECEIVED from the supplier.
  * Stamps received_at on this factory's supplier_orders rows for the quote and
  * re-derives the order rollup. Gates dispatch (see set-status.php).
+ *
+ * supplier_name (optional) marks just that supplier, so an order buying from
+ * two suppliers can say "Hunter Douglas in, still waiting on the other". With
+ * no name it marks every supplier, as it always did.
  */
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../quote-builder/_helpers.php';
 require __DIR__ . '/../_partials/factory_boughtin.php';
+require __DIR__ . '/../_partials/order_tracks.php';
 
 requireFactoryOffice();
 
@@ -19,7 +24,8 @@ csrf_check();
 
 $factoryId = current_factory_id();
 $quoteId   = (int) ($_POST['quote_id'] ?? 0);
-$back      = '/factory/incoming-orders.php';
+$supplier  = trim((string) ($_POST['supplier_name'] ?? ''));
+$back      = ot_back_url($_POST['back'] ?? null);
 $pdo       = db();
 
 // Authorise: this factory owns a line on the order.
@@ -30,16 +36,18 @@ $own = $pdo->prepare(
 $own->execute([$quoteId, $factoryId]);
 if (!$own->fetchColumn()) { http_response_code(403); exit('Not your order.'); }
 
-$undo = !empty($_POST['undo']);
+$undo  = !empty($_POST['undo']);
+$where = 'quote_id = ? AND ordered_by_factory_id = ?';
+$args  = [$quoteId, $factoryId];
+if ($supplier !== '') { $where .= ' AND TRIM(supplier_name) = ?'; $args[] = $supplier; }
+$what  = $supplier !== '' ? 'Items from ' . $supplier : 'Bought-in items';
 try {
     if ($undo) {
-        $pdo->prepare('UPDATE supplier_orders SET received_at = NULL WHERE quote_id = ? AND ordered_by_factory_id = ?')
-            ->execute([$quoteId, $factoryId]);
-        $msg = 'Bought-in items marked not received.';
+        $pdo->prepare("UPDATE supplier_orders SET received_at = NULL WHERE $where")->execute($args);
+        $msg = $what . ' marked not received.';
     } else {
-        $pdo->prepare('UPDATE supplier_orders SET received_at = COALESCE(received_at, NOW()) WHERE quote_id = ? AND ordered_by_factory_id = ?')
-            ->execute([$quoteId, $factoryId]);
-        $msg = 'Bought-in items marked received.';
+        $pdo->prepare("UPDATE supplier_orders SET received_at = COALESCE(received_at, NOW()) WHERE $where")->execute($args);
+        $msg = $what . ' marked received.';
     }
     factory_boughtin_restamp($pdo, $quoteId, $factoryId);
     // Phase 0: bought-in received can complete the Ready gate — roll it up.

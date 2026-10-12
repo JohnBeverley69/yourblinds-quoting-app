@@ -9,13 +9,19 @@ declare(strict_types=1);
  * account), showing only those lines — a tenant's own products never appear.
  * Replaces re-keying from Blind Matrix's Online Submission inbox.
  *
- * Read-only for now. Mark-as-received / production status / work sheets follow.
+ * Each order has two tracks (_partials/order_tracks.php): lines we MAKE, which
+ * go to the floor, and lines we BUY IN from a supplier, which are ordered then
+ * received. The tabs are the next jobs (New to accept · To make · To order ·
+ * Awaiting supplier · Ready to dispatch), and an order sits in every tab where it
+ * still has work. Each row has one main button for that tab; the rest are under
+ * "⋯". Route A of the factory order-flow rethink (John, 2026-10-12).
  */
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/blind_jobs.php';
 require __DIR__ . '/../_partials/factory_poll.php';
+require __DIR__ . '/../_partials/order_tracks.php';
 
 requireFactory();
 
@@ -102,7 +108,7 @@ try {
     if ($ids) {
         $ph = implode(',', array_fill(0, count($ids), '?'));
         $lStmt = $pdo->prepare(
-            "SELECT qi.quote_id, qi.line_no,
+            "SELECT qi.id, qi.quote_id, qi.line_no,
                     qi.product_name_snapshot, qi.system_name_snapshot,
                     qi.fabric_name_snapshot, qi.fabric_colour_snapshot,
                     qi.width_mm, qi.drop_mm, qi.quantity, qi.room_name
@@ -204,6 +210,73 @@ $newCount = 0;
 foreach ($orders as $o) {
     if (empty($o['factory_status'])) $newCount++;   // no factory_jobs row = new
 }
+
+// ── The two tracks + the tabs ───────────────────────────────────────────────
+// Each order's MAKE progress and BUY-IN suppliers, then the tabs (lanes) it
+// belongs in: one per job still to do. An order with a roller on the floor and a
+// venetian still to order from Hunter Douglas is in both To make and To order.
+$tracks = !empty($ids) ? ot_order_tracks($pdo, $ids, $MASTER) : [];
+$LANES = [
+    'new'        => 'New to accept',
+    'make'       => 'To make',
+    'order'      => 'To order from suppliers',
+    'awaiting'   => 'Awaiting supplier',
+    'ready'      => 'Ready to dispatch',
+    'open'       => 'All open',
+    'dispatched' => 'Dispatched',
+];
+$lane = (string) ($_GET['lane'] ?? 'open');
+if (!isset($LANES[$lane])) $lane = 'open';
+$emptyTrack = ['make' => ['units' => 0, 'made' => 0, 'released' => false], 'buy' => [],
+               'total_units' => 0, 'ready_units' => 0, 'waiting_on' => [], 'lines' => []];
+
+$laneCount = array_fill_keys(array_keys($LANES), 0);
+$lanesOf   = [];
+foreach ($orders as $o) {
+    $qid = (int) $o['id'];
+    $t   = $tracks[$qid] ?? $emptyTrack;
+    $fj  = (string) ($o['factory_status'] ?? '');
+    $fs  = (string) ($stageBy[$qid] ?? '');
+    if ($fs === 'dispatched' || $fj === 'dispatched') {
+        $ls = ['dispatched'];
+    } else {
+        $ls = ['open'];
+        if ($fj === '') $ls[] = 'new';
+        if ($fj !== '' && $t['make']['made'] < $t['make']['units']) $ls[] = 'make';
+        foreach ($t['buy'] as $b) {
+            if ($b['state'] === 'to_order') $ls[] = 'order';
+            if ($b['state'] === 'ordered')  $ls[] = 'awaiting';
+        }
+        if ($fs === 'ready') $ls[] = 'ready';
+    }
+    $lanesOf[$qid] = array_values(array_unique($ls));
+    foreach ($lanesOf[$qid] as $l) $laneCount[$l]++;
+}
+$orders = array_values(array_filter($orders, static fn ($o) => in_array($lane, $lanesOf[(int) $o['id']] ?? [], true)));
+
+/**
+ * The jobs this order has outstanding, in the order the office should do them:
+ * accept it, order its bought-in items (suppliers take days), start production,
+ * book the supplier's goods in, dispatch. The first one that fits the tab is the
+ * row's main button; the rest go under "⋯".
+ */
+$jobsFor = static function (array $o, array $t, string $fs): array {
+    $fj   = (string) ($o['factory_status'] ?? '');
+    $jobs = [];
+    if ($fj === '') $jobs[] = ['lane' => 'new', 'kind' => 'accept'];
+    foreach ($t['buy'] as $sup => $b) {
+        if ($b['state'] === 'to_order') $jobs[] = ['lane' => 'order', 'kind' => 'order', 'supplier' => $sup];
+    }
+    if ($fj === 'received' && $t['make']['units'] > 0) $jobs[] = ['lane' => 'make', 'kind' => 'start'];
+    foreach ($t['buy'] as $sup => $b) {
+        if ($b['state'] === 'ordered') $jobs[] = ['lane' => 'awaiting', 'kind' => 'receive', 'supplier' => $sup];
+    }
+    if ($fs === 'ready' && $fj !== 'dispatched') $jobs[] = ['lane' => 'ready', 'kind' => 'dispatch'];
+    if ($fj === 'in_production' && $t['make']['made'] < $t['make']['units']) {
+        $jobs[] = ['lane' => 'make', 'kind' => 'floor'];   // the floor is doing it; nothing to click but a look
+    }
+    return $jobs;
+};
 
 // One-shot flash from a status action.
 $flashOk  = (string) ($_SESSION['flash_success'] ?? '');
@@ -328,6 +401,51 @@ require __DIR__ . '/../_partials/factory_head.php';
     .io-btn.edit:hover { background: #e2e8f0; }
     .io-undo { background: none; border: none; color: var(--text-muted, #667); font-size: 0.75rem; text-decoration: underline; cursor: pointer; padding: 0; }
 
+    /* Tabs = the next jobs. An order appears in every tab it has work in. */
+    .io-lanes { display: flex; flex-wrap: wrap; gap: 0.4rem; margin: 0 0 0.8rem; }
+    .io-lanes a { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; border-radius: 999px;
+        border: 1px solid var(--border, #e5e7eb); background: var(--bg-card, #fff); color: inherit; text-decoration: none;
+        font-size: 0.875rem; font-weight: 600; white-space: nowrap; }
+    .io-lanes a .n { font-variant-numeric: tabular-nums; color: var(--text-muted, #667); font-weight: 700; }
+    .io-lanes a.active { background: #1f2a37; border-color: #1f2a37; color: #fff; }
+    .io-lanes a.active .n { color: #cbd5e1; }
+    .io-lanes .sep { width: 1px; background: var(--border, #e5e7eb); margin: 0.2rem 0.2rem; }
+
+    /* The two tracks: MAKE (to the floor) and one chip per BUY-IN supplier. */
+    .io-track { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.6875rem; font-weight: 700;
+        padding: 0.15rem 0.5rem; border-radius: 6px; white-space: nowrap; text-decoration: none; border: 1px solid transparent; }
+    .io-track .k { letter-spacing: 0.05em; opacity: 0.8; }
+    .io-track.t-todo { background: #fee2e2; color: #991b1b; }
+    .io-track.t-wait { background: #dbeafe; color: #1e40af; }
+    .io-track.t-prog { background: #fef3c7; color: #92600a; }
+    .io-track.t-done { background: #dcfce7; color: #166534; }
+    .io-track.t-idle { background: var(--bg-subtle, #f1f5f9); color: #475569; border-color: var(--border, #e5e7eb); }
+    .io-track .warn { color: #b91c1c; font-weight: 800; }
+    .io-ready { flex-basis: 100%; font-size: 0.75rem; color: var(--text-muted, #667); }
+    .io-ready b { color: var(--text-secondary, #334155); }
+
+    /* "⋯" — everything that isn't the row's main job. */
+    .io-more { position: relative; }
+    .io-more > summary { list-style: none; cursor: pointer; font-weight: 800; letter-spacing: 0.1em; padding: 0.3rem 0.6rem;
+        border-radius: 8px; border: 1px solid var(--border, #e5e7eb); background: var(--bg-subtle, #f1f5f9); color: #334155; }
+    .io-more > summary::-webkit-details-marker { display: none; }
+    .io-more[open] > summary { background: #e2e8f0; }
+    .io-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; min-width: 13rem; display: flex; flex-direction: column;
+        background: var(--bg-card, #fff); border: 1px solid var(--border, #e5e7eb); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.12); padding: 0.3rem; }
+    .io-menu a, .io-menu button { font: inherit; font-size: 0.875rem; text-align: left; color: inherit; text-decoration: none; background: none;
+        border: 0; border-radius: 6px; padding: 0.45rem 0.6rem; cursor: pointer; width: 100%; }
+    .io-menu a:hover, .io-menu button:hover { background: var(--bg-subtle, #f1f5f9); }
+    .io-menu form { margin: 0; }
+    .io-menu hr { border: 0; border-top: 1px solid var(--border, #e5e7eb); margin: 0.25rem 0; }
+    .io-btn.floor { background: var(--bg-subtle, #f1f5f9); color: #334155; text-decoration: none; border: 1px solid var(--border, #e5e7eb); }
+    .io-lines .track { font-size: 0.75rem; font-weight: 700; white-space: nowrap; }
+    .io-actions form { margin: 0; }
+    /* The "⋯" menu drops out of its row, so the list can't clip its overflow;
+       the rounded corners come from the first and last rows instead. */
+    .io-list { overflow: visible; }
+    .io-list-head { border-radius: 12px 12px 0 0; }
+    .io-item:last-child { border-radius: 0 0 12px 12px; }
+
     .io-detail { padding: 0.2rem 1rem 0.9rem; }
     .io-detail .io-refs { color: var(--text-muted, #667); font-size: 0.85rem; margin: 0 0 0.5rem; }
     .io-lines { width: 100%; border-collapse: collapse; }
@@ -366,8 +484,18 @@ require __DIR__ . '/../_partials/factory_head.php';
 <?php if ($flashOk !== ''): ?><div class="io-flash ok"><?= e($flashOk) ?></div><?php endif; ?>
 <?php if ($flashErr !== ''): ?><div class="io-flash err"><?= e($flashErr) ?></div><?php endif; ?>
 
+<nav class="io-lanes" aria-label="Show orders by their next job">
+    <?php foreach ($LANES as $k => $label):
+        $href = '/factory/incoming-orders.php' . ($k === 'open' ? '' : '?lane=' . $k); ?>
+        <?php if ($k === 'open'): ?><span class="sep" aria-hidden="true"></span><?php endif; ?>
+        <a href="<?= e($href) ?>" class="<?= $lane === $k ? 'active' : '' ?>"<?= $lane === $k ? ' aria-current="page"' : '' ?>><?= e($label) ?> <span class="n"><?= (int) $laneCount[$k] ?></span></a>
+    <?php endforeach; ?>
+</nav>
+
 <?php if ($loadError !== null): ?>
     <div class="io-empty">Couldn't load orders: <?= e($loadError) ?></div>
+<?php elseif (!$orders && $lane !== 'open'): ?>
+    <div class="io-empty">Nothing in <strong><?= e($LANES[$lane]) ?></strong> right now.</div>
 <?php elseif (!$orders): ?>
     <div class="io-empty">No incoming orders yet. Placed orders containing <?= e($factoryName) ?> lines will appear here — nothing to re-key.</div>
 <?php else: ?>
@@ -444,26 +572,49 @@ require __DIR__ . '/../_partials/factory_head.php';
                     <span class="stat">
                         <?php if (isset($remakeOf[$qid])): ?><?= rm_badge($remakeOf[$qid]) ?><?php endif; ?>
                         <?php
-                            // Phase 3: the single fulfilment stage IS the status now (Confirmed /
-                            // In Production / Ready / Dispatched), coloured by stage. The old raw
-                            // factory-jobs pill has been retired now the roll-up is proven.
+                            // One set of words on this page: New (not accepted yet) /
+                            // Received (accepted) / In production / Ready / Dispatched.
+                            // os_stage_label() says "Confirmed" for Received, but it also
+                            // labels the trade customer's own pill, so it's mapped here.
                             $fs = $stageBy[$qid] ?? null;
+                            $t  = $tracks[$qid] ?? $emptyTrack;
+                            $fjNow = (string) ($o['factory_status'] ?? '');
                             $stCols = [
-                                'confirmed'     => ['#5b6b7f', '#e6ebf1'],
+                                'new'           => ['#b91c1c', '#fee2e2'],
+                                'confirmed'     => ['#1e40af', '#dbeafe'],
                                 'in_production' => ['#b5730f', '#f7ecd6'],
                                 'ready'         => ['#245ea3', '#dde8f6'],
                                 'dispatched'    => ['#0d7a67', '#d6ece6'],
                             ];
-                            $sc = $stCols[$fs] ?? ['#5b6b7f', '#eef1f4'];
+                            $stKey = ($fjNow === '' && $fs !== 'dispatched') ? 'new' : (string) $fs;
+                            $stLabel = [
+                                'new' => 'New', 'confirmed' => 'Received', 'in_production' => 'In production',
+                                'ready' => 'Ready', 'dispatched' => 'Dispatched',
+                            ][$stKey] ?? ($status !== '' ? ucfirst($status) : 'New');
+                            $sc = $stCols[$stKey] ?? ['#5b6b7f', '#eef1f4'];
                         ?>
-                        <?php if ($fs !== null): ?>
-                            <span class="io-stage" style="color:<?= $sc[0] ?>;background:<?= $sc[1] ?>;font-weight:700"><?= e(os_stage_label($fs)) ?></span>
-                        <?php else: ?>
-                            <span class="io-status <?= $status === 'ordered' ? 'ordered' : '' ?>"><?= e($status !== '' ? $status : 'new') ?></span>
+                        <span class="io-stage" style="color:<?= $sc[0] ?>;background:<?= $sc[1] ?>;font-weight:700"><?= e($stLabel) ?></span>
+                        <?php
+                            // MAKE track — the blinds we make, linked to the floor.
+                            $mk = $t['make'];
+                            if ($mk['units'] > 0):
+                                $mkCls = $mk['made'] >= $mk['units'] ? 't-done' : ($mk['released'] ? 't-prog' : 't-idle');
+                                $mkTxt = $mk['released'] || $mk['made'] > 0
+                                    ? $mk['made'] . '/' . $mk['units'] . ' made'
+                                    : $mk['units'] . ' to make';
+                        ?>
+                            <a class="io-track <?= $mkCls ?>" href="/factory/order-areas.php?order=<?= $qid ?>" title="Blinds we make here — open this order on the floor"><span class="k">MAKE</span> <?= e($mkTxt) ?></a>
                         <?php endif; ?>
-                        <?php if ($prog !== null && $prog['total'] > 0): ?>
-                            <a class="io-prog<?= $prog['done'] >= $prog['total'] ? ' all' : '' ?>" href="/factory/floor.php" title="On the production floor"><?= (int) $prog['done'] ?>/<?= (int) $prog['total'] ?> made</a>
-                        <?php endif; ?>
+                        <?php
+                            // BUY-IN track — one chip per supplier.
+                            foreach ($t['buy'] as $supName => $b):
+                                $bCls = $b['state'] === 'received' ? 't-done' : ($b['state'] === 'ordered' ? 't-wait' : 't-todo');
+                                $bTxt = $b['state'] === 'received' ? 'received'
+                                      : ($b['state'] === 'ordered' ? 'ordered ' . date('j M', strtotime((string) $b['sent_at'])) : $b['units'] . ' to order');
+                                $noMail = $b['state'] === 'to_order' && !$b['has_email'];
+                        ?>
+                            <span class="io-track <?= $bCls ?>" title="<?= (int) $b['units'] ?> bought in from <?= e($supName) ?><?= $noMail ? ' — no order email set for this supplier (Settings › Suppliers), so it can\'t be sent automatically' : '' ?>"><span class="k">BUY</span> <?= e($supName) ?> · <?= e($bTxt) ?><?php if ($noMail): ?> <span class="warn">· no email set</span><?php endif; ?></span>
+                        <?php endforeach; ?>
                         <?php
                             // "Waiting on …" — the outstanding parts by bench/stream, so
                             // the queue shows WHY an order isn't finished at a glance.
@@ -476,74 +627,79 @@ require __DIR__ . '/../_partials/factory_head.php';
                             }
                         ?>
                         <?php if ($parts): ?>
-                            <span class="io-waiting" title="Parts still to make on the floor">Waiting on <b><?= implode('</b> · <b>', $parts) ?></b></span>
+                            <span class="io-waiting" title="Parts still to make on the floor">Floor: <b><?= implode('</b> · <b>', $parts) ?></b></span>
                         <?php endif; ?>
-                        <?php if ($boughtinQty > 0): ?>
-                            <?php if ($supReceived): ?>
-                                <span class="io-stage" style="color:#166534;background:#dcfce7" title="Bought-in items received">Bought-in: received</span>
-                            <?php elseif ($supOrdered): ?>
-                                <span class="io-stage" style="color:#1e40af;background:#dbeafe" title="Ordered from supplier <?= e(date('j M Y', strtotime((string) $supOrdered))) ?>">Bought-in: ordered</span>
-                            <?php else: ?>
-                                <span class="io-stage" style="color:#b91c1c;background:#fee2e2" title="<?= (int) $boughtinQty ?> bought-in item(s) to order from the supplier">Bought-in: <?= (int) $boughtinQty ?> to order</span>
-                            <?php endif; ?>
+                        <?php if ($fs !== 'dispatched' && $t['total_units'] > 0): ?>
+                            <span class="io-ready">
+                                <b><?= (int) $t['ready_units'] ?> of <?= (int) $t['total_units'] ?> ready</b><?php if ($t['waiting_on']): ?> · waiting on <?= e(implode(' · ', $t['waiting_on'])) ?><?php endif; ?>
+                            </span>
                         <?php endif; ?>
                     </span>
                     <span class="io-actions">
-                        <?php if ($ioOffice): ?>
-                        <a class="io-btn edit" href="/factory/edit-order.php?order=<?= $qid ?>">Edit</a>
-                        <?php endif; ?>
-                        <a class="io-btn worksheet" href="/factory/worksheet-print.php?order=<?= $qid ?>" target="_blank" rel="noopener">Worksheet</a>
-                        <?php if ($ioOffice): /* office-only row actions */ ?>
-                        <?php if ($boughtinQty > 0 && !$supReceived): ?>
-                            <a class="io-btn" href="/factory/order-suppliers.php?id=<?= $qid ?>" title="Order the bought-in items from their supplier"><?= $supOrdered ? '📦 Bought-in' : '📦 Order bought-in' ?></a>
-                        <?php endif; ?>
-                        <?php if ($boughtinQty > 0 && $supOrdered && !$supReceived): ?>
-                            <form method="post" action="/factory/boughtin-received.php" style="margin:0">
-                                <?= csrf_field() ?>
-                                <input type="hidden" name="quote_id" value="<?= $qid ?>">
-                                <button type="submit" class="io-btn" title="Mark the bought-in items as received from the supplier">✓ Received</button>
-                            </form>
-                        <?php endif; ?>
-                        <?php
-                            // Phase 1: dispatch is gated on Ready (all made AND all bought-in received).
-                            // Phase 3: an all-bought-in order (no in-house blinds) has nothing to make,
-                            // so skip the production steps — it goes received -> dispatch once the
-                            // bought-in items arrive.
-                            $dispatchReady = ($stageBy[$qid] ?? '') === 'ready';
-                            $noProduction  = ((int) ($o['bev_qty'] ?? 0) === 0);
-                        ?>
-                        <?php if ($noProduction): ?>
-                            <?php if ($next !== null && $next[0] === 'received'): ?>
-                                <form method="post" action="/factory/set-status.php" style="margin:0">
-                                    <?= csrf_field() ?>
-                                    <input type="hidden" name="quote_id" value="<?= $qid ?>">
-                                    <button type="submit" name="status" value="received" class="io-btn advance">Mark as received</button>
-                                </form>
-                            <?php endif; ?>
-                            <?php if ($dispatchReady): ?>
-                                <form method="post" action="/factory/set-status.php" style="margin:0">
-                                    <?= csrf_field() ?>
-                                    <input type="hidden" name="quote_id" value="<?= $qid ?>">
-                                    <button type="submit" name="status" value="dispatched" class="io-btn advance">Dispatch</button>
-                                </form>
-                            <?php endif; ?>
-                        <?php elseif ($next !== null && ($next[0] !== 'dispatched' || $dispatchReady)):
-                            // "Mark made" while the floor still has blinds to finish: the
-                            // office is overriding the floor, so say so and finish them
-                            // explicitly (force_made) rather than letting the order read
-                            // made while the floor says 0 of 2.
-                            $floorOpen = ($next[0] === 'made' && $prog !== null && $prog['total'] > 0 && $prog['done'] < $prog['total'])
+                        <?php if (!$ioOffice): /* floor logins: read and print tickets only, as before */ ?>
+                            <a class="io-btn worksheet" href="/factory/worksheet-print.php?order=<?= $qid ?>" target="_blank" rel="noopener">Worksheet</a>
+                        <?php else:
+                            // Every job this order still has, in doing order. The main
+                            // button is the first one belonging to this tab (in All open,
+                            // simply the first); the others go under "⋯".
+                            $jobs = $jobsFor($o, $t, (string) $fs);
+                            $main = null;
+                            foreach ($jobs as $i => $j) {
+                                if ($lane === 'open' || $j['lane'] === $lane) { $main = $j; unset($jobs[$i]); break; }
+                            }
+                            $backQ = '&back=' . rawurlencode($lane);
+                            // Render one job as a button (main) or a menu item.
+                            $jobHtml = static function (array $j, int $qid, string $lane, string $cls, string $backQ): string {
+                                $h  = csrf_field() . '<input type="hidden" name="quote_id" value="' . $qid . '">'
+                                    . '<input type="hidden" name="back" value="' . e($lane) . '">';
+                                $sup = (string) ($j['supplier'] ?? '');
+                                switch ($j['kind']) {
+                                    case 'accept':
+                                        return '<form method="post" action="/factory/set-status.php">' . $h
+                                             . '<button type="submit" name="status" value="received" class="' . $cls . '" title="Take the order on — it moves to To make / To order">Accept</button></form>';
+                                    case 'start':
+                                        return '<form method="post" action="/factory/set-status.php">' . $h
+                                             . '<button type="submit" name="status" value="in_production" class="' . $cls . '" title="Put the blinds we make on the floor">Start production</button></form>';
+                                    case 'order':
+                                        return '<a class="' . $cls . '" href="/factory/order-suppliers.php?id=' . $qid . $backQ . '" title="Send the bought-in lines to ' . e($sup) . '">Order from ' . e($sup) . '</a>';
+                                    case 'receive':
+                                        return '<form method="post" action="/factory/boughtin-received.php">' . $h
+                                             . '<input type="hidden" name="supplier_name" value="' . e($sup) . '">'
+                                             . '<button type="submit" class="' . $cls . '" title="The goods from ' . e($sup) . ' have arrived">Received from ' . e($sup) . '</button></form>';
+                                    case 'dispatch':
+                                        return '<form method="post" action="/factory/set-status.php">' . $h
+                                             . '<button type="submit" name="status" value="dispatched" class="' . $cls . '" title="Everything is made and received">Dispatch</button></form>';
+                                    case 'floor':
+                                        return '<a class="' . ($cls === 'io-btn advance' ? 'io-btn floor' : $cls) . '" href="/factory/order-areas.php?order=' . $qid . '" title="The floor is making these — nothing to click until they\'re done">View on floor</a>';
+                                }
+                                return '';
+                            };
+                            // "Mark made" overrides the floor: say so and finish its blinds
+                            // (force_made) rather than letting the order read made while the
+                            // floor says 0 of 2.
+                            $floorOpen = ($fjNow === 'in_production' && $prog !== null && $prog['total'] > 0 && $prog['done'] < $prog['total'])
                                 ? (int) $prog['total'] - (int) $prog['done'] : 0;
                         ?>
-                            <form method="post" action="/factory/set-status.php" style="margin:0"<?php if ($floorOpen > 0): ?> onsubmit="return confirm(<?= e(json_encode('The floor still has ' . $floorOpen . ' of ' . (int) $prog['total'] . ' blind' . ((int) $prog['total'] === 1 ? '' : 's') . ' to finish. Mark the order made anyway? The remaining blinds will be marked complete on the floor.')) ?>)"<?php endif; ?>>
-                                <?= csrf_field() ?>
-                                <input type="hidden" name="quote_id" value="<?= $qid ?>">
-                                <?php if ($floorOpen > 0): ?><input type="hidden" name="force_made" value="1"><?php endif; ?>
-                                <button type="submit" name="status" value="<?= e($next[0]) ?>" class="io-btn advance"><?= e($next[1]) ?></button>
-                            </form>
-                        <?php elseif ($next !== null && $next[0] === 'dispatched'): ?>
-                            <span class="io-btn advance" style="opacity:.45;cursor:not-allowed" title="Not ready to dispatch yet — every blind must be made and every bought-in item received first">Dispatch</span>
-                        <?php endif; ?>
+                            <?php if ($main !== null): ?><?= $jobHtml($main, $qid, $lane, 'io-btn advance', $backQ) ?><?php endif; ?>
+                            <details class="io-more">
+                                <summary aria-label="More actions for <?= e($ref) ?>" title="More actions">&middot;&middot;&middot;</summary>
+                                <div class="io-menu">
+                                    <?php foreach ($jobs as $j): ?><?= $jobHtml($j, $qid, $lane, '', $backQ) ?><?php endforeach; ?>
+                                    <?php if ($jobs): ?><hr><?php endif; ?>
+                                    <a href="/factory/worksheet-print.php?order=<?= $qid ?>" target="_blank" rel="noopener">Worksheet</a>
+                                    <a href="/factory/edit-order.php?order=<?= $qid ?>">Edit order</a>
+                                    <?php if ($t['make']['released']): ?><a href="/factory/order-areas.php?order=<?= $qid ?>">View on floor</a><?php endif; ?>
+                                    <?php if ($fjNow === 'in_production'): ?>
+                                        <form method="post" action="/factory/set-status.php"<?php if ($floorOpen > 0): ?> onsubmit="return confirm(<?= e(json_encode('The floor still has ' . $floorOpen . ' of ' . (int) $prog['total'] . ' blind' . ((int) $prog['total'] === 1 ? '' : 's') . ' to finish. Mark the order made anyway? The remaining blinds will be marked complete on the floor.')) ?>)"<?php endif; ?>>
+                                            <?= csrf_field() ?>
+                                            <input type="hidden" name="quote_id" value="<?= $qid ?>">
+                                            <input type="hidden" name="back" value="<?= e($lane) ?>">
+                                            <?php if ($floorOpen > 0): ?><input type="hidden" name="force_made" value="1"><?php endif; ?>
+                                            <button type="submit" name="status" value="made">Mark made</button>
+                                        </form>
+                                    <?php endif; ?>
+                                </div>
+                            </details>
                         <?php endif; /* $ioOffice */ ?>
                         <span class="io-chev" aria-hidden="true">&#9654;</span>
                     </span>
@@ -561,7 +717,7 @@ require __DIR__ . '/../_partials/factory_head.php';
                     <?php if ($lines): ?>
                     <table class="io-lines">
                         <thead>
-                            <tr><th>#</th><th>Product</th><th>Fabric / Colour</th><th class="num">W&times;D (mm)</th><th class="num">Qty</th><th>Room</th></tr>
+                            <tr><th>#</th><th>Product</th><th>Fabric / Colour</th><th class="num">W&times;D (mm)</th><th class="num">Qty</th><th>Room</th><th>Track</th><th>Status</th></tr>
                         </thead>
                         <tbody>
                             <?php foreach ($lines as $ln):
@@ -579,15 +735,19 @@ require __DIR__ . '/../_partials/factory_head.php';
                                     <td class="num"><?= (int) $ln['width_mm'] ?> &times; <?= (int) $ln['drop_mm'] ?></td>
                                     <td class="num"><?= (int) $ln['quantity'] ?></td>
                                     <td><?= e((string) ($ln['room_name'] ?? '')) ?></td>
+                                    <?php $lt = $t['lines'][(int) $ln['id']] ?? null; ?>
+                                    <td class="track"><?= $lt === null ? '' : ($lt['track'] === 'make' ? 'MAKE' : 'BUY · ' . e($lt['supplier'])) ?></td>
+                                    <td><?= $lt === null ? '' : e($lt['status']) ?></td>
                                 </tr>
                             <?php endforeach; ?>
                         </tbody>
                     </table>
                     <?php endif; ?>
-                    <?php if ($prev !== null): ?>
+                    <?php if ($prev !== null && $ioOffice): ?>
                         <form method="post" action="/factory/set-status.php" style="margin:0.6rem 0 0">
                             <?= csrf_field() ?>
                             <input type="hidden" name="quote_id" value="<?= $qid ?>">
+                            <input type="hidden" name="back" value="<?= e($lane) ?>">
                             <button type="submit" name="status" value="<?= e($prev) ?>" class="io-undo">&larr; step status back</button>
                         </form>
                     <?php endif; ?>
@@ -608,6 +768,12 @@ require __DIR__ . '/../_partials/factory_head.php';
             if (detail) detail.hidden = !open;
             sum.setAttribute('aria-expanded', open ? 'true' : 'false');
         }
+        // One "⋯" menu open at a time; a click anywhere else closes it.
+        document.addEventListener('click', function (e) {
+            document.querySelectorAll('.io-more[open]').forEach(function (d) {
+                if (!d.contains(e.target)) d.removeAttribute('open');
+            });
+        });
         list.addEventListener('click', function (e) {
             if (e.target.closest('.io-actions')) return;   // buttons/links keep their own behaviour
             var sum = e.target.closest('.io-summary');
