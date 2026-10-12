@@ -74,7 +74,7 @@ $ORDER = [
     'instaprice-quick',
     'quote-build',
     'quote-send-accept',
-    'quote-new-order',
+    // 'quote-new-order' — direct orders switched off 2026-10-12.
     'quote-offline',
     'quote-order-invoice',
     'orders-list',
