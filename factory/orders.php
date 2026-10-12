@@ -226,5 +226,6 @@ $activeNav = $stage === 'notplaced' ? 'factory-quotes' : 'factory-orders';
   <?php endif; ?>
 </main>
 </div>
+<?php require_once __DIR__ . '/../_partials/factory_poll_banner.php'; fx_poll_banner(db(), 'incoming', current_factory_id()); ?>
 </body>
 </html>

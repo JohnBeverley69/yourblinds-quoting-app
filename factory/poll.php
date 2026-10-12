@@ -20,6 +20,6 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 
 $what = (string) ($_GET['what'] ?? 'incoming');
-if (!in_array($what, ['incoming', 'floor'], true)) $what = 'incoming';
+if (!in_array($what, ['incoming', 'floor', 'pipeline'], true)) $what = 'incoming';
 
 echo json_encode(['v' => fx_poll_version(db(), $what, current_factory_id())]);

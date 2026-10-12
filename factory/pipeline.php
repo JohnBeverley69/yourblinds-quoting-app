@@ -366,5 +366,6 @@ $activeNav = 'factory-pipeline';
     The <a href="/master-admin/dispatch.php">Dispatch tray</a> is still where the van run is ticked and printed.<?php else: ?>Dispatched orders leave after 7 days and stay on <a href="/factory/orders.php?stage=all">Orders</a>.<?php endif; ?></p>
 </main>
 </div>
+<?php require_once __DIR__ . '/../_partials/factory_poll_banner.php'; fx_poll_banner(db(), 'pipeline', current_factory_id()); ?>
 </body>
 </html>

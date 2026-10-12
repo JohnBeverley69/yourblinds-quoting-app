@@ -236,5 +236,6 @@ $activeNav = 'factory-dashboard';
   </div>
 </main>
 </div>
+<?php require_once __DIR__ . '/../_partials/factory_poll_banner.php'; fx_poll_banner(db(), 'pipeline', current_factory_id()); ?>
 </body>
 </html>
