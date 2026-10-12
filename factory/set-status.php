@@ -148,8 +148,24 @@ try {
         if (bj_tables_ready($pdo)) bj_clear_order($pdo, $quoteId);
         $_SESSION['flash_success'] = 'Order moved back to new.';
     } else {
-        $recvAt = $target === 'received' ? date('Y-m-d H:i:s') : null;
-        $recvBy = $target === 'received' ? ($userId ?: null)   : null;
+        // "Accept" (Incoming orders): take the order on AND put its blinds on the
+        // floor in one go — John, 2026-10-12, Mark-as-received then Start production
+        // was a pointless extra click. An order with nothing to make here (all
+        // bought in) just gets accepted.
+        $accept = $target === 'received' && !empty($_POST['accept']);
+        if ($accept) {
+            require_once __DIR__ . '/../_partials/bought_in.php';
+            $mk = $pdo->prepare(
+                'SELECT 1 FROM quote_items qi JOIN products p ON p.id = qi.product_id '
+                . bought_in_master_join('p', 'mp') . '
+                  WHERE qi.quote_id = ? AND COALESCE(NULLIF(p.source_client_id,0), p.client_id) = ?
+                    AND ' . bought_in_inhouse_predicate('mp') . ' LIMIT 1'
+            );
+            $mk->execute([$quoteId, $MASTER]);
+            if ($mk->fetchColumn()) $target = 'in_production';
+        }
+        $recvAt = ($target === 'received' || $accept) ? date('Y-m-d H:i:s') : null;
+        $recvBy = ($target === 'received' || $accept) ? ($userId ?: null)   : null;
         $pdo->prepare(
             "INSERT INTO factory_jobs (quote_id, status, status_at, status_by, received_at, received_by)
              VALUES (?, ?, NOW(), ?, ?, ?)
@@ -171,7 +187,9 @@ try {
         if ($forcedBlinds > 0) {
             $released .= " {$forcedBlinds} unfinished blind" . ($forcedBlinds === 1 ? ' was' : 's were') . ' marked complete on the floor.';
         }
-        $_SESSION['flash_success'] = 'Order moved to ' . (FACTORY_STAGE_LABELS[$target] ?? $target) . '.' . $released;
+        $_SESSION['flash_success'] = ($accept
+                ? 'Order accepted' . ($target === 'in_production' ? ' and put on the floor' : '') . '.'
+                : 'Order moved to ' . (FACTORY_STAGE_LABELS[$target] ?? $target) . '.') . $released;
     }
 } catch (Throwable $e) {
     $_SESSION['flash_error'] = 'Could not update the order: ' . $e->getMessage()
