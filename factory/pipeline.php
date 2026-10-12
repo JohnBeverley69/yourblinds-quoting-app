@@ -210,15 +210,28 @@ $activeNav = 'factory-pipeline';
       .pl-sum { display:flex; flex-wrap:wrap; gap:.5rem; margin:0 0 .9rem; font-size:.8125rem; }
       .pl-sum span { padding:.2rem .65rem; border-radius:999px; background:var(--bg-card); border:1px solid var(--border); color:var(--text-muted); }
       .pl-sum b { color:var(--text-primary); }
-      .pl-scroll { overflow-x:auto; padding-bottom:.5rem; }
-      .pl-board { display:grid; grid-auto-flow:column; grid-auto-columns:260px; gap:.75rem; align-items:start; width:max-content; }
-      .pl-col { background:var(--bg-subtle-2); border-radius:12px; padding:.6rem; display:flex; flex-direction:column; gap:.6rem; min-height:12rem; }
+      .pl-board { display:grid; grid-template-columns:repeat(<?= count($COLS) ?>, minmax(0, 1fr)); gap:.4rem; align-items:start; }
+      .pl-col { background:var(--bg-subtle-2); border-radius:10px; padding:.4rem; display:flex; flex-direction:column; gap:.2rem; min-width:0; }
+      @media (max-width:1100px){ .pl-scroll { overflow-x:auto; } .pl-board { grid-template-columns:repeat(<?= count($COLS) ?>, 150px); width:max-content; } }
+      .pl-scroll { padding-bottom:.5rem; }
       .pl-col > header { display:flex; justify-content:space-between; align-items:center; padding:.15rem .2rem .35rem; border-bottom:3px solid var(--pl-c); }
       .pl-col h2 { margin:0; font-size:.875rem; font-weight:700; color:var(--text-primary); }
       .pl-n { font-size:.75rem; font-weight:700; color:var(--pl-c); background:var(--bg-card); border-radius:999px; padding:0 .5rem; }
-      .pl-hint { margin:0 .2rem; font-size:.75rem; color:var(--text-faint); }
+      .pl-hint { margin:0 .15rem .15rem; font-size:.6875rem; line-height:1.3; color:var(--text-faint); }
       .pl-empty { margin:.2rem; font-size:.8125rem; color:var(--text-faint); }
-      .pl-card { background:var(--bg-card); border:1px solid var(--border); border-radius:10px; padding:.7rem .75rem; display:flex; flex-direction:column; gap:.4rem; }
+      /* Collapsed: one line with the order number. Click it to open the card. */
+      .pl-card { background:var(--bg-card); border:1px solid var(--border); border-radius:7px; }
+      .pl-card > summary { list-style:none; cursor:pointer; display:flex; align-items:center; gap:.35rem; padding:.18rem .45rem;
+                           font-weight:700; font-size:.78rem; line-height:1.35; color:var(--text-primary); white-space:nowrap; overflow:hidden; }
+      .pl-card > summary::-webkit-details-marker { display:none; }
+      .pl-card > summary::before { content:"\25B8"; font-size:.7rem; color:var(--text-faint); }
+      .pl-card[open] > summary::before { content:"\25BE"; }
+      .pl-card > summary:hover { color:var(--link); }
+      .pl-card[open] { box-shadow:0 2px 8px rgba(15,23,42,.12); }
+      .pl-sn { overflow:hidden; text-overflow:ellipsis; }
+      .pl-dot { width:.5rem; height:.5rem; border-radius:50%; background:#b91c1c; flex:none; margin-left:auto; }
+      .pl-body { padding:0 .55rem .55rem; display:flex; flex-direction:column; gap:.35rem; }
+      .pl-tools { display:flex; gap:.4rem; margin-left:auto; }
       .pl-row { display:flex; justify-content:space-between; gap:.5rem; align-items:baseline; }
       .pl-num { font-weight:700; font-size:.875rem; color:var(--text-primary); text-decoration:none; }
       .pl-num:hover { color:var(--link); text-decoration:underline; }
@@ -277,6 +290,10 @@ $activeNav = 'factory-pipeline';
     <?php if ($money): $od = count(array_filter($board['to_pay'], static fn ($r) => $r['money'] === 'overdue')); ?>
       <?php if ($od > 0): ?><span style="background:#fee2e2;color:#991b1b;border-color:#fecaca"><b style="color:#991b1b"><?= $od ?></b> overdue</span><?php endif; ?>
     <?php endif; ?>
+    <div class="pl-tools">
+      <button type="button" class="btn btn-sm" onclick="document.querySelectorAll('.pl-card').forEach(function(d){d.open=true})">Open all</button>
+      <button type="button" class="btn btn-sm" onclick="document.querySelectorAll('.pl-card').forEach(function(d){d.open=false})">Close all</button>
+    </div>
   </div>
 
   <div class="pl-scroll">
@@ -287,9 +304,17 @@ $activeNav = 'factory-pipeline';
           <p class="pl-hint"><?= e($hint) ?></p>
           <?php if (!$cards): ?><p class="pl-empty">Nothing here.</p><?php endif; ?>
           <?php foreach ($cards as $r): $qid = (int) $r['id']; $due = $dueBy[$qid] ?? ''; ?>
-            <article class="pl-card">
+            <?php
+              // Red dot on the collapsed line when something needs chasing: a
+              // supplier item not ordered / not in yet, or money that's due.
+              $urgent = in_array($r['money'], ['needs_invoicing', 'overdue'], true);
+              foreach ($linesBy[$qid] ?? [] as $l) if ($lineStatus($r, $l)[1] === 'bad') { $urgent = true; break; }
+            ?>
+            <details class="pl-card"<?= ($q !== '' || $account >= 0) ? ' open' : '' ?>>
+              <summary title="<?= e($r['account']) ?>"><span class="pl-sn"><?= e((string) $r['quote_number']) ?></span><?php if ($urgent): ?><span class="pl-dot" aria-label="Needs attention"></span><?php endif; ?></summary>
+              <div class="pl-body">
               <div class="pl-row">
-                <a class="pl-num" href="<?= e($r['open_url']) ?>"><?= e((string) $r['quote_number']) ?></a>
+                <a class="pl-num" href="<?= e($r['open_url']) ?>">Open order &rarr;</a>
                 <?php if ($money): ?><span class="pl-val"><?= e($gbp($r['value'])) ?></span><?php endif; ?>
               </div>
               <div class="pl-acc"><?= e($r['account']) ?><?php if (trim((string) ($r['customer_reference'] ?? '')) !== ''): ?> <span class="pl-meta">&middot; <?= e((string) $r['customer_reference']) ?></span><?php endif; ?>
@@ -313,7 +338,8 @@ $activeNav = 'factory-pipeline';
                 <div class="pl-money"><?= fc_money_pill($r['money']) ?></div>
               <?php endif; ?>
               <?= $action($r) ?>
-            </article>
+              </div>
+            </details>
           <?php endforeach; ?>
         </section>
       <?php endforeach; ?>
