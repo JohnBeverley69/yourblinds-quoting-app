@@ -194,6 +194,15 @@ try {
 } catch (Throwable $e) {
     $_SESSION['flash_error'] = 'Could not update the order: ' . $e->getMessage()
         . ' — have the factory_jobs migrations been run?';
+    // The status write failed, so the order is NOT dispatched: stop here. Running
+    // the dispatch side effects below anyway issued a dispatched delivery note
+    // (and, with auto-invoice on, an invoice) for an order the floor never moved,
+    // so the paperwork said "gone out" while the order said otherwise. The stage
+    // is still re-rolled in case part of the write landed.
+    require_once __DIR__ . '/../_partials/order_stage.php';
+    recompute_order_stage($pdo, $quoteId);
+    header('Location: ' . $backTo);
+    exit;
 }
 
 // Phase 1: dispatching on the floor issues the delivery note too — one dispatch,
