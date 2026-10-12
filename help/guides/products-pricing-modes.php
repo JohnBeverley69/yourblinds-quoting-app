@@ -38,6 +38,7 @@ $script = [
     ['12', 'Discount has no default',          "The Discount box works differently, and this catches people out. There is no default behind it. Blank, or nought, means no discount at all. Sometimes the box is replaced by a green figure, with from your supplier underneath. Your supplier has given you that trade discount on their product. It is the one the pricing uses, so you cannot type over it.", 12],
     ['13', 'Markup or margin',                 "Two more things. If your Settings say you work in margin, this column says Margin instead of Markup. The customer pays the same either way. It only changes which number you type. And on a supplier list, the same two figures also sit on each price table, as Buying discount and Our markup. Change them in one place, and the other changes too.", 13],
     ['14', 'Save changes',                     "Finally, click Save changes. If something is wrong, like a minus number, the page comes back with a red message: Markup percent must be a non-negative number. Fix it, and save again. You will see Product updated, and land back on your products list. The new prices apply to quotes from now on. Quotes already saved keep their prices.", 14],
+    ['15', 'Undo a price change',              "One more thing. After you import width prices or rates, a strip appears at the top of this Edit page. It says Last change, what it was, and when, with an Undo button. Click Undo, and say OK. Every price that import changed goes back exactly as it was. If the prices have been edited since, it will not undo, so newer work is never lost.", 15],
 ];
 $len = static fn (int $n): string => (string) round(mb_strlen($script[$n - 1][2]) / 13.6);
 
@@ -81,7 +82,7 @@ $miniGrid = static function (bool $animate): string {
 };
 
 $L1 = $len(1); $L2 = $len(2); $L3 = $len(3); $L4 = $len(4); $L5 = $len(5); $L6 = $len(6); $L7 = $len(7);
-$L8 = $len(8); $L9 = $len(9); $L10 = $len(10); $L11 = $len(11); $L12 = $len(12); $L13 = $len(13); $L14 = $len(14);
+$L8 = $len(8); $L9 = $len(9); $L10 = $len(10); $L11 = $len(11); $L12 = $len(12); $L13 = $len(13); $L14 = $len(14); $L15 = $len(15);
 
 $bxPoster = $boxes();
 $bx2 = $boxes([], [], '');
@@ -114,7 +115,7 @@ $demo = <<<HTML
                   <div class="blk"><span class="bn">1</span><div><b>The tick-boxes</b><small>How the blind is measured and priced</small></div></div>
                   <div class="blk"><span class="bn">2</span><div><b>Pricing source</b><small>Whose prices are in your tables</small></div></div>
                   <div class="blk"><span class="bn">3</span><div><b>Pricing per system</b><small>Your markup and your discount</small></div></div>
-                  <p class="scs" style="margin-top:.8rem">Press <b>&#9654; Play</b> below &mdash; fourteen short chapters, at an easy pace.</p>
+                  <p class="scs" style="margin-top:.8rem">Press <b>&#9654; Play</b> below &mdash; fifteen short chapters, at an easy pace.</p>
                 </div>
 
                 <!-- 1 — where it lives -->
@@ -346,6 +347,20 @@ $demo = <<<HTML
                   <span class="chip a-pop" style="--d:21.5s;margin-top:.7rem">Saved quotes keep their prices</span>
                 </div>
 
+                <!-- 15 — undo a price change -->
+                <div class="sc" data-scene="15" data-len="{$L15}">
+                  <div class="sct a-fade" style="--d:.2s">Undo a price change</div>
+                  <div class="okbanner a-pop" style="--d:18.5s;margin-bottom:.5rem"><span>&#10003;</span><div>Undone: Width price import &mdash; 24 prices are back to what they were.</div></div>
+                  <div class="bstack">
+                  <div class="undobar a-mid" style="--d:4s;--d2:17.2s"><span>Last change: <b>Width price import (all price tables)</b> &middot; 12 Oct 10:42</span>
+                    <span class="btns a-ring" style="--d:12.5s">&#8630; Undo Width price import</span></div>
+                  <div class="undobar stale a-fade" style="--d:20.5s"><span>Last change: <b>Rate import (all price tables)</b> &middot; 12 Oct 11:05 &mdash; can&rsquo;t be undone, the prices have been edited since.</span></div>
+                  </div>
+                  <div class="cfm a-mid" style="--d:14s;--d2:17s">Undo &ldquo;Width price import (all price tables)&rdquo;? Every price it changed goes back to exactly what it was before (12 Oct 10:42). Unsaved edits on this page will be lost.
+                    <div class="act"><span class="btns">Cancel</span><span class="btnp a-press" style="--d:16s">OK</span></div></div>
+                  <span class="chip a-pop" style="--d:23s;margin-top:.6rem">Never overwrites newer work</span>
+                </div>
+
               </div>
             </div>
           </div>
@@ -512,6 +527,14 @@ return [
           .gd .sc[data-scene="14"] .row2c{ grid-template-columns:auto 1fr; }
           .gd .bstack{ display:grid; } .gd .bstack > div{ grid-area:1/1; }
 
+          /* 15 — undo */
+          .gd .undobar{ display:flex; align-items:center; gap:.6rem; flex-wrap:wrap; background:var(--panel); border:1px solid var(--line); border-radius:8px;
+                        padding:.45rem .65rem; font-size:.7rem; color:var(--soft); max-width:34rem; }
+          .gd .undobar b{ color:var(--ink); } .gd .undobar .btns{ margin-left:auto; } .gd .undobar.stale{ border-color:#f59e0b; }
+          .gd .cfm{ position:absolute; z-index:5; left:6%; top:5.5rem; max-width:22rem; background:var(--surface); border:1px solid var(--line);
+                    border-radius:12px; box-shadow:var(--gd-shadow); padding:.7rem .8rem; font-size:.7rem; color:var(--ink); line-height:1.45; }
+          .gd .cfm .act{ display:flex; justify-content:flex-end; gap:.4rem; margin-top:.55rem; }
+
           @media (max-width:640px){
             .gd .app{ grid-template-columns:1fr; } .gd .side{ display:none; } .gd .stage{ min-width:0; padding:.9rem .8rem; }
             .gd .sc{ min-height:440px; }
@@ -601,6 +624,17 @@ return [
              <b>Save changes</b>. A bad figure brings the page back with a red message &mdash; <code>Markup % must be a non-negative
              number.</code>, <code>Discount % must be a non-negative number.</code> or <code>A markup or discount % is too large for the
              column. Maximum is 999999.99.</code> Fix it and save again: you get <b>Product updated.</b> and land on the <b>products
-             list</b>, not back on the product. Changes apply to quotes from now on; quotes already saved keep their prices.</p>',
+             list</b>, not back on the product. Changes apply to quotes from now on; quotes already saved keep their prices.</p>
+
+          <p class="prose"><b>Undo a price change.</b> After <b>Import width prices &raquo;</b> or <b>Import rates &raquo;</b>, a strip
+             appears at the top of the product&rsquo;s Edit page (and on its price-tables page, marked <b>(all systems)</b>):
+             <b>Last change: Width price import (all price tables) &middot; 12 Oct 10:42</b> with <b>&#8630; Undo Width price import</b>
+             (or <b>Rate import</b>). It asks first &mdash; <em>&ldquo;Every price it changed goes back to exactly what it was before&hellip;
+             Unsaved edits on this page will be lost.&rdquo;</em> &mdash; then puts every price back:
+             <code>Undone: Width price import &mdash; 24 prices are back to what they were.</code> Undo again to step further back (the last
+             ten changes are kept). If the prices have been edited since, the strip says <em>&ldquo;can&rsquo;t be undone, the prices have
+             been edited since&rdquo;</em> &mdash; undo never overwrites newer work. Changes to one price table (Save grid, uploads, Adjust all
+             prices) have their own strip on that table &mdash; see <b>Building price tables</b>. The markup and discount boxes on this page
+             are not price-table changes and aren&rsquo;t undone this way: just change them back and save.</p>',
         'script'  => $script,
 ];
