@@ -85,6 +85,7 @@ $ORDER = [
     'accounts-to-package',
     // The factory's own office (Factory Console users + super-admin only).
     'console-orders',
+    'console-pipeline',
     'console-remakes',
     'console-calendar',
 ];
