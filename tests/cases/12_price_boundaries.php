@@ -119,3 +119,12 @@ test('money rounding: a 12.5% surcharge, markup, discount, quantity 3 and the li
     check(isset($g['rounding_line']), 'tests/goldens/price_edges.json missing — run --update-goldens');
     check_same(t_show($g['rounding_line']), t_show(price_figures($r)), 'rounding line figures');
 });
+
+test('the price grid screen warns about a hole in the middle, not about the "too big" corner', function () {
+    $t = (int) t_val('SELECT id FROM price_tables WHERE product_id = ?', [fx('grid_product')]);
+    $page = as_user('super')->get("/admin/products/price-table.php?id=$t");
+    check_page_ok($page, 'price grid screen');
+    check_contains('data-grid-holes="1"', $page->body, 'warning for exactly one inside gap (1500 × 1500)');
+    check_contains('1500 × 1500', $page->body, 'the gap named');
+    check_not_contains('2000 × 2000', $page->body, 'the empty top-right corner warned about');
+});

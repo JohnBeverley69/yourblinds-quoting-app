@@ -1676,6 +1676,21 @@ if (is_array($pendingAxis)) {
 $matrixWidths = array_keys($matrixWidths); sort($matrixWidths);
 $matrixDrops  = array_keys($matrixDrops);  sort($matrixDrops);
 
+// Gaps INSIDE the grid: an empty cell with a priced cell both wider and longer
+// than it. A blank top-right corner just means "too big to make", but a gap in
+// the middle isn't refused: the engine prices that size from the narrowest
+// wider cell (pe_find_matrix_row orders width, then drop), which may not be the
+// price intended. Warned about only; nothing is changed.
+$gridHoles = [];
+foreach ($matrixWidths as $w) {
+    foreach ($matrixDrops as $d) {
+        if (isset($matrixByPair["$w|$d"])) continue;
+        foreach ($cells as $c) {
+            if ((int) $c['width_mm'] >= $w && (int) $c['drop_mm'] >= $d) { $gridHoles[] = "{$w} × {$d}"; break; }
+        }
+    }
+}
+
 // What this grid HOLDS — shown at the top of the page, and what decides how the
 // cost/margin line under each cell is worked out (see price_source.php).
 //
@@ -2251,6 +2266,14 @@ $activeNav = 'products';
         <?php endif; ?>
         <?php if (pl_product_locked((int) $table['product_id'])): ?>
             <div class="alert alert-info" role="status">🔒 <?= e(PRODUCT_LOCK_MSG) ?></div>
+        <?php endif; ?>
+        <?php if ($gridHoles): ?>
+            <div class="alert alert-info" role="status" data-grid-holes="<?= count($gridHoles) ?>">
+                ⚠ This grid has <?= count($gridHoles) ?> empty cell<?= count($gridHoles) === 1 ? '' : 's' ?> inside it
+                (<?= e(implode(', ', array_slice($gridHoles, 0, 6))) ?><?= count($gridHoles) > 6 ? ', …' : '' ?> mm).
+                A blind that size isn't refused — it's priced from the next wider cell — so fill
+                <?= count($gridHoles) === 1 ? 'it' : 'them' ?> in unless that's what you want.
+            </div>
         <?php endif; ?>
 
         <?php if ($justSaved || $flashMsg !== null): ?>
