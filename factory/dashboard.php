@@ -167,6 +167,7 @@ $activeNav = 'factory-dashboard';
       </a>
     <?php endforeach; ?>
   </div>
+  <?php if (fc_money_visible()): ?>
   <div class="fd-grid">
     <?php foreach ([
         'needs_invoicing' => ['Needs invoicing',  'Dispatched, no invoice yet',  $toBill['needs_invoicing'] > 0 ? '#b91c1c' : 'var(--border)'],
@@ -180,6 +181,7 @@ $activeNav = 'factory-dashboard';
       </a>
     <?php endforeach; ?>
   </div>
+  <?php endif; ?>
   <?php if ($byStage['notplaced'] > 0): ?>
     <p class="fd-notplaced"><a href="/factory/orders.php?stage=notplaced"><?= (int) $byStage['notplaced'] ?> of our own quote<?= $byStage['notplaced'] === 1 ? '' : 's' ?></a> not placed yet.</p>
   <?php endif; ?>
@@ -190,7 +192,7 @@ $activeNav = 'factory-dashboard';
     <div class="fd-tile"><div class="fd-label">Blinds to make</div><div class="fd-value"><?= $blindsIn ?></div><div class="fd-sub">On orders not yet ready</div></div>
     <a class="fd-tile" href="/master-admin/dispatch.php"><div class="fd-label">Out today</div><div class="fd-value"><?= $outToday === null ? '—' : $outToday ?></div><div class="fd-sub">Delivery notes dispatched</div></a>
     <div class="fd-tile"><div class="fd-label">Orders this week</div><div class="fd-value"><?= $inThisWeek ?></div><div class="fd-sub">Placed since Monday</div></div>
-    <a class="fd-tile" href="/master-admin/wholesale.php"><div class="fd-label">Invoiced this week</div><div class="fd-value" style="font-size:1.5rem"><?= e($money($invWeek)) ?></div><div class="fd-sub">Net, since Monday &middot; owed <?= e($money($owed)) ?></div></a>
+    <?php if (fc_money_visible()): ?><a class="fd-tile" href="/master-admin/wholesale.php"><div class="fd-label">Invoiced this week</div><div class="fd-value" style="font-size:1.5rem"><?= e($money($invWeek)) ?></div><div class="fd-sub">Net, since Monday &middot; owed <?= e($money($owed)) ?></div></a><?php endif; ?>
   </div>
 
   <div class="fd-cols">
@@ -200,7 +202,7 @@ $activeNav = 'factory-dashboard';
         <p class="fd-empty">No orders yet. When an account places an order with us it shows here.</p>
       <?php else: ?>
         <div class="table-wrap"><table class="table">
-          <thead><tr><th>Order</th><th>Account</th><th class="num">Blinds</th><th>Making</th><th>Money</th></tr></thead>
+          <thead><tr><th>Order</th><th>Account</th><th class="num">Blinds</th><th>Making</th><?php if (fc_money_visible()): ?><th>Money</th><?php endif; ?></tr></thead>
           <tbody>
           <?php foreach ($recent as $o): ?>
             <tr>
@@ -208,7 +210,7 @@ $activeNav = 'factory-dashboard';
               <td><?= e($o['account']) ?></td>
               <td class="num"><?= (int) $o['blinds'] ?></td>
               <td><?= fc_stage_pill($o['stage']) ?></td>
-              <td><?= fc_money_pill($o['money']) ?></td>
+              <?php if (fc_money_visible()): ?><td><?= fc_money_pill($o['money']) ?></td><?php endif; ?>
             </tr>
           <?php endforeach; ?>
           </tbody>

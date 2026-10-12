@@ -188,7 +188,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     ?>
     <p class="fe-sub fe-status">
         <span class="fe-sl">Making</span> <?= fc_stage_pill($fcs['stage']) ?>
-        <span class="fe-sl">Money</span> <?= fc_money_pill($fcs['money']) ?>
+        <?php if (fc_money_visible()): ?><span class="fe-sl">Money</span> <?= fc_money_pill($fcs['money']) ?><?php endif; ?>
         <?php foreach ($fcs['invoices'] as $iv): ?>
             <span class="fe-inv"><?= e($iv['number']) ?><?= $iv['outstanding'] > 0.004 ? ' · £' . e(number_format($iv['outstanding'], 2)) . ' owed' : '' ?></span>
         <?php endforeach; ?>
