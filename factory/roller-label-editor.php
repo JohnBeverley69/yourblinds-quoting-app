@@ -29,6 +29,13 @@ if ($productId === 0) {
     $p->execute([$MASTER]);
     $productId = (int) $p->fetchColumn();
 }
+// White-label isolation: the product must be one THIS factory makes, or a login
+// on another factory could read and overwrite its roller label layout (outside
+// review, 2026-10-12). Same check as worksheets.php.
+if ($productId > 0 && !factory_owns_product($pdo, $productId, $MASTER)) {
+    http_response_code(404);
+    exit('That product is not one this factory makes.');
+}
 $pn = $pdo->prepare('SELECT name FROM products WHERE id = ? LIMIT 1');
 $pn->execute([$productId]);
 $productName = (string) $pn->fetchColumn();
