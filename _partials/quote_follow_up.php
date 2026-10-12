@@ -94,7 +94,7 @@ function qfu_log_email(int $clientId, array $q, string $to, string $from, string
          VALUES (?, 'email', 'out', ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, 'smtp', ?)"
     )->execute([
         $clientId, QFU_KIND, (string) $q['sent_at'], $q['customer_id'] ?: null, (int) $q['id'],
-        substr($to, 0, 190), substr($from, 0, 190), $subject . "\n\n" . $body,
+        substr($to, 0, 190), substr($from, 0, 190), $subject,   // subject only — never the message text
         $ok ? 'sent' : ($why !== null ? 'blocked' : 'failed'), $why ?? ($ok ? null : 'The email could not be sent.'),
         $ok ? date('Y-m-d H:i:s') : null,
     ]);

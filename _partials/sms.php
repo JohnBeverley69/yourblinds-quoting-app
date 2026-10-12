@@ -258,6 +258,31 @@ function sms_monthly_limit(int $clientId): int
     return ($own !== null && (int) $own >= 0) ? (int) $own : sms_default_limit();
 }
 
+/**
+ * Delete Messages-log entries (texts and emails) older than 12 months — the
+ * retention the privacy policy states. Run by cron_messages.php; a batch at a
+ * time so it never holds the table long. Also strips the message text from any
+ * email logged before the log stopped storing it (subject line kept).
+ * Returns the number of rows deleted.
+ */
+function sms_purge_old(int $months = 12): int
+{
+    if (!sms_ready()) return 0;
+    try {
+        $cut = (new DateTimeImmutable('now'))->modify("-{$months} months")->format('Y-m-d H:i:s');
+        $st  = db()->prepare('DELETE FROM messages WHERE created_at < ? LIMIT 2000');
+        $st->execute([$cut]);
+        $gone = $st->rowCount();
+        // Old-format email rows: "Subject\n\nBody…" → keep the subject only.
+        db()->exec("UPDATE messages SET body = SUBSTRING_INDEX(body, '\n\n', 1)
+                     WHERE channel = 'email' AND body LIKE '%\n\n%' LIMIT 2000");
+        return $gone;
+    } catch (Throwable $e) {
+        error_log('sms_purge_old: ' . $e->getMessage());
+        return 0;
+    }
+}
+
 /** Texts (segments) this company has used this calendar month. */
 function sms_used_this_month(int $clientId): int
 {

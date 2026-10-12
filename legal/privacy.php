@@ -113,6 +113,8 @@ pl_head(
   <li><b>Billing and financial records</b>: six years, as UK tax law requires.</li>
   <li><b>Support messages</b>: for as long as they&rsquo;re useful for helping you, and no more than two years after the issue
       is closed.</li>
+  <li><b>Message log</b> (the record of texts and emails sent to your customers: who to, when, the subject and whether it
+      arrived &mdash; not the email itself): 12 months, then deleted automatically.</li>
   <li><b>Server logs</b>: kept only for a short period for security and fault-finding.</li>
 </ul>
 

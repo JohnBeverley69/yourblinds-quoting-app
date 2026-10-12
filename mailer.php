@@ -112,7 +112,13 @@ function mailer_deliver($to, string $subject, string $body, ?array $attachment, 
     $port     = (int)    (env('MAIL_PORT',      '2525')                  ?? 2525);
     $username = (string) (env('MAIL_USERNAME',  '')                      ?? '');
     $password = (string) (env('MAIL_PASS',      '')                      ?? '');
+    // Send-from address: set in Master Admin (app setting mail_from, tested
+    // against AuthSMTP before it's saved — see master-admin/email-from.php),
+    // else MAIL_FROM in .env. AuthSMTP only accepts addresses authorised in
+    // its control panel.
     $from     = (string) (env('MAIL_FROM',      'noreply@yourblinds.uk') ?? 'noreply@yourblinds.uk');
+    $setFrom  = function_exists('app_setting_get') ? trim((string) (app_setting_get('mail_from', '') ?? '')) : '';
+    if ($setFrom !== '' && filter_var($setFrom, FILTER_VALIDATE_EMAIL)) $from = $setFrom;
     $fromName = (string) (env('MAIL_FROM_NAME', 'YourBlinds')            ?? 'YourBlinds');
 
     if ($host === '' || $username === '' || $password === '') {
