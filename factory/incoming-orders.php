@@ -510,6 +510,8 @@ require __DIR__ . '/../_partials/factory_head.php';
     <div class="io-empty">Couldn't load orders: <?= e($loadError) ?></div>
 <?php elseif (!$orders && $lane !== 'open'): ?>
     <div class="io-empty">Nothing in <strong><?= e($LANES[$lane]) ?></strong> right now.</div>
+<?php elseif (!$orders && $laneCount['dispatched'] > 0): ?>
+    <div class="io-empty">Nothing open right now — every order has been dispatched. See <a href="/factory/incoming-orders.php?lane=dispatched">Dispatched</a>.</div>
 <?php elseif (!$orders): ?>
     <div class="io-empty">No incoming orders yet. Placed orders containing <?= e($factoryName) ?> lines will appear here — nothing to re-key.</div>
 <?php else: ?>
