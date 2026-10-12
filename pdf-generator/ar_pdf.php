@@ -112,11 +112,11 @@ function ar_delivery_note_body(array $ctx, array $items, bool $pageBreak = false
     $rows = ''; $n = 0;
     foreach ($items as $it) {
         $n++;
+        // No option lines on a delivery note (John, 2026-10-12): the "+ Control
+        // Side: R/H" list ran to ten lines a blind and filled the paper. The note
+        // identifies each blind by product, system, fabric, size, qty and room;
+        // the full spec stays on the worksheet and the invoice.
         $optsHtml = '';
-        foreach ((array) ($it['options'] ?? []) as $opt) {
-            if (trim((string) $opt) === '') continue;
-            $optsHtml .= '<br><span class="opt">+ ' . $e($opt) . '</span>';
-        }
         $fabric   = trim(implode(' / ', array_filter([
             (string) ($it['fabric'] ?? ''), (string) ($it['colour'] ?? ''), (string) ($it['code'] ?? ''),
         ], static fn ($s) => trim($s) !== '')));
