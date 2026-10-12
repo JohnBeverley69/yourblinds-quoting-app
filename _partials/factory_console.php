@@ -214,7 +214,9 @@ function fc_next_action(array $r): array
     if ($r['stage'] === 'notplaced') return ['Place the order', '/quote-builder/edit.php?id=' . (int) $r['id'], false];
     if ($r['money'] === 'overdue')   return ['Chase payment', $acUrl, true];
     switch ($r['stage']) {
-        case 'new':           return ['Mark received',    '/factory/incoming-orders.php', false];
+        // Accept takes the order on AND puts it on the floor (#1061) — same word
+        // as the Incoming orders and Pipeline buttons.
+        case 'new':           return ['Accept',           '/factory/incoming-orders.php', false];
         case 'confirmed':     return ['Start production', '/factory/incoming-orders.php', false];
         case 'in_production':
         case 'awaiting_supplier': return fc_making_next($r['tracks'] ?? null);

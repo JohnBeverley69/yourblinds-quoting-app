@@ -152,7 +152,7 @@ $action = static function (array $r) use ($money, $csrf): string {
             switch ($j['kind']) {
                 case 'accept':
                     return '<form method="post" action="/factory/set-status.php">' . $h . '<input type="hidden" name="accept" value="1">'
-                         . '<button type="submit" name="status" value="received" class="pl-btn">Mark received</button></form>';
+                         . '<button type="submit" name="status" value="received" class="pl-btn" title="Take the order on and put its blinds on the floor">Accept</button></form>';
                 case 'start':
                     return '<form method="post" action="/factory/set-status.php">' . $h
                          . '<button type="submit" name="status" value="in_production" class="pl-btn">Start production</button></form>';
