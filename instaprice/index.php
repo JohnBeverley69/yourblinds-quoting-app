@@ -323,10 +323,7 @@ $activeNav = 'instaprice';
                         </div>
                         <div style="flex:0 0 5rem">
                             <label for="ip-qty" class="ip-dim-cap">Qty</label>
-                            <?php /* No value="1": a placeholder only shows on an EMPTY field, and
-                                     the user wants "Qty" in grey like Width/Drop. Blank is treated
-                                     as qty 1 everywhere it's read (recompute / to-quote). */ ?>
-                            <input id="ip-qty"   type="number" min="1" placeholder="Qty" autocomplete="off" style="width:100%;box-sizing:border-box">
+                            <input id="ip-qty"   type="number" min="1" value="1" placeholder="Qty" autocomplete="off" style="width:100%;box-sizing:border-box">
                         </div>
                     </div>
                     <div id="ip-dim-echo" hidden
@@ -1317,7 +1314,7 @@ $activeNav = 'instaprice';
     refreshDimLabel();
 
     if (resetBtn) resetBtn.addEventListener('click', function () {
-        productSel.value = ''; widthIn.value = ''; dropIn.value = ''; qtyIn.value = '';  // blank = qty 1 (shows the "Qty" placeholder)
+        productSel.value = ''; widthIn.value = ''; dropIn.value = ''; qtyIn.value = '1';  // nearly every line is one blind
         // Clear any Multi-Blind lock so Width is a real, editable field again.
         widthIn.dataset.multiLock = ''; widthIn.readOnly = false;
         widthIn.style.fontStyle = ''; widthIn.style.color = '';
