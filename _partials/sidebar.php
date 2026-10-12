@@ -189,6 +189,11 @@ $navSections = [
             'pipeline'  => ['/orders/pipeline.php',         'Pipeline',  $hasQuotes && $isStaff],
             // Production back-office (its own app) — makes both retail & trade.
             'factory'   => ['/factory/incoming-orders.php', 'Factory',   $canSeeFactory],
+            // A white-label factory (no Factory Console, #1059) moves its orders
+            // on from the factory Pipeline too — the one screen with the buttons.
+            // Office only, like the page (requireFactoryOffice).
+            'factory-pipeline' => ['/factory/pipeline.php', 'Factory pipeline',
+                $canSeeFactory && function_exists('factory_user_is_office') && factory_user_is_office()],
         ],
     ],
     [

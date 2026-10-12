@@ -109,11 +109,13 @@ require_once __DIR__ . '/../_partials/office_calendar.php';
 $calDue    = oc_due_count($pdo, $factory);
 
 $money = static fn ($n) => $n === null ? '—' : '£' . number_format((float) $n, 2);
+// Each order tile opens its column on the Pipeline, the one screen where orders
+// are moved on (John, 2026-10-12). No tile carries an action.
 $tiles = [
-    'new'           => ['New',              'Not processed yet',                  '/factory/incoming-orders.php?lane=new'],
-    'in_production' => ['In production',    'Being made',                         '/factory/orders.php?stage=in_production'],
-    'awaiting_supplier' => ['Awaiting supplier', 'Made, waiting on a bought-in item', '/factory/orders.php?stage=awaiting_supplier'],
-    'ready'         => ['Ready to dispatch','Everything made and in',             '/master-admin/dispatch.php'],
+    'new'           => ['New',              'Not processed yet',                  '/factory/pipeline.php#col-new'],
+    'in_production' => ['In production',    'Being made',                         '/factory/pipeline.php#col-in_production'],
+    'awaiting_supplier' => ['Awaiting supplier', 'Made, waiting on a bought-in item', '/factory/pipeline.php#col-awaiting_supplier'],
+    'ready'         => ['Ready to dispatch','Everything made and in',             '/factory/pipeline.php#col-ready'],
 ];
 $firstName = trim(explode(' ', (string) ($user['full_name'] ?? ''))[0] ?? '');
 

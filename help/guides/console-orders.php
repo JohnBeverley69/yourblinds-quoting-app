@@ -43,9 +43,9 @@ $S = [
     ['1', 'Why there is a Factory Console', 'When a trade account places an order on their own portal, it is stored as their order, not ours. So the old sales screens, which only listed the factory\'s own jobs, could never show it. The Factory Console fixes that. It finds every order with our blinds on it, whoever placed it, and puts them all in one place for the office.', 1],
     ['2', 'Signing in', 'The console is for the office staff of the factory. When you sign in, you land straight on the console Dashboard, and the menu says Factory Console under the logo. If you open one of the old screens, like the sales dashboard, the sales Pipeline or the old orders list, it simply takes you to the console version instead.', 2],
     ['3', 'The Work menu', 'The menu has its own sections. Work comes first. Dashboard is your home page. Pipeline shows every open order as a card, from New to Paid, and has its own guide. Orders is the one list of everything placed with us, and Quotes is our own quotes not placed yet. Remakes is for faults and remakes, and Calendar is the office\'s shared calendar. When something needs you, the menu says so, like Remakes, two to approve.', 3],
-    ['4', 'Production and Accounts', 'Under Production are the factory screens you already know: Incoming orders, the Floor, and Dispatch. Under Accounts are Invoices, Bank, Statements and Commissions. Trade accounts and The Numbers are there too, but only for the super admin. Setup and Platform sit at the bottom, for the people allowed to use them.', 4],
-    ['5', 'The stage tiles', 'The top row counts orders by stage. New means it has come in, but is not processed yet. In production means it is being made. Awaiting supplier means our part is made, but a bought-in item has not arrived. Ready to dispatch means everything is made and in. Click a tile to open it. New opens Incoming orders, and Ready to dispatch opens Dispatch.', 5],
-    ['6', 'Waiting on suppliers', 'Orders that are awaiting a supplier are listed on the Dispatch tray too, under Waiting on suppliers. Each row shows the account, the order, their reference, how many are made, and which supplier it is waiting on, with the date it was ordered, or not ordered yet. When the item arrives, mark it received on Incoming orders, and the order moves up to Ready to go out.', 6],
+    ['4', 'Production and Accounts', 'Under Production are the factory screens you already know: Incoming orders, the Floor, and Dispatch. Incoming orders is the workshop\'s view. Orders are moved on in one place, the Pipeline, which has all the buttons. Under Accounts are Invoices, Bank, Statements and Commissions. Trade accounts and The Numbers are there too, but only for the super admin. Setup and Platform sit at the bottom, for the people allowed to use them.', 4],
+    ['5', 'The stage tiles', 'The top row counts orders by stage. New means it has come in, but is not processed yet. In production means it is being made. Awaiting supplier means our part is made, but a bought-in item has not arrived. Ready to dispatch means everything is made and in. Click a tile, and the Pipeline opens at that column, because that is where orders are moved on. New opens the New column, and Ready to dispatch opens Ready to go.', 5],
+    ['6', 'Waiting on suppliers', 'Orders that are awaiting a supplier are listed on the Dispatch tray too, under Waiting on suppliers. Each row shows the account, the order, their reference, how many are made, and which supplier it is waiting on, with the date it was ordered, or not ordered yet. When the item arrives, click Received from on the Pipeline, and the order moves up to Ready to go out.', 6],
     ['7', 'The money tiles', 'The second row counts the money. Needs invoicing means an order has been dispatched, but has no invoice yet. Awaiting payment means it is invoiced, but not paid yet. Overdue means it is past the invoice due date. Click a tile to see those orders in the Orders list. The money tiles, and the Money column, only show on the main factory account.', 7],
     ['8', 'Quotes not placed yet', 'Just under those tiles, you may see a line saying how many of our own quotes are not placed yet. These are quotes the office has keyed in, which have not been turned into orders. Click the line, and you see them in the Orders list, under Quotes.', 8],
     ['9', 'The rest of the day', 'The next row is the rest of the day at a glance. Calendar shows how many reminders and callbacks are due now. Remakes shows how many are in progress, and how many are waiting for approval. Blinds to make counts the blinds on orders that are not ready yet. And Out today counts the delivery notes dispatched today.', 9],
@@ -55,7 +55,7 @@ $S = [
     ['13', 'The filter chips', 'Across the top are the filter chips, in groups, each with a count. Open is everything not yet both dispatched and paid, and that is where the list starts. To make has New, In production, Awaiting supplier and Ready to go. To bill has Needs invoicing, Awaiting payment and Overdue. Finished has Done. Not placed has Quotes. And All shows every order.', 13],
     ['14', 'Finding an order', 'To find one order, use the account picker and the search box. Choose an account, and you see only their orders. Or type in the search box. An order number, the account, their reference, the name for the labels, or an invoice number all work. Then click Search.', 14],
     ['15', 'Making and Money', 'Each row shows the order number, the account, their reference, the date, how many of our blinds are on it, and its value. Then Making is where the blinds are, and Money is where the bill is. Under the money pill is each invoice number, what is still owed, and when it is due. A purple REMAKE badge marks a remake of an earlier order.', 15],
-    ['16', 'What to do next', 'The Next column tells you the one thing to do next. While it is being made, that is Process order, Being made, or Waiting on a supplier, then Dispatch. If a purchase order to a supplier did not go, it says Couldn\'t order from that supplier, in red, and that comes first. After that comes the money. Raise invoice, Wait for payment, or Wait for the rest. If a payment is late, Chase payment comes first, in red. Done means dispatched and paid. Click it to go to the right screen.', 16],
+    ['16', 'What to do next', 'The Next column tells you the one thing to do next. While it is being made, that is Process order, Being made, or Waiting on a supplier, then Dispatch. If a purchase order to a supplier did not go, it says Couldn\'t order from that supplier, in red, and that comes first. After that comes the money. Raise invoice, Wait for payment, or Wait for the rest. If a payment is late, Chase payment comes first, in red. Done means dispatched and paid. Click it to go to the right screen. For anything to do with making, that is the order\'s card on the Pipeline, where its button is.', 16],
     ['17', 'Opening an order', 'Click the order number to open it. An order an account placed opens in the factory\'s Edit order screen. Our own orders, and quotes not placed yet, open in the quote builder. In the Next column of every placed order is a Remake link. That is the quickest way to raise a remake, and the Remakes guide explains the rest.', 17],
 ];
 $len = static fn (int $n): string => (string) round(mb_strlen($S[$n - 1][2]) / 13.6, 1);
@@ -456,10 +456,10 @@ return [
                   <div class="sct a-fade" style="--d:.2s">The stage tiles</div>
                   ' . $dashHead . '
                   <div class="fgrid">
-                    <div class="a-drop" style="' . $d(5, 'New means') . '">' . $tile('New', '3', 'Not processed yet', '#b91c1c') . '<span class="goes a-fade" style="' . $d(5, 'New opens') . '">&rarr; Incoming orders</span></div>
-                    <div class="a-drop" style="' . $d(5, 'In production means') . '">' . $tile('In production', '12', 'Being made', '#b5730f') . '<span class="goes a-fade" style="' . $d(5, 'Click a tile') . '">&rarr; Orders &middot; In production</span></div>
-                    <div class="a-drop" style="' . $d(5, 'Awaiting supplier means') . '">' . $tile('Awaiting supplier', '1', 'Made, waiting on a bought-in item', '#7c3aed') . '<span class="goes a-fade" style="' . $d(5, 'Click a tile') . '">&rarr; Orders &middot; Awaiting supplier</span></div>
-                    <div class="a-drop" style="' . $d(5, 'Ready to dispatch means') . '">' . $tile('Ready to dispatch', '6', 'Everything made and in', '#245ea3') . '<span class="goes a-fade" style="' . $d(5, 'Ready to dispatch opens') . '">&rarr; Dispatch</span></div>
+                    <div class="a-drop" style="' . $d(5, 'New means') . '">' . $tile('New', '3', 'Not processed yet', '#b91c1c') . '<span class="goes a-fade" style="' . $d(5, 'New opens') . '">&rarr; Pipeline &middot; New</span></div>
+                    <div class="a-drop" style="' . $d(5, 'In production means') . '">' . $tile('In production', '12', 'Being made', '#b5730f') . '<span class="goes a-fade" style="' . $d(5, 'Click a tile') . '">&rarr; Pipeline &middot; In production</span></div>
+                    <div class="a-drop" style="' . $d(5, 'Awaiting supplier means') . '">' . $tile('Awaiting supplier', '1', 'Made, waiting on a bought-in item', '#7c3aed') . '<span class="goes a-fade" style="' . $d(5, 'Click a tile') . '">&rarr; Pipeline &middot; Awaiting supplier</span></div>
+                    <div class="a-drop" style="' . $d(5, 'Ready to dispatch means') . '">' . $tile('Ready to dispatch', '6', 'Everything made and in', '#245ea3') . '<span class="goes a-fade" style="' . $d(5, 'Ready to dispatch opens') . '">&rarr; Pipeline &middot; Ready to go</span></div>
                   </div>
                   <div class="a-move" style="--fx:60%;--fy:95%;--tx:8%;--ty:6.8rem;' . $d(5, 'Click a tile') . ';--md:1.5s">' . $ptr . '</div>
                 </div>
@@ -473,12 +473,12 @@ return [
                       <div><span class="tick"></span><span>ABC Blinds</span><b class="lnk">ABC-2026-0038-R1</b><span>PO 4402</span><span class="n">1</span><span class="n">&pound;0.00</span></div></div></div>
                   <div class="pnl a-rise" style="' . $d(6, 'under Waiting on suppliers') . ';margin-top:.6rem"><h5 class="a-ring" style="' . $d(6, 'under Waiting on suppliers', .4) . ';border-radius:4px">Waiting on suppliers</h5>
                     <div class="phint" style="margin-top:0">Everything we make on these is done; they&rsquo;re waiting on a bought-in item. When it arrives, mark it
-                      received on <b class="lnk">Incoming orders</b> and the order moves up to <b>Ready to go out</b>.</div>
+                      received on the <b class="lnk">Pipeline</b> and the order moves up to <b>Ready to go out</b>.</div>
                     <div class="mt w"><div><span>Account</span><span>Order</span><span>Their ref</span><span class="n">Blinds</span><span>Made</span><span>Waiting on</span></div>
                       <div class="a-fly" style="' . $d(6, 'Each row shows') . '"><span>ABC Blinds</span><b class="lnk">ABC-2026-0039</b><span>PO 4420</span><span class="n">22</span><span class="a-ring" style="' . $d(6, 'how many are made') . ';border-radius:4px">20/20 made</span><span class="a-ring" style="' . $d(6, 'with the date') . ';border-radius:4px">Home Creations &middot; ordered 9 Oct</span></div>
                       <div class="a-fly" style="' . $d(6, 'Each row shows', .6) . '"><span>Coastal Shutters</span><b class="lnk">CST-2026-0010</b><span>CS-121</span><span class="n">1</span><span>Nothing to make</span><span class="a-ring" style="' . $d(6, 'or not ordered yet') . ';border-radius:4px">Hunter Douglas &middot; <b style="color:#b91c1c">not ordered yet</b></span></div>
                     </div></div>
-                  <div class="chips"><span class="chip ok a-pop" style="' . $d(6, 'When the item arrives') . '">Received on <b>Incoming orders</b> &rarr; up to <b>Ready to go out</b></span></div>
+                  <div class="chips"><span class="chip ok a-pop" style="' . $d(6, 'When the item arrives') . '">Received on the <b>Pipeline</b> &rarr; up to <b>Ready to go out</b></span></div>
                 </div>
 
                 <!-- 7 — the money tiles -->
@@ -699,9 +699,9 @@ return [
 
           <p><b>The Dashboard.</b> A greeting and today&rsquo;s date, an <b>All orders</b> button, then the tiles:</p>
           <ul class="steps">
-            <li><b>New</b> &mdash; <em>Not processed yet</em> (opens <b>Incoming orders</b>, on <b>New to process</b>).
+            <li><b>New</b> &mdash; <em>Not processed yet</em> (opens the <b>Pipeline</b> at <b>New</b>).
                 <b>In production</b> &mdash; <em>Being made</em>. <b>Awaiting supplier</b> &mdash; <em>Made, waiting on a bought-in item</em>. <b>Ready to dispatch</b> &mdash; <em>Everything made and in</em>
-                (opens <b>Dispatch</b>). In production and Awaiting supplier open the Orders list on that chip.</li>
+                (opens the Pipeline at <b>Ready to go</b>). In production and Awaiting supplier open the Pipeline at that column. No tile does anything to an order: the buttons are on the Pipeline.</li>
             <li>The money tiles: <b>Needs invoicing</b> &mdash; <em>Dispatched, no invoice yet</em>. <b>Awaiting payment</b> &mdash;
                 <em>Invoiced, not paid yet</em>. <b>Overdue</b> &mdash; <em>Past the invoice due date</em>. Each opens the Orders list on
                 that chip.</li>
@@ -742,7 +742,9 @@ return [
             <li><b>Next</b> &mdash; the one thing to do next: <b>Process order</b>, <b>Being made</b> or <b>Waiting on &lt;supplier&gt;</b> once the floor is done; <b>Couldn&rsquo;t order from &lt;supplier&gt;</b> (red, first) if a purchase order didn&rsquo;t go, or <b>New item to order from &lt;supplier&gt;</b> (red) for a bought-in item added after processing;
                 <b>Dispatch</b>, then <b>Raise invoice</b>, <b>Wait for payment</b> or <b>Wait for the rest</b>, and <b>Done</b> once
                 dispatched and paid. A late payment shows <b>Chase payment</b> first. <b>Raise invoice</b> and <b>Chase payment</b> are red.
-                A quote not placed yet shows <b>Place the order</b>. Click it to go to the right screen.</li>
+                A quote not placed yet shows <b>Place the order</b>. Click it to go to the right screen: every making step
+                (Process order, Couldn&rsquo;t order, Waiting on, Dispatch) opens that order&rsquo;s card on the <b>Pipeline</b>, the one
+                screen with the buttons.</li>
             <li>A purple <b>REMAKE</b> badge marks a remake order (hover it: <em>Remake of &hellip;</em>).</li>
             <li><b>&#8635; Remake</b> in the Next column of every placed order raises a remake on it &mdash; see the <b>Remakes</b> guide.</li>
             <li><b>The Money side is on the main factory account only.</b> Anyone else (a white-label factory) sees no money tiles, no
@@ -758,8 +760,8 @@ return [
              <b>Awaiting supplier</b> (display only &mdash; it is still in production underneath). The <b>Dispatch tray</b>
              (<b>Production &rarr; Dispatch</b>) lists these under <b>Waiting on suppliers</b>, below <b>Ready to go out</b>: Account, Order,
              Their ref, Blinds, Made (e.g. <em>20/20 made</em>, or <em>Nothing to make</em>) and Waiting on (e.g. <em>Home Creations &middot;
-             ordered 9 Oct</em>, or <em>not ordered yet</em> in red). They can&rsquo;t be ticked; when the item arrives, mark it received on
-             <b>Incoming orders</b> and the order moves up to <b>Ready to go out</b>.</p>
+             ordered 9 Oct</em>, or <em>not ordered yet</em> in red). They can&rsquo;t be ticked; when the item arrives, click <b>Received from &hellip;</b> on
+             the <b>Pipeline</b> and the order moves up to <b>Ready to go out</b>.</p>
 
           <div class="heads"><span class="hi">&#9432;</span><div><b>Nothing here changes an order.</b> The Dashboard and the Orders list
              only read &mdash; Making moves on from the floor, dispatch and delivery notes, and Money from the invoices and payments,

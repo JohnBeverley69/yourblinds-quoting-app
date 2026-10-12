@@ -43,7 +43,7 @@ $S = [
     ['7', 'Each line has its own status', 'Under that, every line on the order has its own status. A blind made here says Not started, then Being made, three of five, then a tick and Made. A bought-in item says the supplier, not ordered yet, then Waiting on the supplier, with the date it was ordered. So on a mixed order, the made part and the bought-in part each have their own card, and you can see exactly which part is holding it up.', 7],
     ['8', 'The money on a card', 'Once an order has an invoice, its card shows the money pill. Invoiced, awaiting payment, Part paid, Overdue, or Paid. Under the pill is each invoice number, what is still owed, and when it is due. Once it is paid, it shows the date it was paid instead.', 8],
     ['9', 'Remakes on the board', 'Remakes show up too. A remake\'s line has a purple R after the order number. Hover over the R to see which order it is a remake of. Above the board, the totals say how many remakes are in progress. If any are waiting for approval, a purple link takes you to the Remakes page. Those are not orders yet, so they have no card.', 9],
-    ['10', 'One button: taking it in', 'Each card has one button, and it is always the next step. The same rules as Incoming orders decide it, so the two never disagree. A new order shows Process order. First, a summary says what will happen: which blinds go to the floor, and which suppliers are emailed their purchase order. Click Process order, and it does all of that in one go. While the floor is making it, the button says See progress, so you can see how far each blind has got.', 10],
+    ['10', 'One button: taking it in', 'Each card has one button, and it is always the next step. The Pipeline is the only screen with these buttons. Incoming orders is the workshop\'s view, and the Dashboard and the Orders list just bring you here. A new order shows Process order. First, a summary says what will happen: which blinds go to the floor, and which suppliers are emailed their purchase order. Click Process order, and it does all of that in one go. While the floor is making it, the button says See progress, so you can see how far each blind has got.', 10],
     ['11', 'Bought-in items', 'Bought-in items are ordered by Process order, so there is nothing more to click. If a purchase order cannot go, say the supplier has no order email, the card says Couldn\'t order from, and the supplier\'s name, in red, with the reason. Fix it, then click Retry. An item added after processing shows New item to order. On the bought-in card, each supplier has its own line and its own button. When the goods arrive, click Received from, and the supplier\'s name. Once everything is made and in, the order moves on to Ready to go as one card.', 11],
     ['12', 'Sending it out', 'On a ready order, the button says Add to today\'s run. It takes you to the Dispatch tray, where the van run is ticked and printed, just as before. Once it has gone out, the card moves on to Dispatched, to invoice. If you do not see the money columns, the button simply says Dispatch.', 12],
     ['13', 'Getting paid', 'In the money columns, the button follows the bill. Raise invoice, in green, when it has gone out with no invoice. Record payment, while it is waiting to be paid, or part paid. And Chase payment, in red, once it is overdue. That opens the account, so you can see everything they owe.', 13],
@@ -542,7 +542,7 @@ return [
                     <div class="a-pop" style="' . $d(10, 'which blinds go') . '">Put 6 blinds on the floor: Roller Blind &times;4, Vertical Blind &times;2</div>
                     <div class="a-pop" style="' . $d(10, 'which suppliers are emailed') . '">Email Hunter Douglas its purchase order (1 item) &rarr; orders@example.com</div>
                     <div style="margin-top:.45rem"><span class="pbt a-press" style="display:inline-block;padding:.3rem .7rem;' . $d(10, 'Click Process order') . '">Process order</span> <span style="margin-left:.4rem">Cancel</span></div></div>
-                  <div class="chips"><span class="chip ok a-pop" style="' . $d(10, 'The same rules') . '">Same rules as <b>Incoming orders</b></span></div>
+                  <div class="chips"><span class="chip ok a-pop" style="' . $d(10, 'the only screen') . '">The <b>only</b> screen with buttons</span></div>
                 </div>
 
                 <!-- 11 — bought-in items -->
@@ -721,7 +721,13 @@ return [
                 or <em>&middot; paid 8 Oct</em>. On Dispatched &middot; to invoice it shows <b>Needs invoicing</b>.</li>
           </ul>
 
-          <p><b>The one button</b> is the next step, worked out by the same rules as <b>Incoming orders</b>:</p>
+          <p><b>The Pipeline is the only screen with these buttons.</b> <b>Incoming orders</b> is the workshop&rsquo;s view: where
+             a step is due it names it and says <em>Do this on the Pipeline &rarr;</em>, which opens that order&rsquo;s card here. The
+             Dashboard&rsquo;s order tiles open their column here, and the Orders list&rsquo;s <b>Next</b> links land on the order&rsquo;s
+             card. A white-label factory has the Pipeline too (<b>Factory pipeline</b> in its menu, and <b>Pipeline</b> in the factory
+             top bar), with one <b>Dispatched</b> column instead of the money columns.</p>
+
+          <p><b>The one button</b> is the next step:</p>
           <ul class="steps">
             <li><b>Process order</b> &mdash; on a new order. It takes the order in, sends its made-here blinds to the floor and emails each
                 bought-in supplier its purchase order (one per supplier, with only their lines and a spec PDF), in one go. A summary
