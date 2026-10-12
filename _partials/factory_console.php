@@ -79,7 +79,7 @@ function fc_money_pill(string $key): string
  */
 function fc_filter_groups(): array
 {
-    return [
+    $g = [
         ''          => ['open' => 'Open'],
         'To make'   => ['new' => 'New', 'confirmed' => 'Received', 'in_production' => 'In production', 'ready' => 'Ready to go'],
         'To bill'   => ['needs_invoicing' => 'Needs invoicing', 'awaiting' => 'Awaiting payment', 'overdue' => 'Overdue'],
@@ -87,6 +87,19 @@ function fc_filter_groups(): array
         'Not placed'=> ['notplaced' => 'Quotes'],
         ' '         => ['all' => 'All'],
     ];
+    if (!fc_money_visible()) unset($g['To bill']);
+    return $g;
+}
+
+/**
+ * Is the MONEY side shown? It belongs to the accounts pages, which are the main
+ * factory's only (#1057), so the same gate applies: factory_accounts_user().
+ * A white-label factory sees Making only, and "Done" means dispatched. John,
+ * 2026-10-12: factory changes are per client, with no crossover with Beverley.
+ */
+function fc_money_visible(): bool
+{
+    return !function_exists('factory_accounts_user') || factory_accounts_user();
 }
 
 /** Does an fc_orders() row belong under filter $key? */
@@ -159,7 +172,7 @@ function fc_order_invoices(PDO $pdo, int $factoryId, array $quoteIds): array
 /** fc_money_meta() key for an fc_orders() row (needs stage, status, invoices, billed_here). */
 function fc_money_state(array $r): string
 {
-    if ($r['stage'] === 'notplaced') return 'none';
+    if ($r['stage'] === 'notplaced' || !fc_money_visible()) return 'none';
     $sent = $r['stage'] === 'dispatched';
     if (!$r['billed_here']) {
         // Our own one-off sale: billed from the quote builder.
@@ -187,7 +200,7 @@ function fc_money_state(array $r): string
  */
 function fc_next_action(array $r): array
 {
-    $acct  = !function_exists('factory_accounts_user') || factory_accounts_user();
+    $acct  = fc_money_visible();
     $accId = (int) ($r['account_key'] ?? 0);
     $acUrl = $acct && $accId > 0 ? '/master-admin/account.php?id=' . $accId : '';
     if ($r['stage'] === 'notplaced') return ['Place the order', '/quote-builder/edit.php?id=' . (int) $r['id'], false];
@@ -237,12 +250,12 @@ function fc_order_status(PDO $pdo, int $factoryId, array $quote): array
         'id'          => $id,
         'status'      => (string) ($quote['status'] ?? ''),
         'stage'       => fc_making_stage((string) ($quote['status'] ?? ''), (string) ($quote['fulfilment_stage'] ?? ''), $fj),
-        'invoices'    => fc_order_invoices($pdo, $factoryId, [$id])[$id] ?? [],
+        'invoices'    => fc_money_visible() ? (fc_order_invoices($pdo, $factoryId, [$id])[$id] ?? []) : [],
         'account_key' => (int) ($quote['account_client_id'] ?? 0) > 0 ? (int) $quote['account_client_id'] : ($own ? 0 : (int) ($quote['client_id'] ?? 0)),
     ];
     $r['billed_here'] = !($own && $r['account_key'] === 0);
     $r['money'] = fc_money_state($r);
-    $r['done']  = $r['stage'] === 'dispatched' && $r['money'] === 'paid';
+    $r['done']  = $r['stage'] === 'dispatched' && in_array($r['money'], ['paid', 'none'], true);
     $r['next']  = fc_next_action($r);
     return $r;
 }
@@ -351,7 +364,7 @@ function fc_orders(PDO $pdo, int $factoryId): array
 
     // The order's factory invoices (void ones don't count): numbers for the row
     // and the search, what's still owed for the MONEY column.
-    $invBy = fc_order_invoices($pdo, $factoryId, array_map(static fn ($r) => (int) $r['id'], $rows));
+    $invBy = fc_money_visible() ? fc_order_invoices($pdo, $factoryId, array_map(static fn ($r) => (int) $r['id'], $rows)) : [];
 
     require_once __DIR__ . '/remakes.php';
     $remakeOf = rm_remake_orders($pdo, array_map(static fn ($r) => (int) $r['id'], $rows));
@@ -376,7 +389,7 @@ function fc_orders(PDO $pdo, int $factoryId): array
         // the quote's own status instead.
         $r['billed_here'] = !($own && (int) $r['account_key'] === 0);
         $r['money'] = fc_money_state($r);
-        $r['done']  = $stage === 'dispatched' && $r['money'] === 'paid';
+        $r['done']  = $stage === 'dispatched' && in_array($r['money'], ['paid', 'none'], true);   // 'none' = money not shown here
         $r['next']  = fc_next_action($r);
         $r['open_url'] = ($own || $stage === 'notplaced')
             ? '/quote-builder/edit.php?id=' . $id

@@ -60,7 +60,7 @@ $qs = static function (array $over) use ($stage, $account, $q): string {
 };
 $money = static fn ($n) => $n === null ? '' : '£' . number_format((float) $n, 2);
 // Invoice numbers link to the PDF only for someone allowed on the accounts pages (#1057).
-$canAccounts = !function_exists('factory_accounts_user') || factory_accounts_user();
+$canAccounts = fc_money_visible();
 
 // Highlight Quotes in the sidebar when that is the stage being shown, so the
 // new tab lights up rather than Orders staying lit for both.
@@ -140,8 +140,8 @@ $activeNav = $stage === 'notplaced' ? 'factory-quotes' : 'factory-orders';
          orders yet. Open one to add blinds or place it.</p>
       <?php else: ?>
       <p class="page-subtitle ui-hint">Every order placed with us, whoever placed it: from their portal, as a direct order,
-         or keyed in here. <b>Making</b> is where the blinds are, <b>Money</b> is where the bill is, and <b>Open</b>
-         is anything not yet both dispatched and paid.</p>
+         or keyed in here. <b>Making</b> is where the blinds are<?php if ($canAccounts): ?>, <b>Money</b> is where the bill is, and <b>Open</b>
+         is anything not yet both dispatched and paid<?php else: ?>; <b>Open</b> is anything not dispatched yet<?php endif; ?>.</p>
       <?php endif; ?>
     </div>
     <a href="/master-admin/new-order.php" class="btn btn-primary">+ New order</a>
@@ -187,7 +187,7 @@ $activeNav = $stage === 'notplaced' ? 'factory-quotes' : 'factory-orders';
         <table class="table">
           <thead><tr>
             <th>Order</th><th>Account</th><th class="fc-hide-md">Their ref</th><th class="fc-hide-md">Date</th>
-            <th class="num">Blinds</th><th class="num fc-hide-sm">Value</th><th>Making</th><th>Money</th><th>Next</th>
+            <th class="num">Blinds</th><th class="num fc-hide-sm">Value</th><th>Making</th><?php if ($canAccounts): ?><th>Money</th><?php endif; ?><th>Next</th>
           </tr></thead>
           <tbody>
           <?php foreach ($rows as $r): ?>
@@ -205,10 +205,10 @@ $activeNav = $stage === 'notplaced' ? 'factory-quotes' : 'factory-orders';
               <td class="num"><?= (int) $r['blinds'] ?></td>
               <td class="num fc-hide-sm"><?= e($money($r['value'])) ?></td>
               <td><?= fc_stage_pill($r['stage']) ?></td>
-              <td><?= fc_money_pill($r['money']) ?>
+              <?php if ($canAccounts): ?><td><?= fc_money_pill($r['money']) ?>
                 <?php foreach ($r['invoices'] as $iv): ?>
                   <div class="fc-sub"><?php if ($canAccounts): ?><a href="/master-admin/invoice-pdf.php?id=<?= (int) $iv['id'] ?>" target="_blank" rel="noopener"><?= e($iv['number']) ?></a><?php else: ?><?= e($iv['number']) ?><?php endif; ?><?php if ($iv['outstanding'] > 0.004): ?> &middot; <?= e($money($iv['outstanding'])) ?> owed<?php if ($iv['due'] !== ''): ?>, due <?= e(date('j M', strtotime($iv['due']))) ?><?php endif; ?><?php endif; ?></div>
-                <?php endforeach; ?></td>
+                <?php endforeach; ?></td><?php endif; ?>
               <td>
                 <?php [$nLabel, $nUrl, $nUrgent] = $r['next']; ?>
                 <?php if ($nUrl !== ''): ?><a class="fc-next<?= $nUrgent ? ' urgent' : '' ?>" href="<?= e($nUrl) ?>"><?= e($nLabel) ?></a>
