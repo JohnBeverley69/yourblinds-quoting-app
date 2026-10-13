@@ -74,13 +74,9 @@ $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
 /** can the current user use a topic of this audience? */
-$canSee = static function (string $aud) use ($isAdmin, $isSuper): bool {
-    if ($aud === 'super') return $isSuper;
-    if ($aud === 'admin') return $isAdmin || $isSuper;
-    // Factory Console: the factory's office staff (and the super-admin), never an ordinary business.
-    if ($aud === 'factory') return $isSuper || (function_exists('factory_console_user') && factory_console_user());
-    return true; // 'all'
-};
+// One rule for the list and the guide page: help/_audience.php.
+require_once __DIR__ . '/_audience.php';
+$canSee = static fn (string $aud): bool => help_can_see($aud);
 
 // ── Guided walkthroughs — the step-by-step "dummies' guide" pages ────────────
 $guides = [];
@@ -94,7 +90,7 @@ foreach (require __DIR__ . '/_guides.php' as $slug => $gd) {
 $TOPICS = require __DIR__ . '/_topics.php';
 
 // Sections in display order.
-$ORDER = ['Getting started', 'Quoting', 'Calendar & customers', 'Products & pricing',
+$ORDER = ['Getting started', 'Quoting', 'Calendar & customers', 'Factory', 'Products & pricing',
           'Fabric Library', 'Master catalogue', 'Accounts', 'Settings', 'Backups & safety'];
 
 // Group the topics the user can see.

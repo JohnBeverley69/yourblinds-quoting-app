@@ -284,10 +284,17 @@ function support_ai_alerts_if_due(): void
  *  Prompt
  * ------------------------------------------------------------------ */
 
-/** Help topics as plain text, filtered to what this audience may see. */
+/** Help topics as plain text, filtered to what this audience may see.
+ *  $aud is all | admin | super, optionally with +factory / +console (the
+ *  factory side and the main factory's Console — help/_audience.php). */
 function support_ai_knowledge(string $aud): string
 {
-    $allowed = ['all' => ['all'], 'admin' => ['all', 'admin'], 'super' => ['all', 'admin', 'super', 'factory']][$aud] ?? ['all'];
+    $parts   = explode('+', $aud);
+    $base    = $parts[0];
+    $allowed = ['all' => ['all'], 'admin' => ['all', 'admin'], 'super' => ['all', 'admin', 'super', 'factory', 'console']][$base] ?? ['all'];
+    foreach (array_slice($parts, 1) as $extra) {
+        if (in_array($extra, ['factory', 'console'], true)) $allowed[] = $extra;
+    }
     $topics  = require APP_ROOT . '/help/_topics.php';
     $out = [];
     $cat = '';
@@ -312,7 +319,8 @@ function support_ai_system_prompt(string $aud): string
         'all'   => 'a staff member of a blinds business (sales, fitter or office) using YourBlinds',
         'admin' => 'an admin of a blinds business using YourBlinds',
         'super' => 'the platform owner (super-admin), who also runs the factory and the Trade side',
-    ][$aud] ?? 'a YourBlinds user';
+    ][explode('+', $aud)[0]] ?? 'a YourBlinds user';
+    if (strpos($aud, '+factory') !== false) $who .= ', in a business that also makes blinds (it has the Factory side)';
     $kb = support_ai_knowledge($aud);
 
     return <<<TXT
@@ -435,6 +443,12 @@ function support_ai_clean_content(array $content): array
 function support_ai_turn(array &$chat, array $user, string $text, array $ctx): array
 {
     $aud = !empty($user['is_super_admin']) ? 'super' : (($user['role'] ?? '') === 'admin' ? 'admin' : 'all');
+    // Factory topics only for the factory side (help/_audience.php) — never an ordinary shop.
+    if ($aud !== 'super') {
+        require_once APP_ROOT . '/help/_audience.php';
+        if (help_can_see('factory')) $aud .= '+factory';
+        if (help_can_see('console')) $aud .= '+console';
+    }
     $system = [[
         'type' => 'text',
         'text' => support_ai_system_prompt($aud),

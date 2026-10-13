@@ -229,9 +229,9 @@ $fullBoard = '<div class="pbd sm">'
 
 return [
         'aud'     => 'factory',
-        'section' => 'Factory Console',
+        'section' => 'Factory',
         'title'   => 'The Factory Pipeline: where&rsquo;s my order?',
-        'eyebrow' => 'Factory Console',
+        'eyebrow' => 'Factory · Pipeline',
         'v'       => 2,
         'blurb'   => 'Every open order as a card, from New to Paid: the columns, what a card and each of its lines says, the one next-step button, and finding an order fast with the search box and account picker.',
         'lede'    => 'The <b>Pipeline</b> answers <b>&ldquo;where&rsquo;s my order?&rdquo;</b> in one look. Every open order sits on it as a

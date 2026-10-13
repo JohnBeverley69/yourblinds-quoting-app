@@ -87,7 +87,7 @@ $tabs = static function (string $active, string $waiting = '1') : string {
 $rmHead = '<div class="dh"><div><div class="pt">Remakes</div></div><span class="btns">Edit reasons</span></div>';
 
 return [
-        'aud'     => 'factory',
+        'aud'     => 'console',
         'section' => 'Factory Console',
         'title'   => 'Remakes',
         'eyebrow' => 'Factory Console',
