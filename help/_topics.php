@@ -6,7 +6,9 @@ declare(strict_types=1);
  * the animated walkthroughs in help/guides/.
  *
  * Each row: [aud, cat, title, keys, body]
- *   aud   all | admin | super | factory  — who may see it (factory = Factory Console users)
+ *   aud   all | admin | super | factory | console — who may see it (help/_audience.php):
+ *         factory = anyone on a factory account's Factory side; console = the main
+ *         factory's Factory Console only. Never put factory how-tos under all/admin.
  *   cat   the section it groups under (order here is the page order)
  *   title the question, as the user would ask it
  *   keys  extra search words (the box matches title + keys + body)
@@ -25,24 +27,23 @@ return [
       <li><strong>Make and fit it.</strong> The status ladder is <em>draft &rarr; sent &rarr; accepted &rarr; ordered &rarr; fitted &rarr; invoiced &rarr; paid</em>, with <em>declined</em> as the dead end. Orders made in your own factory also carry a separate <strong>fulfilment stage</strong> (Confirmed, In Production, Ready, Dispatched).</li>
       <li><strong>Get paid.</strong> Record money on the order\'s own Payments panel, or on <strong>Retail &rarr; Payments</strong> if you have the Accounts add-on.</li>
       </ul>
-      <p>To see where everything is at a glance, open <strong>Work &rarr; Pipeline</strong>.</p>'],
+      <p>To see where everything is at a glance, open <strong>Work &rarr; Sales pipeline</strong>.</p>'],
 
-    ['all', 'Getting started', 'Why does the menu have Retail and Trade?', 'menu sidebar navigation retail trade two quotes orders twice duplicate same page wholesale missing section cant see trade where is',
-     '<p>Because the app does two different jobs, and the menu keeps them apart. It is grouped <strong>Work</strong> / <strong>Retail</strong> / <strong>Setup</strong> / <strong>Platform</strong>.</p>
+    ['all', 'Getting started', 'How is the menu laid out?', 'menu sidebar navigation retail trade two quotes orders twice duplicate same page wholesale missing section cant see where is sales pipeline',
+     '<p>The menu is grouped <strong>Work</strong> / <strong>Retail</strong> / <strong>Setup</strong> (and <strong>Platform</strong> for the people who run the whole system).</p>
       <ul>
-      <li><strong>Work</strong> &mdash; the everyday screens that belong to both: Dashboard, Calendar, Pipeline and Factory.</li>
-      <li><strong>Retail</strong> &mdash; your own end customers: Customers, Quotes, Orders and Payments.</li>
+      <li><strong>Work</strong> &mdash; the everyday screens: Dashboard, Calendar and the <strong>Sales pipeline</strong>.</li>
+      <li><strong>Retail</strong> &mdash; your own end customers: Customers, Messages, Quotes, Orders and Payments.</li>
       <li><strong>Setup</strong> &mdash; Products, Users, Settings, Trade terms and Billing.</li>
-      <li><strong>Platform</strong> &mdash; running the whole system (catalogue, clients, billing plans, system health).</li>
       </ul>
-      <p><strong>The factory works from its own menu.</strong> The office staff of the factory that makes the blinds sign in to the <strong>Factory Console</strong> instead: Dashboard, Orders, Remakes and Calendar; Production (Incoming orders, Floor, Dispatch); Accounts (Trade accounts, Invoices, Bank, Statements, Commissions, The Numbers). Its Orders list holds every order placed with the factory, whoever placed it. An ordinary business never sees any of that.</p>'],
+      <p>What you see depends on your ticks on the Users page &mdash; a fitter, for example, sees far less than an admin. <strong>+ New</strong> and <strong>InstaPrice</strong> sit at the top.</p>'],
 
-    ['factory', 'Getting started', 'Where has the Trade menu gone?', 'trade menu missing gone moved quotes orders dispatch invoices bank statements commissions factory console old screen redirect',
+    ['console', 'Getting started', 'Where has the Trade menu gone?', 'trade menu missing gone moved quotes orders dispatch invoices bank statements commissions factory console old screen redirect',
      '<p>Into the <strong>Factory Console</strong>. Everything that was under <strong>Trade</strong> now sits in the console menu: <strong>Work</strong> (Dashboard, Orders, Remakes, Calendar), <strong>Production</strong> (Incoming orders, Floor, Dispatch) and <strong>Accounts</strong> (Invoices, Bank, Statements, Commissions, and Trade accounts and The Numbers for the super-admin).</p>
       <p>The old Trade quotes and orders lists are now the one <strong>Work &rarr; Orders</strong> list &mdash; quotes not placed yet are its <em>Quotes</em> chip, and <strong>Work &rarr; Quotes</strong> in the menu goes straight to them. Old links and bookmarks still work: the sales dashboard, the orders and quotes lists, the Pipeline and the old calendar simply take you to their console screen. The guides under <em>Factory Console</em> on this page walk through it.</p>'],
 
-    ['all', 'Getting started', 'What is the Pipeline for?', 'pipeline board kanban columns drag drop move cards cannot move funnel column totals value mine only all time',
-     '<p><strong>Work &rarr; Pipeline</strong> is a board that shows where every job has got to, in columns, so you can see the whole funnel in one screen instead of scrolling a list.</p>
+    ['all', 'Getting started', 'What is the Sales pipeline for?', 'pipeline board kanban columns drag drop move cards cannot move funnel column totals value mine only all time',
+     '<p><strong>Work &rarr; Sales pipeline</strong> is a board that shows where every job has got to, in columns, so you can see the whole funnel in one screen instead of scrolling a list.</p>
       <p>The columns are <strong>Quote</strong> (drafts and sent quotes together &mdash; an unsent one carries a <em>Not sent</em> tag), <strong>Declined</strong>, <strong>Accepted</strong>, <strong>Ordered</strong>, <strong>Fitted</strong>, <strong>Invoiced</strong> and <strong>Paid</strong>. Each column head shows how many jobs are in it and what they are worth, and the bar at the top gives the overall job count and &pound; total. Cards show the customer, quote number, postcode, how long since the job was last touched, a <em>Paid</em> or <em>Part paid</em> tag, and the outstanding balance on anything invoiced. The colours are your own traffic lights from <strong>Setup &rarr; Settings &rarr; Status colours</strong>.</p>
       <p><strong>The board is read-only &mdash; you cannot drag a card from one column to the next.</strong> That is deliberate: moving a job really does things (timestamps, supplier orders, invoices), so you change the status on the job itself. Click any card to open it.</p>
       <ul>
@@ -52,8 +53,8 @@ return [
       <li>If you cannot see everyone\'s jobs (the <em>View all customer jobs</em> tick on your user), the board only shows jobs you are on. Prices are hidden unless you have <em>View costs</em>.</li>
       </ul>'],
 
-    ['factory', 'Getting started', 'Where has an order got to? (Confirmed, In Production, Ready, Dispatched)', 'fulfilment stage progress where is my order confirmed in production ready dispatched pill chip factory made bought in',
-     '<p>Every placed order that contains something you make carries one <strong>fulfilment stage</strong>, and it is the single honest answer to "where is this order?". You will see it as a coloured pill on <strong>Work &rarr; Factory</strong> (the incoming orders list) and in the <em>Stage</em> column on a trade account\'s page (<strong>Factory Console &rarr; Accounts &rarr; Invoices</strong>, then click the account&rsquo;s name) and in <strong>Factory Console &rarr; Orders</strong>.</p>
+    ['factory', 'Factory', 'Where has an order got to? (Confirmed, In Production, Ready, Dispatched)', 'fulfilment stage progress where is my order confirmed in production ready dispatched pill chip factory made bought in',
+     '<p>Every placed order that contains something you make carries one <strong>fulfilment stage</strong>, and it is the single honest answer to "where is this order?". You will see it as a coloured pill on <strong>Factory &rarr; Incoming orders</strong> and in the <em>Stage</em> column on a trade account\'s page (<strong>Factory Console &rarr; Accounts &rarr; Invoices</strong>, then click the account&rsquo;s name) and in <strong>Factory Console &rarr; Orders</strong>.</p>
       <ul>
       <li><strong>Confirmed</strong> &mdash; the order is in, but nothing has started: not on the production floor and no bought-in items ordered yet.</li>
       <li><strong>In Production</strong> &mdash; work has begun. Either blinds have been released to the floor, or the bought-in items have been ordered from the supplier.</li>
@@ -63,7 +64,7 @@ return [
       <p><strong>You do not set the stage by hand</strong> &mdash; the app works it out from the floor, the bought-in log and the delivery notes, and recalculates it whenever you change an order\'s status, place it with suppliers, or act on it under Factory Console &rarr; Invoices. If a stage looks wrong, fix the thing underneath it: scan the last blind off the floor, or tick the bought-in items as received.</p>
       <p>A dash instead of a stage means the order has nothing of yours in it, or it is still only a quote &mdash; stages start once an order is placed. On the Factory list the pill sits alongside a <em>made</em> count (click it to open the floor) and the bought-in tag: <em>n to order</em>, <em>ordered</em> or <em>received</em>.</p>'],
 
-    ['factory', 'Getting started', 'It won\'t let me dispatch — why?', 'cant dispatch wont let me dispatch not ready greyed out disabled button blocked mark dispatched delivery note print dn bought in awaiting',
+    ['factory', 'Factory', 'It won\'t let me dispatch — why?', 'cant dispatch wont let me dispatch not ready greyed out disabled button blocked mark dispatched delivery note print dn bought in awaiting',
      '<p>Because the order is not <strong>Ready</strong> yet. The app refuses with <em>"Can\'t dispatch &mdash; the order isn\'t ready yet (every blind made and every bought-in item received)."</em> on <strong>Factory Console &rarr; Invoices</strong> (both <em>Mark dispatched</em> and <em>Print DN &amp; invoice</em>), and with <em>"Can\'t dispatch yet &mdash; the order isn\'t ready. Every blind must be made and every bought-in item received first."</em> on the factory side.</p>
       <p>Ready has two halves, and <strong>both</strong> must be true:</p>
       <ul>
@@ -71,7 +72,7 @@ return [
       <li><strong>Everything bought in has arrived.</strong> No bought-in line is still waiting on its supplier &mdash; each one has to be marked received.</li>
       </ul>
       <p>There is a third catch that surprises people: <strong>work has to have actually started</strong>. A brand-new Confirmed order that nobody has touched is never Ready, even if there is little to do on it, so send it to the floor (or order the bought-in items) first.</p>
-      <p>To find out which half is holding it up, open <strong>Work &rarr; Factory</strong> and look at the order\'s row: the <em>made</em> count shows how many blinds are still to finish (click it to go to the floor), and the bought-in tag reads <em>n to order</em>, <em>ordered</em> or <em>received</em>. Clear whichever is outstanding and the stage flips to Ready on its own &mdash; then the dispatch buttons work.</p>'],
+      <p>To find out which half is holding it up, open <strong>Factory &rarr; Incoming orders</strong> and look at the order\'s row: the <em>made</em> count shows how many blinds are still to finish (click it to go to the floor), and the bought-in tag reads <em>n to order</em>, <em>ordered</em> or <em>received</em>. Clear whichever is outstanding and the stage flips to Ready on its own &mdash; then the dispatch buttons work.</p>'],
 
     // ---- Quoting -------------------------------------------------------
     ['all', 'Quoting', 'Building a quote', 'quote builder add blind product system band fabric width drop room duplicate dup new quote line item',
@@ -168,15 +169,7 @@ return [
       cover the total, so &ldquo;paid&rdquo; always means the money is genuinely accounted for.</p>'],
 
     ['all', 'Quoting', 'Can I just send an order, without a quote?', 'new order direct order place order straight to factory no quote no customer portal order reference buying price create orders duplicate reference twice start order anyway',
-     '<p>Yes &mdash; <strong>New order</strong>. Press <strong>+ New</strong> at the top of the menu and pick <strong>New order</strong>
-      (if your login can only create orders, the button itself reads <strong>+ New order</strong>). It needs the <strong>Create orders</strong>
-      tick on the Users page.</p>
-      <ul><li>Type your <strong>Order reference</strong> (required), an optional <strong>Name for the labels</strong> and any
-      <strong>Order notes</strong>, then <strong>Start order</strong>. If that reference is already on one of your jobs, it shows you
-      them first &mdash; press <strong>Start order anyway</strong> only if it really is a separate order.</li>
-      <li>Add the blinds as on a quote. Prices are <strong>your buying price</strong> (no markup, no retail discount) and the total reads
-      <strong>Order total (your price, ex VAT)</strong>.</li>
-      <li>Press <strong>&#128230; Place order</strong> and confirm. There is no customer, so nothing is sent out for approval.</li></ul>'],
+     '<p><strong>No &mdash; every job goes through a quote</strong>, so its buying <em>and</em> selling price are on the system. If the job is already sold and nothing needs sending to the customer, build the quote as normal and press <strong>&#128230; Save as order</strong> in Quote actions: it accepts the quote and takes you straight to the place-order screen, where your suppliers get their orders.</p>'],
 
     ['all', 'Quoting', 'Archiving jobs you’ve finished with', 'archive archived restore hide old quotes tidy list delete selected bulk clear out',
      '<p><strong>Archiving hides a job. Deleting destroys it.</strong> If you just want an old job out of the way,
@@ -879,7 +872,7 @@ return [
       <p>The Help guides <em>QuickBooks live link</em>, <em>Match customers (QuickBooks)</em> and <em>Swap-over: Blind Matrix
       balances</em> walk through each part.</p>'],
 
-    ['factory', 'Accounts', 'How do I raise a delivery note and invoice for a trade account?', 'delivery note dn invoice trade wholesale raise dispatch print billing account order paperwork',
+    ['console', 'Accounts', 'How do I raise a delivery note and invoice for a trade account?', 'delivery note dn invoice trade wholesale raise dispatch print billing account order paperwork',
      '<p>Go to <strong>Factory Console → Invoices</strong> in the left-hand menu (the page itself is headed
       <strong>Wholesale</strong>). Every placed trade-account order that contains your products is one row, with a
       status pill and one button for whatever comes next.</p>
@@ -903,7 +896,7 @@ return [
       an order already covered by a live invoice refuses with <em>“Order already invoiced on … (void it first to
       re-invoice).”</em></p>'],
 
-    ['factory', 'Accounts', 'One-step or two-step invoicing — which should I use?', 'one step two step auto invoice dispatch delivery note flow wholesale setting mode automatic manual',
+    ['console', 'Accounts', 'One-step or two-step invoicing — which should I use?', 'one step two step auto invoice dispatch delivery note flow wholesale setting mode automatic manual',
      '<p>There are <strong>two different switches</strong> at the top of <strong>Accounts → Invoices</strong> and people
       mix them up constantly. They do not do the same job.</p>
       <ul>
@@ -922,7 +915,7 @@ return [
       watched a few orders go through and you’re happy they price correctly — the screen says exactly that. Once you
       trust it, turning it on means nothing ever sits un-invoiced because the office forgot.</p>'],
 
-    ['factory', 'Accounts', 'A trade invoice is wrong — credit it or void it?', 'void credit note cn cancel invoice wrong mistake wholesale reissue re-invoice trade refund adjust',
+    ['console', 'Accounts', 'A trade invoice is wrong — credit it or void it?', 'void credit note cn cancel invoice wrong mistake wholesale reissue re-invoice trade refund adjust',
      '<p>Both live on <strong>Accounts → Invoices</strong>: open the order’s row with the ▸ arrow and you’ll see
       <strong>Void</strong> and <strong>Credit note</strong> beside each invoice. The difference matters.</p>
       <ul>
@@ -941,7 +934,7 @@ return [
       <p><strong>Rule of thumb:</strong> nothing sent yet, or plainly wrong → <strong>Void</strong> and re-raise. The
       customer has the invoice and it needs to stay in the books → <strong>Credit note</strong>.</p>'],
 
-    ['factory', 'Accounts', 'How do I record a payment from a trade account?', 'trade payment received allocate allocation invoice outstanding wholesale account money in bank transfer cheque void payment',
+    ['console', 'Accounts', 'How do I record a payment from a trade account?', 'trade payment received allocate allocation invoice outstanding wholesale account money in bank transfer cheque void payment',
      '<p>Trade payments are <em>not</em> recorded on the retail Payments page. The screen you want is headed
       <strong>Payments &mdash; &lt;the account&rsquo;s name&gt;</strong>, and there are three ways in:</p>
       <ul>
@@ -971,7 +964,7 @@ return [
       <p>Below, <strong>Payment history</strong> lists every payment with its number and a <strong>Void</strong> button.
       Voiding a payment puts the invoices it covered back to open.</p>'],
 
-    ['factory', 'Accounts', 'Month-end: chasing what you\'re owed', 'statement run aged debt debtors overdue chase credit control month end email statements pdf as at date',
+    ['console', 'Accounts', 'Month-end: chasing what you\'re owed', 'statement run aged debt debtors overdue chase credit control month end email statements pdf as at date',
      '<p><strong>Accounts → Statements</strong> is your chase list. It shows every trade account that owes you money,
       aged into <strong>Current</strong>, <strong>1–30</strong>, <strong>31–60</strong>, <strong>61–90</strong> and
       <strong>90+ days</strong>, with a grand total across the bottom so you can see the whole debt at a glance.</p>
@@ -1012,7 +1005,7 @@ return [
       whole money picture — balance, aged debt, orders with their production stage, open invoices and payment history —
       open the account overview instead.</p>'],
 
-    ['factory', 'Accounts', 'How do I work out a consultant\'s commission?', 'commission consultant sales rep statement percentage turnover rate pdf agent introducer',
+    ['console', 'Accounts', 'How do I work out a consultant\'s commission?', 'commission consultant sales rep statement percentage turnover rate pdf agent introducer',
      '<p><strong>Accounts → Commissions</strong> works out what a sales consultant has earned. Pick the
       <strong>Consultant</strong>, set <strong>From</strong> (leave blank for everything from the start) and
       <strong>To</strong>, then press <strong>Apply</strong>.</p>
@@ -1098,7 +1091,8 @@ return [
       <ul>
       <li><strong>Bronze</strong> — free to start. Quotes, calendar, customers, orders and products.</li>
       <li><strong>Silver</strong> — everything in Bronze plus <strong>Maps</strong> (the day run planner with directions,
-      and one-tap Google Maps / Waze navigation) and <strong>Postcode lookup</strong>.</li>
+      and one-tap Google Maps / Waze navigation), <strong>Postcode lookup</strong> and <strong>customer texts</strong>
+      (a monthly allowance; buy more as bundles if you need them).</li>
       <li><strong>Gold</strong> — everything in Silver plus <strong>Accounts</strong>: payment tracking, outstanding
       balances and the account summary.</li>
       </ul>
@@ -1227,4 +1221,39 @@ return [
       <p>Before you delete anything real, take a copy: <strong>Platform → System health → Backup</strong> has a <strong>Per-tenant export</strong> that hands you that one client’s data as a <code>.sql</code> file, and <em>“Download backup now”</em> takes the whole database. Do it in that order — export first, delete second.</p>
       <p>The Overview row also carries an <strong>Inactive</strong> tag and a <strong>Master</strong> tag, so check which row you are on before you press anything — the tick boxes across that row are the paid feature flags and are saved separately with <strong>Save flag changes</strong>; they have nothing to do with the Delete button beside them.</p>'],
 
+
+    // ---- Texts ----------------------------------------------------------
+    ['admin', 'Settings', 'Texts: how many do I get, and what if I run out?', 'sms text texts limit allowance 500 1000 monthly run out ran out used up buy more bundle bundles top up credit extra',
+     '<p>Texts come with the <strong>Silver</strong> and <strong>Gold</strong> plans. Each month you get an <strong>allowance</strong> &mdash; the number is on <strong>Messages</strong> and on <strong>Settings &rarr; Texts</strong>, with how many you&rsquo;ve used. It starts again on the 1st.</p>
+      <p><strong>If you need more</strong>, press <strong>Buy more texts</strong> on the Messages page (admins only) and pick a bundle. You pay up front with PayPal, and the texts are yours to use whenever:</p>
+      <ul>
+      <li>Texts come out of the month&rsquo;s allowance first, then out of your bundle.</li>
+      <li>Bundle texts you don&rsquo;t use <strong>carry over</strong> to next month.</li>
+      <li>With the allowance used and no bundle texts left, texts stop until the 1st (or until you buy a bundle) &mdash; the Messages log shows each one that couldn&rsquo;t go and why.</li>
+      </ul>
+      <p>A long text counts as more than one: every 160 characters (or 70 if it has an emoji in it).</p>'],
+
+    // ---- Factory (factory accounts only) ---------------------------------
+    ['factory', 'Factory', 'Shop or Factory — which side am I on?', 'shop factory switch side sides two which side lost navigation menu orange amber factory band back to the app pipeline sales pipeline',
+     '<p>A business that makes blinds has two sides, and the menu keeps them apart:</p>
+      <ul>
+      <li><strong>Shop</strong> &mdash; selling: Calendar, Customers, Quotes, Orders, Payments and the <strong>Sales pipeline</strong>.</li>
+      <li><strong>Factory</strong> &mdash; making: the factory <strong>Pipeline</strong>, Incoming orders, Floor, Scan log, Worksheets, Label sheet, and under <strong>Factory setup</strong> your production areas, routes, build rules and factory settings.</li>
+      </ul>
+      <p>The <strong>Shop | Factory</strong> switch at the top of the menu is the way across. On the factory side the menu turns dark with an amber edge and a <strong>FACTORY</strong> band, there&rsquo;s an amber strip across the top of the page, and the browser tab starts &ldquo;Factory &middot;&rdquo; &mdash; so you always know where you are. The <strong>YourBlinds</strong> logo takes you home on the side you&rsquo;re on.</p>
+      <p>The two sides work together: when your own shop accepts a quote for blinds you make, it goes straight into your factory&rsquo;s Incoming orders and Pipeline &mdash; nothing to re-key.</p>'],
+
+    ['factory', 'Factory', 'Do our own retail jobs get a fitting on the calendar?', 'fitting install pending fitting calendar tray retail trade our own customers accepted not showing missing appointment',
+     '<p><strong>Yes.</strong> A fitting follows the <em>sale</em>, not the account: when a <strong>retail</strong> quote is accepted &mdash; by the customer online, with <strong>Customer signs here</strong>, or with <strong>&check; Customer accepted</strong> &mdash; an <strong>Install</strong> card lands in the calendar&rsquo;s <strong>Pending Fitting</strong> tray. Drag it onto a date. If you have exactly one fitter it&rsquo;s already assigned to them.</p>
+      <p><strong>Trade</strong> orders (for a trade account, or marked trade) never get a fitting &mdash; they&rsquo;re supplied, not fitted.</p>
+      <p>And because you make the blinds, an accepted retail job for your own products goes straight into <strong>your</strong> factory&rsquo;s queue with a due date from your production times.</p>'],
+
+    ['factory', 'Factory', 'Factory office or floor login — what\'s the difference?', 'factory office floor login users ticks permission role pipeline process order production areas build rules settings create orders bench workstation tablet',
+     '<p>On <strong>Setup &rarr; Users</strong>, anyone who works in the factory needs the <strong>Factory</strong> role. Then:</p>
+      <ul>
+      <li><strong>Factory office</strong> ticked &mdash; they run the factory: the factory <strong>Pipeline</strong> and <strong>Process order</strong>, plus production set-up (areas, routes, build rules, factory settings).</li>
+      <li><strong>Factory office</strong> not ticked &mdash; a <strong>floor login</strong>: Incoming orders, the Floor, the Scan log, Worksheets and Label sheet, but none of the office screens.</li>
+      <li>A login assigned to a <strong>production area</strong> is a <strong>bench workstation</strong> (&ldquo;Roller Blinds&rdquo;, not a person) and opens straight into its own screen.</li>
+      </ul>
+      <p><strong>Create orders</strong> is only for placing shop orders &mdash; it doesn&rsquo;t make anyone factory office. <strong>Admin</strong> always counts as factory office.</p>'],
 ];

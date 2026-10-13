@@ -103,7 +103,7 @@ $calHead = '<div class="pt">Calendar</div><div class="phint">The office&rsquo;s 
 $dueH = '<h5>Due now <small>(today and anything carried forward)</small></h5>';
 
 return [
-        'aud'     => 'factory',
+        'aud'     => 'console',
         'section' => 'Factory Console',
         'title'   => 'The office calendar',
         'eyebrow' => 'Factory Console',

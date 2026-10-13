@@ -206,7 +206,7 @@ $moneyTiles = $tile('Needs invoicing', '2', 'Dispatched, no invoice yet', '#b91c
 $dashHead = '<div class="dh"><div><div class="pt">Good morning, Sam</div><div class="psub">Friday 9 October 2026</div></div><span class="btns">All orders</span></div>';
 
 return [
-        'aud'     => 'factory',
+        'aud'     => 'console',
         'section' => 'Factory Console',
         'title'   => 'The Factory Console: dashboard and orders',
         'eyebrow' => 'Factory Console',

@@ -26,13 +26,9 @@ $isAdmin = ($user['role'] ?? '') === 'admin';
 $isSuper = function_exists('is_super_admin') && is_super_admin();
 
 /** can the current user open a guide of this audience? */
-$canSee = static function (string $aud) use ($isAdmin, $isSuper): bool {
-    if ($aud === 'super') return $isSuper;
-    if ($aud === 'admin') return $isAdmin || $isSuper;
-    // Factory Console guides: the factory's office staff (and the super-admin), never an ordinary business.
-    if ($aud === 'factory') return $isSuper || (function_exists('factory_console_user') && factory_console_user());
-    return true;
-};
+// One rule for the list and the guide page: help/_audience.php.
+require_once __DIR__ . '/_audience.php';
+$canSee = static fn (string $aud): bool => help_can_see($aud);
 
 // Guide registry (shared with help/index.php's guide list).
 $GUIDES = require __DIR__ . '/_guides.php';

@@ -65,7 +65,7 @@ $todo = static fn (array $over = []): string =>
 $save = '<div class="stk"><span class="btnp">Save matches</span> <span class="ref">Saves every row as shown above.</span></div>';
 
 return [
-        'aud'     => 'factory',
+        'aud'     => 'console',
         'section' => 'Factory Console',
         'title'   => 'Match customers (QuickBooks)',
         'eyebrow' => 'Factory Console · QuickBooks customers',
