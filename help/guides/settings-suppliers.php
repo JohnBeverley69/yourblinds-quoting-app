@@ -364,13 +364,6 @@ return [
              orders.&rdquo;</em> The spec PDF carries your <b>Deliver to</b> address and your <b>Account no:</b> with that supplier. A product with no
              supplier shows <b>&#9888;&#65039; No supplier set</b>. Every send is logged: one already sent shows <b>&#9888;&#65039; Already sent</b> and is
              <em>&ldquo;left unticked so you don&rsquo;t double-order&rdquo;</em>. If nothing can be sent you&rsquo;ll see <em>&ldquo;Nothing&rsquo;s
-             ready to send yet &mdash; set suppliers on your products and their emails in Settings.&rdquo;</em></p>
-
-          <p class="prose"><b>Factory accounts</b> use the same list and delivery address. On the <b>Pipeline</b>, <b>Process order</b>
-             emails each bought-in supplier its purchase order as it takes the order in; a supplier with no valid email here shows
-             <b>Couldn&rsquo;t order from &hellip;</b> in red until it&rsquo;s fixed, then <b>Retry</b>. <b>Re-send to a supplier&hellip;</b>
-             (the order&rsquo;s &ldquo;&middot;&middot;&middot;&rdquo; menu on <b>Incoming orders</b>) opens <b>Order bought-in items</b> to send one again by hand.
-             The factory-only <b>Auto-order bought-in items</b> setting (Settings &rarr; Quoting) sends them on placement instead &mdash;
-             only switch that on once every email here is confirmed.</p>',
+             ready to send yet &mdash; set suppliers on your products and their emails in Settings.&rdquo;</em></p>',
         'script'  => $script,
 ];

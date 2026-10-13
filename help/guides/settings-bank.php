@@ -315,12 +315,6 @@ return [
 
           <div class="heads"><span class="hi">&#9888;</span><div><b>What switches the box on.</b> It appears only when <b>Account name</b> or
              <b>Account number</b> has something in it. A sort code on its own, or a note on its own, prints nothing. To switch the box off
-             (if you&rsquo;d rather customers rang to pay), clear <b>all four</b> boxes and save.</div></div>
-
-          <p class="prose"><b>Trade paperwork.</b> The factory&rsquo;s <b>wholesale invoice</b> prints a block headed <b>Payment</b>
-             (<b>Account:</b> / <b>Sort code:</b> / <b>Account no:</b>, then the note) &mdash; but it reads the <em>factory&rsquo;s</em> own
-             four boxes, not yours. Credit notes and account statements print no payment block. And the <b>bank account</b> you map on the
-             <b>Accounting</b> tab is a ledger account in your accounts package &mdash; a different thing that doesn&rsquo;t change what prints
-             here.</p>',
+             (if you&rsquo;d rather customers rang to pay), clear <b>all four</b> boxes and save.</div></div>',
         'script'  => $script,
 ];

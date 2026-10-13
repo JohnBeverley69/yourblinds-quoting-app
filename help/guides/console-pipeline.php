@@ -343,12 +343,12 @@ return [
           <div class="demo-shell">
             <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / factory / pipeline</span></div>
             <div class="app">
-              <div class="side">
+              <div class="side factory"><div class="fband">FACTORY</div>
                 <div class="logo">Your<b>Blinds</b></div><small>FACTORY CONSOLE</small>
                 <div class="navh">Work</div>
                 <a>Calendar</a><a>Dashboard</a><a>Orders</a><a class="on">Pipeline</a><a>Quotes</a><a>Remakes</a>
                 <div class="navh">Production</div>
-                <a>Dispatch</a><a>Floor</a><a>Incoming orders</a>
+                <a>Dispatch</a><a>Floor</a><a>Incoming orders</a><a>Label sheet</a><a>Scan log</a><a>Worksheets</a>
               </div>
               <div class="stage" id="gdStage" data-step="0">
 
@@ -361,7 +361,7 @@ return [
                 <!-- 1 — what it is for -->
                 <div class="sc" data-scene="1" data-len="' . $len(1) . '">
                   <div class="mwrap">
-                    <div class="cmnu a-rise" style="' . $d(1, 'Open it from') . '"><div class="lg">Your<b>Blinds</b></div><small class="tag">FACTORY CONSOLE</small>
+                    <div class="cmnu a-rise" style="' . $d(1, 'Open it from') . '"><div class="fband">FACTORY</div><div class="lg">Your<b>Blinds</b></div><small class="tag">FACTORY CONSOLE</small>
                       <div class="nh">Work</div><span class="it">Calendar</span><span class="it">Dashboard</span><span class="it">Orders</span>
                       <span class="it a-sel" style="' . $d(1, 'Open it from', 1) . '">Pipeline</span><span class="it">Quotes</span><span class="it">Remakes</span></div>
                     <div>

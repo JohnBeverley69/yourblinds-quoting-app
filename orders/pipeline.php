@@ -223,7 +223,7 @@ $ageOf = static function (?string $ts): string {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Pipeline &middot; YourBlinds</title>
+    <title>Sales pipeline &middot; YourBlinds</title>
     <link rel="stylesheet" href="<?= asset('/app.css') ?>">
     <style>
         /* Pipeline = horizontal-scrolling Kanban. On desktop the
@@ -376,7 +376,7 @@ $ageOf = static function (?string $ts): string {
     <main class="app-main">
         <div class="page-header">
             <div>
-                <h1 class="page-title">Pipeline</h1>
+                <h1 class="page-title">Sales pipeline</h1>
                 <p class="page-subtitle">
                     Where every job is in the funnel.
                 </p>
