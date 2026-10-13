@@ -777,7 +777,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $delMarkup->execute([$clientId, $id, $sysId, $sysId]);
                 }
 
-                $dp = (float) $f['discount'][$k];
+                // A factory product's discount is the factory's, not the account's.
+                $dp = pl_is_factory_copy((int) $id) ? 0.0 : (float) $f['discount'][$k];
                 if ($dp > 0) {
                     $insDiscount->execute([$clientId, $id, $sysId, $dp]);
                 } else {
@@ -1545,7 +1546,11 @@ $activeNav = 'products';
                                             <?php endif; ?>
                                         </td>
                                         <td class="num">
-                                            <?php $ptd = $_effTradeDisc((int) $s['id']); if ($ptd > 0): ?>
+                                            <?php $ptd = $_effTradeDisc((int) $s['id']); if (pl_is_factory_copy((int) $id)): ?>
+                                                <span style="color:var(--text-faint)">—</span>
+                                                <div style="font-size:0.6875rem;color:var(--text-faint);margin-top:0.125rem;line-height:1.2">set by the factory</div>
+                                                <input type="hidden" name="discount[<?= (int) $s['id'] ?>]" value="0">
+                                            <?php elseif ($ptd > 0): ?>
                                                 <span style="color:#065f46;font-weight:700"><?= number_format($ptd, 2) ?>%</span>
                                                 <div style="font-size:0.6875rem;color:var(--text-faint);margin-top:0.125rem;line-height:1.2">from your supplier</div>
                                                 <input type="hidden" name="discount[<?= (int) $s['id'] ?>]" value="0">
@@ -1586,7 +1591,11 @@ $activeNav = 'products';
                             </div>
                             <div class="form-group">
                                 <label for="discount_no_sys">Discount %</label>
-                                <?php $ptd = $_effTradeDisc(null); if ($ptd > 0): ?>
+                                <?php $ptd = $_effTradeDisc(null); if (pl_is_factory_copy((int) $id)): ?>
+                                    <div><span style="color:var(--text-faint)">—</span>
+                                        <small style="color:var(--text-faint);font-size:0.75rem;display:block;margin-top:0.1875rem">set by the factory</small></div>
+                                    <input type="hidden" name="discount" value="0">
+                                <?php elseif ($ptd > 0): ?>
                                     <div><span style="color:#065f46;font-weight:700"><?= number_format($ptd, 2) ?>%</span>
                                         <small style="color:var(--text-faint);font-size:0.75rem;display:block;margin-top:0.1875rem">from your supplier</small></div>
                                     <input type="hidden" name="discount" value="0">

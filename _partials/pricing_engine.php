@@ -837,6 +837,24 @@ function pe_markup_for_system(PDO $pdo, int $clientId, int $productId, ?int $sys
  */
 function pe_discount_for_system(PDO $pdo, int $clientId, int $productId, ?int $systemId): float
 {
+    // An account's copy of a factory product: its grid is already our trade
+    // price, and the buying discount is ours to set, never the account's
+    // (John, 2026-10-13). A discount row left on a copy (typed before the box
+    // was locked, or copied in by the old set-up) is ignored.
+    static $copy = [];
+    if (!array_key_exists($productId, $copy)) {
+        try {
+            $cp = $pdo->prepare('SELECT client_id, source_client_id FROM products WHERE id = ? LIMIT 1');
+            $cp->execute([$productId]);
+            $row = $cp->fetch(PDO::FETCH_ASSOC);
+            $src = (int) ($row['source_client_id'] ?? 0);
+            $copy[$productId] = $row && $src > 0 && $src !== (int) $row['client_id'];
+        } catch (Throwable $e) {
+            $copy[$productId] = false;   // no source column (old schema)
+        }
+    }
+    if ($copy[$productId]) return 0.0;
+
     if ($systemId === null) {
         $st = $pdo->prepare(
             'SELECT discount_percent FROM client_discounts

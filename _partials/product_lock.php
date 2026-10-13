@@ -15,9 +15,11 @@ declare(strict_types=1);
  * the price is read-only for non-super-admins: price grids and their imports /
  * Adjust % / undo, systems, fabrics and bands, options/choices and their
  * prices, and the product's own pricing fields. What the account still
- * controls: its own markup and discount (per product/system — those don't
- * reduce the factory's bill, they only change what THEIR customer pays),
- * active on/off, category and sort order. Duplicating the product makes an
+ * controls: its own markup (per product/system — it doesn't change the
+ * factory's bill, only what THEIR customer pays), active on/off, category and
+ * sort order. NOT the discount: on a factory product that is the buying
+ * discount, set by the factory (John, 2026-10-13: ABC Blinds could type 99%).
+ * See pl_is_factory_copy() — the engine ignores a discount row there too. Duplicating the product makes an
  * unlinked copy of their own, which they can edit freely (it's then no longer
  * a factory product, so it isn't billed by the factory).
  *
@@ -28,7 +30,7 @@ declare(strict_types=1);
 if (!defined('PRODUCT_LOCK_MSG')) {
     define('PRODUCT_LOCK_MSG',
         'This product comes from the factory catalogue, so its prices, options and fabrics are set by the '
-        . 'factory and can\'t be changed here. You can still set your own markup and discount.');
+        . 'factory and can\'t be changed here. You can still set your own markup. The discount is set by the factory.');
 }
 
 /** True if the product's pricing is locked for the current user. */
@@ -51,6 +53,29 @@ function pl_product_locked(int $productId): bool
         && $src !== (int) $p['client_id']
         && function_exists('is_factory_client') && is_factory_client($src);
     return $cache[$productId] = (bool) $locked;
+}
+
+/**
+ * True if this product is an account's copy of a factory product (whoever is
+ * looking — unlike pl_product_locked there is no super-admin exception). On a
+ * copy the account may set its markup but never a discount: the grid is
+ * already our trade price to them.
+ */
+function pl_is_factory_copy(int $productId): bool
+{
+    static $cache = [];
+    if ($productId <= 0) return false;
+    if (array_key_exists($productId, $cache)) return $cache[$productId];
+    try {
+        $st = db()->prepare('SELECT client_id, source_client_id FROM products WHERE id = ? LIMIT 1');
+        $st->execute([$productId]);
+        $p = $st->fetch(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        return $cache[$productId] = false;
+    }
+    $src = (int) ($p['source_client_id'] ?? 0);
+    return $cache[$productId] = (bool) ($p && $src > 0 && $src !== (int) $p['client_id']
+        && (!function_exists('is_factory_client') || is_factory_client($src)));
 }
 
 /** Product id owning a price table / system / option (fabric) / extra / choice. */
