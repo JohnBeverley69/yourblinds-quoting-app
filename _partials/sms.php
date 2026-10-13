@@ -8,12 +8,15 @@ declare(strict_types=1);
  *  - ONE provider account, paid for by YourBlinds. Each company's texts go out
  *    under its own NAME (alphanumeric sender, up to 11 chars) — customers can't
  *    reply, so the wording ends with the company's phone number.
- *  - Paid plans only (Silver/Gold grant feature_sms; never Bronze). The
- *    factory account always has it.
+ *  - Paid plans only (Silver/Gold grant feature_sms; never Bronze). The main
+ *    factory (Beverley, ours) always has it; other factories need the plan.
  *  - Every text is logged in `messages` and counted against a per-company
- *    MONTHLY limit — a safety net, not an allowance. NULL on the company means
- *    the platform default (SMS_DEFAULT_MONTHLY_LIMIT, 1000); master-admin can
- *    set it per company on /master-admin/texts.php.
+ *    MONTHLY ALLOWANCE. NULL on the company means the platform default
+ *    (SMS_DEFAULT_MONTHLY_LIMIT, 1000); master-admin can set it per company on
+ *    /master-admin/texts.php.
+ *  - Texts are never free (John, 2026-10-13): past the allowance a company
+ *    texts from prepaid BUNDLES it buys through PayPal (sms_bundles; unused
+ *    bundle texts carry over). Packs and prices: Master Admin → Texts.
  *  - A customer with "Don't text" ticked (customers.sms_opt_out) is never texted.
  *
  * Replies are a later paid add-on: a rented UK number per company, inbound
@@ -228,11 +231,13 @@ function sms_settings(int $clientId, bool $fresh = false): array
     return $cache[$clientId] = $s;
 }
 
-/** Does this company get texting? (paid plan, or the factory account) */
+/** Does this company get texting? (paid plan, or the main factory — ours) */
 function sms_feature_enabled(int $clientId): bool
 {
     if (!sms_ready()) return false;
-    if (function_exists('is_factory_client') && is_factory_client($clientId)) return true;
+    // Only the main factory gets it without a plan: texts cost money, so a
+    // white-label factory pays like any other company (John, 2026-10-13).
+    if (function_exists('factory_client_id') && $clientId === (int) factory_client_id()) return true;
     return (int) sms_settings($clientId)['feature_sms'] === 1;
 }
 
@@ -283,7 +288,8 @@ function sms_purge_old(int $months = 12): int
     }
 }
 
-/** Texts (segments) this company has used this calendar month. */
+/** Texts (segments) this company has used this calendar month OUT OF ITS
+ *  ALLOWANCE — texts paid for from a bundle don't count against it. */
 function sms_used_this_month(int $clientId): int
 {
     if (!sms_ready()) return 0;
@@ -292,13 +298,87 @@ function sms_used_this_month(int $clientId): int
             "SELECT COALESCE(SUM(segments), 0) FROM messages
               WHERE client_id = ? AND channel = 'sms' AND direction = 'out'
                 AND status IN ('queued', 'sent', 'delivered')
-                AND created_at >= ?"
+                AND created_at >= ?" . (sms_bundles_ready() ? ' AND from_bundle = 0' : '')
         );
         $st->execute([$clientId, date('Y-m-01 00:00:00')]);
         return (int) $st->fetchColumn();
     } catch (Throwable $e) {
         return 0;
     }
+}
+
+/* ------------------------------------------------------------------ *
+ *  Prepaid text bundles (migrate_sms_bundles.php)
+ * ------------------------------------------------------------------ */
+
+function sms_bundles_ready(): bool
+{
+    static $ok = null;
+    if ($ok !== null) return $ok;
+    try {
+        db()->query('SELECT 1 FROM sms_bundles LIMIT 0');
+        db()->query('SELECT from_bundle FROM messages LIMIT 0');
+        return $ok = true;
+    } catch (Throwable $e) { return $ok = false; }
+}
+
+/** Bundle texts this company has left: paid bundles minus texts sent from them. */
+function sms_bundle_balance(int $clientId): int
+{
+    if (!sms_bundles_ready()) return 0;
+    try {
+        $st = db()->prepare("SELECT COALESCE(SUM(texts), 0) FROM sms_bundles WHERE client_id = ? AND status = 'paid'");
+        $st->execute([$clientId]);
+        $bought = (int) $st->fetchColumn();
+        $st = db()->prepare(
+            "SELECT COALESCE(SUM(segments), 0) FROM messages
+              WHERE client_id = ? AND channel = 'sms' AND direction = 'out' AND from_bundle = 1
+                AND status IN ('queued', 'sent', 'delivered')"
+        );
+        $st->execute([$clientId]);
+        return max(0, $bought - (int) $st->fetchColumn());
+    } catch (Throwable $e) {
+        return 0;
+    }
+}
+
+/**
+ * The packs on sale, set on Master Admin → Texts (platform_config SMS_BUNDLES,
+ * JSON [{"texts":250,"price":"10.00"}, …]). Empty until the super-admin sets
+ * them — no prices are made up here.
+ *
+ * @return list<array{texts:int, price:string}>
+ */
+function sms_bundle_packs(): array
+{
+    $raw = json_decode((string) (pc_get('SMS_BUNDLES', '') ?? ''), true);
+    $out = [];
+    foreach (is_array($raw) ? $raw : [] as $p) {
+        $t = (int) ($p['texts'] ?? 0);
+        $v = round((float) ($p['price'] ?? 0), 2);
+        if ($t > 0 && $t <= 100000 && $v > 0) $out[] = ['texts' => $t, 'price' => number_format($v, 2, '.', '')];
+    }
+    usort($out, static fn ($a, $b) => $a['texts'] <=> $b['texts']);
+    return $out;
+}
+
+/**
+ * Can this company send $segments more texts, and paid from where? The
+ * month's allowance first, then the bundle balance.
+ *
+ * @return array{ok:bool, from_bundle:bool, block:?string}
+ */
+function sms_allowance_check(int $clientId, int $segments): array
+{
+    $limit = sms_monthly_limit($clientId);
+    if (sms_used_this_month($clientId) + $segments <= $limit) {
+        return ['ok' => true, 'from_bundle' => false, 'block' => null];
+    }
+    if (sms_bundle_balance($clientId) >= $segments) {
+        return ['ok' => true, 'from_bundle' => true, 'block' => null];
+    }
+    return ['ok' => false, 'from_bundle' => false,
+            'block' => "This month's {$limit} texts are used up and there are no bundle texts left — buy more on Messages → Buy more texts."];
 }
 
 /* ------------------------------------------------------------------ *
@@ -473,8 +553,11 @@ function sms_send(int $clientId, string $toRaw, string $body, array $ctx = []): 
             if ((int) $st->fetchColumn() === 1) $block = 'This customer is marked "Don\'t text".';
         } catch (Throwable $e) { /* column missing — allow */ }
     }
-    if ($block === null && sms_used_this_month($clientId) + $segments > sms_monthly_limit($clientId)) {
-        $block = 'Monthly text limit reached (' . sms_monthly_limit($clientId) . ').';
+    $fromBundle = false;
+    if ($block === null) {
+        $allow      = sms_allowance_check($clientId, $segments);
+        $block      = $allow['block'];
+        $fromBundle = $allow['from_bundle'];
     }
     if ($block === null && !sms_provider_configured()) {
         $block = 'Texting is not connected yet.';
@@ -482,11 +565,14 @@ function sms_send(int $clientId, string $toRaw, string $body, array $ctx = []): 
 
     // quote_id only when there is one, so other texts don't depend on that column.
     $quoteCol = $quoteId !== null ? ', quote_id' : '';
+    // Paid from a bundle (past the month's allowance).
+    $bundleCol = ($block === null && $fromBundle) ? ', from_bundle' : '';
     $ins = db()->prepare(
         "INSERT INTO messages
             (client_id, channel, direction, kind, customer_id, appointment_id, user_id,
-             to_addr, from_addr, body, segments, status, status_detail, provider, ref_key{$quoteCol})
-         VALUES (?, 'sms', 'out', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'smsworks', ?" . ($quoteId !== null ? ', ?' : '') . ")"
+             to_addr, from_addr, body, segments, status, status_detail, provider, ref_key{$quoteCol}{$bundleCol})
+         VALUES (?, 'sms', 'out', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'smsworks', ?" . ($quoteId !== null ? ', ?' : '')
+              . ($bundleCol !== '' ? ', 1' : '') . ")"
     );
     $ins->execute(array_merge([
         $clientId, $kind, $custId, $apptId, $userId,
