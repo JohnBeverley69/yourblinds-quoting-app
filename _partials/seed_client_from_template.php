@@ -20,11 +20,16 @@ declare(strict_types=1);
  * Only ACTIVE, READY-TO-QUOTE products are copied (pr_is_ready, the dashboard
  * rule). Anything still being set up reaches the company by a push later.
  *
- * Also copied, as a starting point the company can change: the template's
- * markups and discounts per product/system (the push never touches those), so
- * a new company doesn't start out selling at its buying price.
+ * Prices: the company gets OUR TRADE PRICE LIST only, the price we sell the
+ * blinds to them at (John, 2026-10-13). The pushed grids already carry the
+ * trade conversion for supplier products. The template's own markups and
+ * discounts (client_markups / client_discounts) are NOT copied: on the factory
+ * those are buying discounts and margins (e.g. 40% off Forest Wood's list), and
+ * copied onto a company they became its SELLING discount, so it sold below its
+ * trade cost. A company sets its own markup later if it wants one.
  *
- * Not copied: client_settings, users, feature flags, quotes/orders/customers.
+ * Not copied: client_settings, users, feature flags, quotes/orders/customers,
+ * client_markups / client_discounts.
  *
  * No transaction of its own: the caller wraps this, with the client and user
  * inserts, in one transaction so a failure rolls everything back.
@@ -72,8 +77,6 @@ function seed_client_from_template(PDO $pdo, int $sourceClientId, int $newClient
         push_one_product($pdo, (int) $sp['id'], $sp, $sourceClientId, $newClientId, $push, $flagCols);
     }
 
-    seed_copy_pricing($pdo, $sourceClientId, $newClientId);
-
     $n = static fn (string $k): int => (int) ($push[$k] ?? 0);
     return [
         'products'          => $n('products_added'),
@@ -86,50 +89,4 @@ function seed_client_from_template(PDO $pdo, int $sourceClientId, int $newClient
         'width_table_rows'  => $n('width_table_cells'),
         'skipped_not_ready' => $skipped,
     ];
-}
-
-/**
- * Copy the template's client_markups / client_discounts onto the new client's
- * copies, found through the push's markers (product by source_product_id,
- * system by source_system_id, else by name within the product). A NULL system
- * stays NULL. Only rows for products that were copied.
- */
-function seed_copy_pricing(PDO $pdo, int $sourceClientId, int $newClientId): void
-{
-    $prod = $pdo->prepare(
-        'SELECT id FROM products WHERE client_id = ? AND source_client_id = ? AND source_product_id = ? LIMIT 1'
-    );
-    $bySrcSys = pp_has_src_col($pdo, 'product_systems', 'source_system_id')
-        ? $pdo->prepare('SELECT id FROM product_systems WHERE client_id = ? AND product_id = ? AND source_system_id = ? LIMIT 1')
-        : null;
-    $byNameSys = $pdo->prepare(
-        'SELECT t.id FROM product_systems t JOIN product_systems s ON s.id = ?
-          WHERE t.client_id = ? AND t.product_id = ? AND t.name = s.name LIMIT 1'
-    );
-
-    foreach ([['client_markups', 'markup_percent'], ['client_discounts', 'discount_percent']] as [$table, $col]) {
-        $sel = $pdo->prepare("SELECT product_id, system_id, $col AS v FROM $table WHERE client_id = ?");
-        $sel->execute([$sourceClientId]);
-        $ins = $pdo->prepare("INSERT INTO $table (client_id, product_id, system_id, $col) VALUES (?, ?, ?, ?)");
-        foreach ($sel->fetchAll(PDO::FETCH_ASSOC) as $r) {
-            $prod->execute([$newClientId, $sourceClientId, (int) $r['product_id']]);
-            $tgtPid = $prod->fetchColumn();
-            if ($tgtPid === false) continue;   // product not copied
-            $tgtSys = null;
-            if ($r['system_id'] !== null) {
-                $found = false;
-                if ($bySrcSys) {
-                    $bySrcSys->execute([$newClientId, (int) $tgtPid, (int) $r['system_id']]);
-                    $found = $bySrcSys->fetchColumn();
-                }
-                if ($found === false) {
-                    $byNameSys->execute([(int) $r['system_id'], $newClientId, (int) $tgtPid]);
-                    $found = $byNameSys->fetchColumn();
-                }
-                if ($found === false) continue;   // system not copied
-                $tgtSys = (int) $found;
-            }
-            $ins->execute([$newClientId, (int) $tgtPid, $tgtSys, (float) $r['v']]);
-        }
-    }
 }

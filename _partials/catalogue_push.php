@@ -573,6 +573,11 @@ function pp_sync_options(
     // it goes with the fabric: the tenant's order page opens on the same slat.
     $hasOptDefault = pp_has_src_col($pdo, 'product_options', 'is_default');
     if ($hasOptDefault) $selectCols .= ', is_default';
+    // fabric_group — the heading a fabric is listed under on the order page.
+    // Never carried, so a tenant's fabric list lost its grouping (found by the
+    // copies test, 2026-10-12).
+    $hasOptGroup = pp_column_exists($pdo, 'product_options', 'fabric_group');
+    if ($hasOptGroup) $selectCols .= ', fabric_group';
     $src = $pdo->prepare(
         "SELECT $selectCols
            FROM product_options
@@ -659,6 +664,7 @@ function pp_sync_options(
             if ($hasSystemIdCol) { $cols[] = 'system_id';        $params[] = $tgtSystemId; }
             if ($hasOptSrc)      { $cols[] = 'source_option_id'; $params[] = $srcOptId;    }
             if ($hasOptDefault)  { $cols[] = 'is_default';       $params[] = (int) $r['is_default']; }
+            if ($hasOptGroup)    { $cols[] = 'fabric_group';     $params[] = $r['fabric_group'] !== null ? (string) $r['fabric_group'] : null; }
             $pdo->prepare(
                 'INSERT INTO product_options (' . implode(',', $cols) . ') VALUES ('
                 . implode(',', array_fill(0, count($cols), '?')) . ')'
@@ -692,6 +698,7 @@ function pp_sync_options(
             if ($hasSystemIdCol) { $sets[] = 'system_id = ?';        $params[] = $tgtSystemId; }
             if ($hasOptSrc)      { $sets[] = 'source_option_id = ?'; $params[] = $srcOptId;    }
             if ($hasOptDefault)  { $sets[] = 'is_default = ?';       $params[] = (int) $r['is_default']; }
+            if ($hasOptGroup)    { $sets[] = 'fabric_group = ?';     $params[] = $r['fabric_group'] !== null ? (string) $r['fabric_group'] : null; }
             $params[] = (int) $tgtId;
             $pdo->prepare(
                 'UPDATE product_options SET ' . implode(', ', $sets) . ' WHERE id = ?'
@@ -941,10 +948,15 @@ function pp_sync_choices(
     // so a tenant's copy got the per-unit price but no box: the page demanded a
     // quantity there was nowhere to type (ABC Blinds, Forest Wood, 2026-10-12).
     $hasChoiceLen   = pp_column_exists($pdo, 'product_extra_choices', 'length_input_label');
+    // markup_pct_override — a per-choice options markup. Carried as-is so the
+    // tenant's copy of the choice comes out at the same trade price as ours
+    // (delta x (1 + override)); NULL leaves the tenant's own options default.
+    $hasChoiceMkp   = pp_column_exists($pdo, 'product_extra_choices', 'markup_pct_override');
     $choiceCodeSel .= ($hasFaceValue  ? ', face_value'      : '')
                     . ($hasMetreBasis ? ', per_metre_basis' : '')
                     . ($hasPerUnit    ? ', price_per_unit'  : '')
-                    . ($hasChoiceLen  ? ', length_input_label' : '');
+                    . ($hasChoiceLen  ? ', length_input_label' : '')
+                    . ($hasChoiceMkp  ? ', markup_pct_override' : '');
     $src = $pdo->prepare(
         "SELECT id, label, system_id, price_delta, price_percent, price_per_metre,
                 is_default, sort_order, active, image_path$choiceCodeSel
@@ -1033,6 +1045,7 @@ function pp_sync_choices(
             if ($hasFaceValue)  { $cols[] = 'face_value';      $params[] = (int) ($r['face_value'] ?? 0); }
             if ($hasMetreBasis) { $cols[] = 'per_metre_basis'; $params[] = (string) ($r['per_metre_basis'] ?? 'width'); }
             if ($hasPerUnit)    { $cols[] = 'price_per_unit';  $params[] = $r['price_per_unit'] !== null ? (float) $r['price_per_unit'] : null; }
+            if ($hasChoiceMkp)  { $cols[] = 'markup_pct_override'; $params[] = $r['markup_pct_override'] !== null ? (float) $r['markup_pct_override'] : null; }
             if ($hasChoiceLen)  { $cols[] = 'length_input_label'; $params[] = ($r['length_input_label'] ?? null) !== null ? (string) $r['length_input_label'] : null; }
             $pdo->prepare(
                 'INSERT INTO product_extra_choices (' . implode(',', $cols) . ') VALUES ('
@@ -1073,6 +1086,7 @@ function pp_sync_choices(
             if ($hasFaceValue)  { $sets[] = 'face_value = ?';      $params[] = (int) ($r['face_value'] ?? 0); }
             if ($hasMetreBasis) { $sets[] = 'per_metre_basis = ?'; $params[] = (string) ($r['per_metre_basis'] ?? 'width'); }
             if ($hasPerUnit)    { $sets[] = 'price_per_unit = ?';  $params[] = $r['price_per_unit'] !== null ? (float) $r['price_per_unit'] : null; }
+            if ($hasChoiceMkp)  { $sets[] = 'markup_pct_override = ?'; $params[] = $r['markup_pct_override'] !== null ? (float) $r['markup_pct_override'] : null; }
             if ($hasChoiceLen)  { $sets[] = 'length_input_label = ?'; $params[] = ($r['length_input_label'] ?? null) !== null ? (string) $r['length_input_label'] : null; }
             if ($hasChoiceCode && ($r['code'] ?? null) !== null && (string) $r['code'] !== '') {
                 $sets[] = 'code = ?'; $params[] = (string) $r['code'];
