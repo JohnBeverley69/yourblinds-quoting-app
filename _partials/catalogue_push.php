@@ -812,6 +812,16 @@ function pp_sync_extras_and_choices(
         $idx = $nameUsed[$nm] ?? 0;
         $nameUsed[$nm] = $idx + 1;
         $tgtId = $byId !== null ? $byId : ($tgtByName[$nm][$idx] ?? false);
+        // The name list was read before this loop. Since then, pruning a choice
+        // the master removed can have deleted this option on the account too
+        // (an option shown under that choice goes with it, ON DELETE CASCADE).
+        // Re-using that id failed every later push of the product with a
+        // foreign-key error (Forest Wood and Embassy, 2026-10-13); add it again.
+        if ($byId === null && $tgtId !== false) {
+            $alive = $pdo->prepare('SELECT 1 FROM product_extras WHERE id = ?');
+            $alive->execute([$tgtId]);
+            if (!$alive->fetchColumn()) $tgtId = false;
+        }
 
         if ($tgtId === false) {
             // INSERT — same dynamic column shape.
