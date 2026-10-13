@@ -899,7 +899,8 @@ if (is_factory_client($clientId) && function_exists('factory_console_user') && f
                         <form method="post" action="/quote-builder/sign_start.php">
                             <?= csrf_field() ?>
                             <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
-                            <button type="submit" class="is-accept">✍ Customer signs here</button>
+                            <button type="submit" class="is-accept"
+                                    title="The customer reads and signs the quote on this screen. Signing accepts it, just like accepting the emailed quote.">✍ Customer signs here</button>
                         </form>
                     <?php endif; ?>
                     <?php foreach ($quickActions as $qa): ?>
@@ -909,6 +910,9 @@ if (is_factory_client($clientId) && function_exists('factory_console_user') && f
                             <input type="hidden" name="target_status" value="<?= e($qa) ?>">
                             <button type="submit"
                                     class="<?= $qa === 'accepted' ? 'is-accept' : 'is-decline' ?>"
+                                    title="<?= $qa === 'accepted'
+                                        ? 'The customer has said yes some other way (phone, in person, on paper). Accepts the quote without a signature.'
+                                        : 'The customer has said no. Takes any pending fitting off the calendar.' ?>"
                                     <?php if ($qa === 'declined'): ?>
                                         data-confirm="Mark this quote as declined?"
                                     <?php endif; ?>>
@@ -4929,6 +4933,13 @@ window.__editingBlind__ = <?= json_encode([
             if (amt) {
                 amt.focus();
                 amt.select();
+            }
+            // Make it obvious where you've landed: a jump to the bottom of the
+            // page on its own felt like nothing happened (Tyler, 2026-10-13).
+            var card = document.querySelector('.record-payment-card');
+            if (card && card.animate) {
+                card.animate([{ boxShadow: '0 0 0 0 rgba(37,99,235,.55)' }, { boxShadow: '0 0 0 10px rgba(37,99,235,0)' }],
+                             { duration: 900, iterations: 2 });
             }
         }, 350);
     });

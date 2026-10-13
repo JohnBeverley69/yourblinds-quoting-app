@@ -22,7 +22,7 @@ if (!function_exists('cost_reveal_button')) {
         // No title/tooltip text: a hover label saying "Show costs" would give
         // the game away to the customer.
         return '<button type="button" class="yb-cost-eye" aria-label="Toggle details" aria-pressed="false">'
-             . '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" fill="none" stroke="currentColor"'
+             . '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor"'
              . ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round">'
              . '<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>'
              . '</button>';
@@ -36,10 +36,12 @@ if (!function_exists('cost_reveal_button')) {
         ?>
 <style>
 html:not(.yb-costs-shown) .cost-only { display: none !important; }
-.yb-cost-eye { background: none; border: 0; padding: 2px 4px; margin: 0 0 0 4px; cursor: pointer;
-               color: inherit; opacity: .3; line-height: 1; vertical-align: middle; }
-.yb-cost-eye:hover, .yb-cost-eye:focus-visible { opacity: .75; }
-html.yb-costs-shown .yb-cost-eye { opacity: .7; }
+/* Still unlabelled (the customer may be watching), but big and solid enough
+   to find: at .3 opacity and 14px people didn't spot it (Tyler, 2026-10-13). */
+.yb-cost-eye { background: none; border: 1px solid currentColor; border-radius: 6px; padding: 3px 6px;
+               margin: 0 0 0 6px; cursor: pointer; color: inherit; opacity: .55; line-height: 1; vertical-align: middle; }
+.yb-cost-eye:hover, .yb-cost-eye:focus-visible { opacity: .9; }
+html.yb-costs-shown .yb-cost-eye { opacity: .9; }
 </style>
 <script>
 (function () {
