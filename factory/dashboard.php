@@ -631,15 +631,21 @@ $activeNav = 'factory-dashboard';
   </div>
 
   <?php
-    // This morning's order checks (cron_messages.php stores the count) — a
-    // line only when something disagrees, so a quiet day shows nothing.
-    require_once __DIR__ . '/../_partials/app_settings.php';
-    $ocLast = json_decode((string) app_setting_get('order_checks_last', ''), true);
-    if (is_array($ocLast) && (int) ($ocLast['count'] ?? 0) > 0 && (int) $factory === (int) factory_client_id()):
+    // Order checks — counted LIVE, the same way the Order checks page does. It
+    // used to show the 7am email's count (cron_messages.php), so once those
+    // orders were put right the line still said "3 orders didn't add up" while
+    // Order checks said everything was fine (John, 2026-10-13). A line only
+    // when something disagrees right now, so a quiet day shows nothing.
+    $ocNow = 0;
+    if ((int) $factory === (int) factory_client_id()) {
+        require_once __DIR__ . '/../_partials/order_checks.php';
+        try { $ocNow = count(oc_findings($pdo, (int) $factory)); } catch (Throwable $e) { $ocNow = 0; }
+    }
+    if ($ocNow > 0):
   ?>
     <div class="alert alert-error" role="status" style="margin-bottom:.8rem">
-      ⚠ <?= (int) $ocLast['count'] ?> order<?= (int) $ocLast['count'] === 1 ? '' : 's' ?> didn&rsquo;t add up at
-      <?= e(date('H:i \o\n j M', strtotime((string) $ocLast['at']))) ?> &mdash; <a href="/factory/checks.php">see Order checks</a>.
+      ⚠ <?= $ocNow ?> order<?= $ocNow === 1 ? '' : 's' ?> <?= $ocNow === 1 ? 'doesn&rsquo;t' : 'don&rsquo;t' ?> add up right now &mdash;
+      <a href="/factory/checks.php">see Order checks</a>.
     </div>
   <?php endif; ?>
 
