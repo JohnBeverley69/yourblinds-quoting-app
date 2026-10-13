@@ -303,6 +303,26 @@ test('a push still works after the master re-gates an option and deletes its old
     check_same('New Parent', $gate, "the account's child option is shown under");
 });
 
+test('an account can set its markup on a factory product, but never a discount', function () {
+    // John, 2026-10-13: ABC Blinds could type a 99% "buying discount" on Bev 25mm
+    // Venetian. On a factory product the discount is ours; the grid is already
+    // the account's trade price.
+    require_once APP_ROOT . '/_partials/pricing_engine.php';
+    $t = t_row("SELECT t.id, t.product_id, t.system_id FROM price_tables t JOIN products p ON p.id = t.product_id
+                 WHERE p.client_id = 101 AND p.source_client_id = 3 AND t.system_id IS NOT NULL LIMIT 1");
+    check(!empty($t), 'fixture: Alpha has no factory product with a system');
+    $r = t_submit(as_user('alpha.admin'), '/admin/products/price-table.php?id=' . $t['id'],
+        ['action' => 'update_trade_terms', 'discount_percent' => '99', 'markup_percent' => '40']);
+    check(!$r->phpErrors, "save terms: PHP problems:\n    " . implode("\n    ", $r->phpErrors));
+    check_same(0, (int) t_val('SELECT COUNT(*) FROM client_discounts WHERE client_id = 101 AND product_id = ?', [$t['product_id']]), 'discount rows saved on the factory product');
+    check_same(40.0, (float) t_val('SELECT markup_percent FROM client_markups WHERE client_id = 101 AND product_id = ? AND system_id = ?', [$t['product_id'], $t['system_id']]), 'the markup the account typed');
+    // A discount row already there (typed before the lock, or copied by the old set-up) is ignored.
+    db()->prepare('INSERT INTO client_discounts (client_id, product_id, system_id, discount_percent) VALUES (101, ?, ?, 99)')->execute([$t['product_id'], $t['system_id']]);
+    check_same(0.0, pe_discount_for_system(db(), 101, (int) $t['product_id'], (int) $t['system_id']), 'discount the engine uses on the factory product');
+    db()->prepare('DELETE FROM client_discounts WHERE client_id = 101 AND product_id = ?')->execute([$t['product_id']]);
+    db()->prepare('DELETE FROM client_markups WHERE client_id = 101 AND product_id = ?')->execute([$t['product_id']]);
+});
+
 test('the DUPLICATE button copies every column', function () use (&$probe) {
     if (!$probe) skip('no probe');
     $h = as_user('super');   // admin of the factory account, which owns the probe

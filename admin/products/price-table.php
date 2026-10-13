@@ -525,7 +525,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'update_trade_terms') {
     } else {
         $pid   = (int) $table['product_id'];
         $sysId = $table['system_id'] !== null ? (int) $table['system_id'] : null;
-        $dp    = $discRaw === '' ? 0.0 : (float) $discRaw;
+        // A factory product's buying discount is the factory's, never the account's.
+        $dp    = ($discRaw === '' || pl_is_factory_copy($pid)) ? 0.0 : (float) $discRaw;
         $mp    = $markRaw === '' ? 0.0 : display_to_markup((float) $markRaw, $basis);
 
         $pdo = db();
@@ -2120,10 +2121,10 @@ $activeNav = 'products';
                     background:<?= $psIsSupplier ? 'rgba(245,158,11,0.08)' : 'var(--bg-subtle-2)' ?>;
                     display:flex;gap:0.625rem;align-items:baseline;flex-wrap:wrap">
             <strong style="font-size:0.875rem;color:var(--text-primary)">
-                <?= e(ps_label($priceSource)) ?>
+                <?= pl_is_factory_copy((int) $table['product_id']) ? 'Trade price list' : e(ps_label($priceSource)) ?>
             </strong>
             <span style="color:var(--text-faint);font-size:0.8125rem">
-                <?= e(ps_hint($priceSource)) ?>
+                <?= pl_is_factory_copy((int) $table['product_id']) ? 'These are our trade prices to you. Your price = trade price + your markup.' : e(ps_hint($priceSource)) ?>
             </span>
             <a href="/admin/products/edit.php?id=<?= (int) $table['product_id'] ?>#pricing"
                style="color:var(--brand);font-size:0.8125rem;margin-left:auto">Change</a>
@@ -2150,7 +2151,13 @@ $activeNav = 'products';
                     <label for="tt-disc" style="display:block;font-size:0.75rem;font-weight:600;color:var(--text-faint);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.25rem">
                         Buying discount %
                     </label>
-                    <?php if ($psTradeDisc > 0): ?>
+                    <?php if (pl_is_factory_copy((int) $table['product_id'])): ?>
+                        <div style="width:8rem;padding:0.4rem 0.55rem;color:var(--text-faint)">
+                            —
+                            <span style="display:block;font-size:0.68rem">set by the factory</span>
+                        </div>
+                        <input type="hidden" name="discount_percent" value="0">
+                    <?php elseif ($psTradeDisc > 0): ?>
                         <div style="width:8rem;padding:0.4rem 0.55rem;font-weight:700;color:#065f46">
                             <?= rtrim(rtrim(number_format($psTradeDisc, 2, '.', ''), '0'), '.') ?>%
                             <span style="display:block;font-size:0.68rem;font-weight:400;color:var(--text-faint)">from your supplier</span>
