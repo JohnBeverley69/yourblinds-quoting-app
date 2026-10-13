@@ -550,10 +550,10 @@ function requireFactory(): void
  * Factory OFFICE powers vs the FLOOR. Every factory login passes requireFactory();
  * only office staff may change orders, send supplier orders, touch settings /
  * routes / build rules, or run the wholesale accounts (dispatch, invoices,
- * payments, statements, bank). A floor login — factory role WITHOUT "Can create
- * orders" — keeps the floor, scanning and worksheets. Uses existing ticks, so no
- * new role is needed: super-admin, a factory-account admin, or a factory user
- * with can_create_orders.
+ * payments, statements, bank). A floor login — factory role WITHOUT the
+ * "Factory office" tick — keeps the floor, scanning and worksheets. Office =
+ * super-admin, a factory-account admin, or a factory user with the Factory
+ * office tick (can_factory_office; it used to be "Create orders").
  */
 function factory_user_is_office(): bool
 {
@@ -561,7 +561,21 @@ function factory_user_is_office(): bool
     $cid = (int) ($_SESSION['client_id'] ?? 0);
     if (!is_factory_client($cid) || !current_user_has_role('factory')) return false;
     if (current_user_has_role('admin')) return true;
-    return !empty(current_user_permissions()['can_create_orders']);
+    // Its own "Factory office" tick (migrate_factory_office_perm.php) — no longer
+    // "Create orders", which now means shop orders only. Before that migration
+    // has run, the old rule stands.
+    static $office = [];   // per user id
+    $uid = (int) ($_SESSION['user_id'] ?? 0);
+    if (!array_key_exists($uid, $office)) {
+        try {
+            $st = db()->prepare('SELECT COALESCE(can_factory_office, 0) FROM client_users WHERE id = ? LIMIT 1');
+            $st->execute([$uid]);
+            $office[$uid] = ((int) $st->fetchColumn()) === 1;
+        } catch (Throwable $e) {
+            $office[$uid] = !empty(current_user_permissions()['can_create_orders']);
+        }
+    }
+    return $office[$uid];
 }
 
 /**
@@ -571,13 +585,13 @@ function factory_user_is_office(): bool
  * it deletes the remake order the approval created, so it is not something every
  * office user should reach.
  *
- * Deliberately factory_user_is_office() minus its can_create_orders fallback:
+ * Deliberately factory_user_is_office() minus its Factory office tick:
  * super-admin, or an ADMIN on the factory account. John chose this over
  * super-admin only (2026-10-10) — "canceling should be a function for admin,
  * not just for myself" — because is_super_admin() is his login alone and no
  * screen can grant it, so nobody else could ever cancel.
  *
- * Keep the two in step: a floor login (factory role without can_create_orders)
+ * Keep the two in step: a floor login (factory role without Factory office)
  * fails both, and an office user without Admin passes office but not this.
  */
 function factory_user_is_admin(): bool

@@ -45,13 +45,13 @@ $all = ['can_create_quotes' => 1, 'can_create_orders' => 1, 'can_view_all_custom
         'dash_view_revenue' => 1, 'dash_view_team' => 1, 'dash_view_products' => 1, 'dash_view_profit' => 1, 'dash_view_recent' => 1];
 $people = [
     ['super',           3,   'admin',  ['factory'], 1, $all],
-    ['factory.office',  3,   'factory', [],         0, ['can_create_orders' => 1, 'can_view_costs' => 1, 'dash_view_revenue' => 1]],
+    ['factory.office',  3,   'factory', [],         0, ['can_create_orders' => 1, 'can_factory_office' => 1, 'can_view_costs' => 1, 'dash_view_revenue' => 1]],
     ['factory.floor',   3,   'factory', [],         0, []],
     ['alpha.admin',     101, 'admin',  [],          0, $all],
     ['alpha.sales',     101, 'sales',  [],          0, ['can_create_quotes' => 1]],
     ['alpha.fitter',    101, 'fitter', [],          0, []],
     ['bravo.admin',     102, 'admin',  [],          0, $all],
-    ['charlie.office',  103, 'factory', ['admin'],  0, ['can_create_orders' => 1, 'can_view_costs' => 1] + $all],
+    ['charlie.office',  103, 'factory', ['admin'],  0, ['can_create_orders' => 1, 'can_factory_office' => 1, 'can_view_costs' => 1] + $all],
 ];
 foreach ($people as [$user, $client, $role, $extra, $super, $flags]) {
     $cols = ['client_id', 'username', 'full_name', 'email', 'password_hash', 'role', 'active', 'is_super_admin', 'email_verified_at'];
@@ -59,7 +59,7 @@ foreach ($people as [$user, $client, $role, $extra, $super, $flags]) {
     // Every permission explicit (the table defaults can_create_quotes to 1). The primary
     // role column is an old ENUM without fitter/factory: like admin/users.php we store it
     // anyway (it ends up blank) and the real roles live in client_user_roles.
-    foreach (array_keys($all) + [9 => 'can_view_fittings_only'] as $k) { $cols[] = $k; $vals[] = (int) ($flags[$k] ?? 0); }
+    foreach (array_keys($all) + [9 => 'can_view_fittings_only', 10 => 'can_factory_office'] as $k) { $cols[] = $k; $vals[] = (int) ($flags[$k] ?? 0); }
     $pdo->prepare('INSERT INTO client_users (' . implode(',', $cols) . ') VALUES (' . implode(',', array_fill(0, count($vals), '?')) . ')')
         ->execute($vals);
     $uid = (int) $pdo->lastInsertId();
