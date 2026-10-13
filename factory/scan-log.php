@@ -170,7 +170,7 @@ require __DIR__ . '/../_partials/factory_head.php';
     <h1 class="sl-h">Scan log</h1>
     <span class="sl-refresh" id="sl-refresh">live &mdash; refreshes every 15s</span>
 </div>
-<p class="sl-sub">Every scan the benches send, newest first. The <strong>scanner</strong> column is the id baked into each scanner's URL, so you can see which bench a scan came from without anyone logging in.</p>
+<p class="sl-sub">Every scan the benches send, newest first. Each production area has its own WiFi scanner &mdash; set them up under <a href="/factory/production-areas.php#scanners">Production areas &rarr; Area scanners</a>. When a bench scans a worksheet's barcode the blind moves on a stage, and the scan lands here. The <strong>scanner</strong> column is the id baked into each scanner's URL, so you can see which bench a scan came from without anyone logging in.</p>
 
 <?php if ($flashOk !== null): ?><div class="sl-flash ok" role="status"><?= e((string) $flashOk) ?></div><?php endif; ?>
 <?php if ($flashErr !== null): ?><div class="sl-flash err" role="alert"><?= e((string) $flashErr) ?></div><?php endif; ?>
@@ -219,7 +219,8 @@ require __DIR__ . '/../_partials/factory_head.php';
 <?php if (!$ready): ?>
     <div class="sl-empty">Scan logging isn't set up yet &mdash; run <code>/setup/migrations/migrate_factory_scan_in.php</code>.</div>
 <?php elseif (!$rows): ?>
-    <div class="sl-empty">No scans yet. When a WiFi scanner fires a worksheet's barcode, it lands here.</div>
+    <?php require_once __DIR__ . '/../_partials/factory_howto.php'; ?>
+    <?= factory_howto_card('scanlog') ?>
 <?php else: ?>
     <div class="sl-tw">
     <table class="sl">

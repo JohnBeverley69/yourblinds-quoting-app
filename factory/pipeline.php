@@ -383,6 +383,10 @@ $activeNav = 'factory-pipeline';
     </form>
   </div>
 
+  <?php if ($open === 0 && $q === '' && $account < 0): ?>
+    <?php require_once __DIR__ . '/../_partials/factory_howto.php'; ?>
+    <div style="margin:0 0 1rem"><?= factory_howto_card('pipeline') ?></div>
+  <?php endif; ?>
   <div class="pl-sum">
     <span><b><?= $open ?></b> open order<?= $open === 1 ? '' : 's' ?></span>
     <?php $rmOnBoard = count(array_filter($shown, static fn ($r) => $r['remake_of'] !== '' && $r['stage'] !== 'dispatched')); $rmWaiting = rm_waiting_count($pdo, $factory); ?>

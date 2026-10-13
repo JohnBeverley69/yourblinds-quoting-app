@@ -523,7 +523,8 @@ require __DIR__ . '/../_partials/factory_head.php';
 <?php elseif (!$orders && $laneCount['dispatched'] > 0): ?>
     <div class="io-empty">Nothing open right now — every order has been dispatched. See <a href="/factory/incoming-orders.php?lane=dispatched">Dispatched</a>.</div>
 <?php elseif (!$orders): ?>
-    <div class="io-empty">No incoming orders yet. Placed orders containing <?= e($factoryName) ?> lines will appear here — nothing to re-key.</div>
+    <?php require_once __DIR__ . '/../_partials/factory_howto.php'; ?>
+    <?= factory_howto_card('incoming') ?>
 <?php else: ?>
     <div class="io-list">
         <div class="io-list-head io-cols">

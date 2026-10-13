@@ -292,7 +292,7 @@ $activeNav = 'help';
         <?php endif; ?>
 
         <div class="help-search">
-            <input type="search" id="help-search" placeholder="Search help — e.g. band, import, export, supplier, deposit…" autofocus>
+            <input type="search" id="help-search" placeholder="Search help — e.g. band, import, export, supplier, deposit…">
         </div>
         <p class="help-meta" id="help-meta"></p>
         <div class="help-tools">
@@ -326,6 +326,14 @@ $activeNav = 'help';
     var empty    = document.getElementById('help-empty');
     var cards    = Array.prototype.slice.call(document.querySelectorAll('.help-card'));
     var sections = Array.prototype.slice.call(document.querySelectorAll('[data-section]'));
+
+    // Ready to type in the search box — but without scrolling to it. It sits
+    // below the guides list, so a plain autofocus opened the page halfway down
+    // (Tyler, 2026-10-13). Not on touch screens, where it would pop the keyboard.
+    try {
+        var hs = document.getElementById('help-search');
+        if (hs && !location.hash && !(window.matchMedia && matchMedia('(pointer: coarse)').matches)) hs.focus({ preventScroll: true });
+    } catch (e) {}
 
     // Click a card heading to open/close it.
     cards.forEach(function (c) {
