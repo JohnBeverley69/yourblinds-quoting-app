@@ -120,8 +120,10 @@ try {
 // (products.source_client_id = the factory account) goes STRAIGHT to our own
 // manufacturing queue when the order is placed — the factory back-office pulls
 // it in off the "ordered" status, so it needs no supplier and no email. Probe
-// for the column so pre-migration tenants behave exactly as before.
-$factoryId = function_exists('factory_client_id') ? (int) factory_client_id() : 0;
+// for the column so pre-migration tenants behave exactly as before. "Our"
+// factory is the one that makes this order — the main factory, or a
+// white-label factory for its own products (qb_order_factory_id).
+$factoryId = qb_order_factory_id(db(), $quoteId);
 $productsHasSource = false;
 try {
     $productsHasSource = db()->query("SHOW COLUMNS FROM products LIKE 'source_client_id'")->fetchColumn() !== false;
@@ -412,7 +414,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // date from the production times in force now, once and for good.
             if ($advancedToOrdered) {
                 require_once __DIR__ . '/../_partials/due_dates.php';
-                dd_stamp_order(db(), $quoteId, factory_client_id());
+                dd_stamp_order(db(), $quoteId, $factoryId);
                 // Placed → email the factory a new order has landed (once).
                 require_once __DIR__ . '/../_partials/factory_notify.php';
                 factory_notify_new_order(db(), $quoteId);
@@ -421,7 +423,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // (Re)placed: an order already on the floor gets its blind jobs
                 // brought in line with the current lines/units.
                 require_once __DIR__ . '/../_partials/order_stage.php';
-                bj_resync_order(db(), $quoteId, (int) factory_client_id());
+                bj_resync_order(db(), $quoteId, $factoryId);
             }
         } catch (Throwable $e) {
             error_log('Auto-advance to ordered failed: ' . $e->getMessage());

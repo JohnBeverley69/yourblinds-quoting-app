@@ -111,7 +111,7 @@ try {
     $dueMsg = '';
     if ($target === 'ordered') {
         try {
-            $due = dd_stamp_order($pdo, $quoteId, factory_client_id());
+            $due = dd_stamp_order($pdo, $quoteId, qb_order_factory_id($pdo, $quoteId));
             if ($due !== null) {
                 $dueMsg = ' Due ' . (new DateTimeImmutable($due))->format('j M Y') . '.';
             }
@@ -241,7 +241,7 @@ try {
     $autoPlaceMsg = '';
     if ($target === 'accepted') {
         try {
-            $factoryId = (int) factory_client_id();
+            $factoryId = qb_order_factory_id($pdo, $quoteId);
             $auto = 1;
             try {
                 $s = $pdo->prepare('SELECT auto_place_inhouse FROM client_settings WHERE client_id = ? LIMIT 1');
@@ -319,7 +319,7 @@ try {
         factory_autosend_suppliers($pdo, $quoteId);
         // (Re)placed: if the order is already on the floor, bring its blind jobs
         // in line with the current lines/units so nothing added is left off.
-        bj_resync_order($pdo, $quoteId, (int) factory_client_id());
+        bj_resync_order($pdo, $quoteId, qb_order_factory_id($pdo, $quoteId));
         recompute_order_stage($pdo, $quoteId);
     }
 
