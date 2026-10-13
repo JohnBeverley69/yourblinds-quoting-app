@@ -57,6 +57,7 @@ $form = [
     'can_view_all_customer_jobs' => 0,
     'can_view_costs'             => 0,
     'can_view_fittings_only'     => 0,
+    'can_factory_office'         => 0,
 ];
 $error = null;
 
@@ -66,7 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     foreach (['first_name','last_name','username','email'] as $f) {
         $form[$f] = trim((string) ($_POST[$f] ?? ''));
     }
-    foreach (['can_create_quotes','can_create_orders','can_view_all_customer_jobs','can_view_costs','can_view_fittings_only'] as $f) {
+    foreach (['can_create_quotes','can_create_orders','can_view_all_customer_jobs','can_view_costs','can_view_fittings_only','can_factory_office'] as $f) {
         $form[$f] = !empty($_POST[$f]) ? 1 : 0;
     }
     $form['home_areas'] = array_values(array_filter(array_map('intval', (array) ($_POST['home_areas'] ?? []))));
@@ -153,6 +154,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
                     $pdo->query('SELECT can_view_fittings_only FROM client_users LIMIT 0');
                     $pdo->prepare('UPDATE client_users SET can_view_fittings_only = 1 WHERE id = ?')
                         ->execute([$newUserId]);
+                } catch (Throwable $e) { /* column not present yet — skip */ }
+            }
+            // Factory office (migrate_factory_office_perm.php) — factory accounts only.
+            if ($isFactoryAccount && !empty($form['can_factory_office'])) {
+                try {
+                    $pdo->prepare('UPDATE client_users SET can_factory_office = 1 WHERE id = ?')->execute([$newUserId]);
                 } catch (Throwable $e) { /* column not present yet — skip */ }
             }
             // Admin-added users are trusted: the admin sets their password and
@@ -373,11 +380,26 @@ $activeNav = 'users';
                                 <input type="checkbox" name="can_view_fittings_only" value="1" <?= $form['can_view_fittings_only'] ? 'checked' : '' ?>>
                                 Fittings only
                             </label>
+                            <?php if ($isFactoryAccount): ?>
+                            <?php // Its own tick since 2026-10-13 — "Create orders" no longer makes someone factory office. ?>
+                            <label style="display:inline-flex; align-items:center; gap:.4rem; font-weight:400;"
+                                   title="With the Factory role: the factory Pipeline, Process order, and production set-up (areas, routes, build rules, factory settings). Without it a Factory-role login is a floor login.">
+                                <input type="checkbox" name="can_factory_office" value="1" <?= $form['can_factory_office'] ? 'checked' : '' ?>>
+                                Factory office
+                            </label>
+                            <?php endif; ?>
                         </div>
                         <p style="margin:0.5rem 0 0; font-size:0.8125rem; color:var(--text-faint);">
                             <strong>Fittings only</strong> limits the calendar to fitting jobs (hides measures /
                             sales visits) — handy for fitters.
                         </p>
+                        <?php if ($isFactoryAccount): ?>
+                        <p style="margin:0.35rem 0 0; font-size:0.8125rem; color:var(--text-faint);">
+                            <strong>Factory office</strong> (with the Factory role) runs the factory: the Pipeline, Process order
+                            and production set-up. A Factory-role login without it is a floor login. <strong>Create orders</strong>
+                            is only for placing shop orders &mdash; it no longer makes anyone factory office.
+                        </p>
+                        <?php endif; ?>
                     </div>
                 </div>
 
@@ -395,7 +417,7 @@ $activeNav = 'users';
     var admin = document.querySelector('input[name="roles[]"][value="admin"]');
     if (!admin) return;
     var note  = document.getElementById('perm-admin-note');
-    var boxes = ['can_create_quotes', 'can_create_orders', 'can_view_all_customer_jobs', 'can_view_costs', 'dash_view_revenue']
+    var boxes = ['can_create_quotes', 'can_create_orders', 'can_view_all_customer_jobs', 'can_view_costs', 'dash_view_revenue', 'can_factory_office']
         .map(function (n) { return document.querySelector('input[type="checkbox"][name="' + n + '"]'); })
         .filter(Boolean);
     boxes.forEach(function (b) {
