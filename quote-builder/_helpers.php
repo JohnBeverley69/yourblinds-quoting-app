@@ -895,6 +895,51 @@ function qb_user_can_change_to(bool $isAdmin, array $perms, string $target): boo
 }
 
 /**
+ * Every factory account's id (clients.is_factory = 1), always including the
+ * main factory. A product line is "ours to make" when its owning company —
+ * COALESCE(NULLIF(source_client_id,0), client_id) — is one of these.
+ */
+function qb_factory_client_ids(PDO $pdo): array
+{
+    $main = function_exists('factory_client_id') ? (int) factory_client_id() : 0;
+    $ids  = $main > 0 ? [$main] : [];
+    try {
+        foreach ($pdo->query('SELECT id FROM clients WHERE is_factory = 1')->fetchAll(PDO::FETCH_COLUMN) as $id) {
+            $ids[] = (int) $id;
+        }
+    } catch (Throwable $e) { /* is_factory absent pre-migration — main factory only */ }
+    return array_values(array_unique($ids));
+}
+
+/**
+ * The factory that MAKES this order: the factory owning most of its lines,
+ * the main factory on a tie. A white-label factory's own products route to it,
+ * so its retail jobs get its own production times and land in its own queue
+ * instead of the main factory's. Falls back to the main factory when no line
+ * is factory-made (exactly the old behaviour).
+ */
+function qb_order_factory_id(PDO $pdo, int $quoteId): int
+{
+    $main = function_exists('factory_client_id') ? (int) factory_client_id() : 0;
+    if ($quoteId <= 0) return $main;
+    try {
+        $st = $pdo->prepare(
+            'SELECT COALESCE(NULLIF(p.source_client_id,0), p.client_id) AS owner, COUNT(*) AS n
+               FROM quote_items qi JOIN products p ON p.id = qi.product_id
+              WHERE qi.quote_id = ?
+           GROUP BY owner
+           ORDER BY n DESC, (owner = ?) DESC, owner'
+        );
+        $st->execute([$quoteId, $main]);
+        $factories = qb_factory_client_ids($pdo);
+        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            if (in_array((int) $r['owner'], $factories, true)) return (int) $r['owner'];
+        }
+    } catch (Throwable $e) { /* source_client_id absent pre-migration */ }
+    return $main;
+}
+
+/**
  * Create an installation appointment off the back of a quote acceptance.
  *
  * Idempotent: if an appointment already exists pointing at this quote
@@ -930,18 +975,33 @@ function qb_create_appointment_from_quote(PDO $pdo, int $quoteId): ?int
         return null;
     }
 
-    // No fitting for trade work: a factory is trade-only and never fits, and a
-    // trade sale (sale_type = 'trade', e.g. a factory-raised account order) is
-    // supplied, not installed. Accepting one used to drop a phantom "Pending
-    // Fitting" into the calendar. sale_type is guarded (may be pre-migration).
-    if (function_exists('is_factory_client') && is_factory_client((int) $quote['client_id'])) {
+    // A fitting follows the SALE, not the account. A trade sale (sale_type =
+    // 'trade', or an order raised for a trade account) is supplied, not
+    // installed — accepting one used to drop a phantom "Pending Fitting" into
+    // the calendar. A retail sale gets a fitting whoever makes the blinds, so a
+    // white-label factory that also sells and fits retail gets its installs.
+    // The main factory is trade-only and never fits. On any other factory an
+    // unstamped quote (pre sale_type) is assumed trade, so reopening an old
+    // account order can't grow a fitting. Columns guarded (may be pre-migration).
+    $fClient = (int) $quote['client_id'];
+    if (function_exists('factory_client_id') && $fClient === (int) factory_client_id()) {
         return null;
     }
+    $saleType = '';
     try {
         $stt = $pdo->prepare('SELECT sale_type FROM quotes WHERE id = ? LIMIT 1');
         $stt->execute([$quoteId]);
-        if ((string) ($stt->fetchColumn() ?: '') === 'trade') return null;
-    } catch (Throwable $e) { /* column absent pre-migration — treat as retail */ }
+        $saleType = (string) ($stt->fetchColumn() ?: '');
+    } catch (Throwable $e) { /* column absent pre-migration — treat as unstamped */ }
+    if ($saleType === 'trade') return null;
+    try {
+        $act = $pdo->prepare('SELECT account_client_id FROM quotes WHERE id = ? LIMIT 1');
+        $act->execute([$quoteId]);
+        if ((int) ($act->fetchColumn() ?: 0) > 0) return null;
+    } catch (Throwable $e) { /* column absent pre-migration — no account orders */ }
+    if ($saleType === '' && function_exists('is_factory_client') && is_factory_client($fClient)) {
+        return null;
+    }
 
     // appt_kind distinguishes the measure visit from the fitting. Probe once;
     // pre-migration installs just have the single linked appointment.

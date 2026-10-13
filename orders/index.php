@@ -243,10 +243,12 @@ if ($rowIds) {
         }
     } catch (Throwable $e) { /* supplier_orders absent pre-migration */ }
 
-    // Same accessor order_suppliers.php uses, so the two can't disagree on what
-    // counts as ours to make.
-    $factoryId = function_exists('factory_client_id') ? (int) factory_client_id() : 0;
-    if ($factoryId > 0) {
+    // What counts as ours to make: a factory-owned product with no outside
+    // supplier. Any factory counts, so a white-label factory's own lines do too.
+    require_once __DIR__ . '/../quote-builder/_helpers.php';
+    $factoryIds = qb_factory_client_ids(db());
+    if ($factoryIds) {
+        $fph = implode(',', array_fill(0, count($factoryIds), '?'));
         try {
             $hasSrc = true;
             try { db()->query('SELECT source_client_id FROM products LIMIT 0'); }
@@ -257,11 +259,11 @@ if ($rowIds) {
                    FROM quote_items qi
                    JOIN products p ON p.id = qi.product_id
                   WHERE qi.quote_id IN ($ph)
-                    AND $owner = ?
+                    AND $owner IN ($fph)
                     AND (p.supplier_name IS NULL
                          OR REPLACE(REPLACE(LOWER(TRIM(p.supplier_name)), ' ', ''), '-', '') IN ('', 'inhouse'))"
             );
-            $s->execute(array_merge($rowIds, [$factoryId]));
+            $s->execute(array_merge($rowIds, $factoryIds));
             foreach ($s->fetchAll(PDO::FETCH_COLUMN) as $qid) $mfgOrders[(int) $qid] = true;
 
             // Orders that ALSO carry a line that isn't ours to make (a supplier's
@@ -272,11 +274,11 @@ if ($rowIds) {
                    FROM quote_items qi
                    JOIN products p ON p.id = qi.product_id
                   WHERE qi.quote_id IN ($ph)
-                    AND NOT ($owner = ?
+                    AND NOT ($owner IN ($fph)
                          AND (p.supplier_name IS NULL
                               OR REPLACE(REPLACE(LOWER(TRIM(p.supplier_name)), ' ', ''), '-', '') IN ('', 'inhouse')))"
             );
-            $s->execute(array_merge($rowIds, [$factoryId]));
+            $s->execute(array_merge($rowIds, $factoryIds));
             foreach ($s->fetchAll(PDO::FETCH_COLUMN) as $qid) $supplierLines[(int) $qid] = true;
         } catch (Throwable $e) { /* products.supplier_name absent — fall back to unsent */ }
     }

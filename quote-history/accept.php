@@ -169,7 +169,7 @@ if ($action === 'accept') {
     try {
         $acClient  = (int) $quote['client_id'];
         $acQuote   = (int) $quote['id'];
-        $factoryId = function_exists('factory_client_id') ? (int) factory_client_id() : 0;
+        $factoryId = qb_order_factory_id($pdo, $acQuote);
         $auto = 1;
         try {
             $s = $pdo->prepare('SELECT auto_place_inhouse FROM client_settings WHERE client_id = ? LIMIT 1');
