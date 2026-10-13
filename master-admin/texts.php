@@ -44,7 +44,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $ensure->execute([$cid]);
                 $upd->execute([$val === '' ? null : max(0, (int) $val), $cid]);
             }
-            $_SESSION['flash_success'] = 'Monthly text limits saved.';
+            // "Add texts": a free bundle from us (goodwill, or a PayPal payment
+            // that didn't come back) — recorded like a bought one, at £0.
+            $grants = is_array($_POST['grant'] ?? null) ? $_POST['grant'] : [];
+            $added  = 0;
+            if ($grants && sms_bundles_ready()) {
+                $ins = $pdo->prepare("INSERT INTO sms_bundles (client_id, texts, price, status, bought_by_user_id, note, paid_at)
+                                      VALUES (?, ?, 0, 'paid', ?, 'added by YourBlinds', NOW())");
+                foreach ($grants as $cid => $n) {
+                    $cid = (int) $cid; $n = (int) $n;
+                    if ($cid <= 0 || $n <= 0 || $n > 100000) continue;
+                    $ins->execute([$cid, $n, (int) (current_user()['user_id'] ?? 0)]);
+                    $added++;
+                }
+            }
+            $_SESSION['flash_success'] = 'Monthly text allowances saved.' . ($added ? " Texts added for $added client" . ($added === 1 ? '' : 's') . '.' : '');
+        } elseif ($action === 'bundles') {
+            // One pack per line: "250 = 10.00" (texts = price in £, before VAT).
+            $packs = [];
+            foreach (preg_split('/\R/', (string) ($_POST['packs'] ?? '')) as $line) {
+                if (preg_match('/^\s*(\d+)\s*(?:texts?)?\s*[=:,]\s*(?:£)?\s*(\d+(?:\.\d{1,2})?)\s*$/iu', $line, $m) && (int) $m[1] > 0 && (float) $m[2] > 0) {
+                    $packs[] = ['texts' => (int) $m[1], 'price' => number_format((float) $m[2], 2, '.', '')];
+                }
+            }
+            pc_set('SMS_BUNDLES', json_encode($packs));
+            $_SESSION['flash_success'] = $packs ? count($packs) . ' text bundle' . (count($packs) === 1 ? '' : 's') . ' on sale.' : 'No text bundles on sale.';
         }
     } catch (Throwable $e) {
         $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage()
@@ -74,7 +98,7 @@ if ($ready) {
                     (SELECT COALESCE(SUM(m.segments), 0) FROM messages m
                       WHERE m.client_id = c.id AND m.channel = 'sms' AND m.direction = 'out'
                         AND m.status IN ('queued', 'sent', 'delivered')
-                        AND m.created_at >= ?) AS used
+                        AND m.created_at >= ?" . (sms_bundles_ready() ? ' AND m.from_bundle = 0' : '') . ") AS used
                FROM clients c
                LEFT JOIN client_settings s ON s.client_id = c.id
            ORDER BY c.company_name"
@@ -166,7 +190,7 @@ $activeNav  = 'texts';
                         <input id="smsworks_token" name="smsworks_token" type="password" autocomplete="off" value="">
                     </div>
                     <div class="form-group">
-                        <label for="default_limit">Default monthly limit per client</label>
+                        <label for="default_limit">Default monthly text allowance per client</label>
                         <input id="default_limit" name="default_limit" type="number" min="1" step="1" value="<?= (int) $defaultLim ?>">
                     </div>
                 </div>
@@ -184,12 +208,37 @@ $activeNav  = 'texts';
             </form>
         </section>
 
+        <?php if ($ready): $packsNow = sms_bundle_packs(); ?>
+        <section class="section">
+            <div class="section-header"><h2 class="section-title">Text bundles</h2></div>
+            <?php if (!sms_bundles_ready()): ?>
+                <div class="alert alert-error" role="alert">Run <a href="/setup/migrations/migrate_sms_bundles.php?run=1">migrate_sms_bundles.php</a> first.</div>
+            <?php endif; ?>
+            <p style="color:#6b7280;font-size:0.875rem;margin:0 0 1rem">
+                Texts cost us money, so the monthly number is an <strong>allowance</strong>. Past it, a client texts from bundles they
+                buy up front with PayPal on <strong>Messages &rarr; Buy more texts</strong>; unused bundle texts carry over.
+                One pack per line, <code>texts = price</code> in pounds <strong>before VAT</strong> (VAT is added at checkout, like the plans),
+                e.g. <code>250 = 10.00</code>. Leave empty and no bundles are on sale.
+            </p>
+            <form method="post" action="/master-admin/texts.php" class="form" novalidate>
+                <?= csrf_field() ?>
+                <input type="hidden" name="_action" value="bundles">
+                <textarea name="packs" rows="4" style="width:100%;max-width:20rem;font-family:monospace" placeholder="250 = 10.00&#10;500 = 18.00"><?php
+                    foreach ($packsNow as $p) echo e($p['texts'] . ' = ' . $p['price']) . "\n";
+                ?></textarea>
+                <div class="form-actions"><button type="submit" class="btn btn-primary">Save bundles</button></div>
+            </form>
+        </section>
+        <?php endif; ?>
+
         <?php if ($rows): ?>
         <section class="section">
             <div class="section-header"><h2 class="section-title">Clients — <?= e(date('F Y')) ?></h2></div>
             <p style="color:#6b7280;font-size:0.875rem;margin:0 0 1rem">
-                Leave a limit blank to use the default (<?= number_format($defaultLim) ?>). The limit is a safety net:
-                once a client reaches it, texts stop until next month. Texting is on for Silver and Gold clients only.
+                Leave an allowance blank to use the default (<?= number_format($defaultLim) ?>). Once a client has used it,
+                texts come from their bundle balance; with none left, texts stop until next month or until they buy a bundle.
+                <strong>Add texts</strong> gives a client free bundle texts (goodwill, or a payment that didn't come through).
+                Texting is on for Silver and Gold clients only.
             </p>
             <form method="post" action="/master-admin/texts.php" class="form" novalidate>
                 <?= csrf_field() ?>
@@ -198,7 +247,8 @@ $activeNav  = 'texts';
                 <table class="table texts-table">
                     <thead><tr>
                         <th>Client</th><th>Texting</th><th>Sender</th><th>Texts on</th>
-                        <th style="text-align:right">Used</th><th>Monthly limit</th>
+                        <th style="text-align:right">Used</th><th>Monthly allowance</th>
+                        <th style="text-align:right">Bundle left</th><th>Add texts</th>
                     </tr></thead>
                     <tbody>
                     <?php foreach ($rows as $r):
@@ -206,7 +256,7 @@ $activeNav  = 'texts';
                         $limit = $r['sms_monthly_limit'] !== null ? (int) $r['sms_monthly_limit'] : $defaultLim;
                         $used  = (int) $r['used'];
                         $pct   = $limit > 0 ? (int) round($used * 100 / $limit) : ($used > 0 ? 100 : 0);
-                        $on    = (int) $r['feature_sms'] === 1 || is_factory_client($cid);
+                        $on    = sms_feature_enabled($cid);
                         $which = [];
                         foreach (sms_kinds() as $k) if ((int) $r[$k['column']] === 1) $which[] = $k['label'];
                     ?>
@@ -221,7 +271,12 @@ $activeNav  = 'texts';
                             <td>
                                 <input type="number" min="0" step="1" name="limit[<?= $cid ?>]"
                                        value="<?= $r['sms_monthly_limit'] !== null ? (int) $r['sms_monthly_limit'] : '' ?>"
-                                       placeholder="<?= (int) $defaultLim ?>" aria-label="Monthly text limit for <?= e((string) $r['company_name']) ?>">
+                                       placeholder="<?= (int) $defaultLim ?>" aria-label="Monthly text allowance for <?= e((string) $r['company_name']) ?>">
+                            </td>
+                            <td style="text-align:right"><?= number_format(sms_bundle_balance($cid)) ?></td>
+                            <td>
+                                <input type="number" min="0" step="1" name="grant[<?= $cid ?>]" value="" placeholder="0" style="width:6rem"
+                                       aria-label="Free texts to add for <?= e((string) $r['company_name']) ?>">
                             </td>
                         </tr>
                     <?php endforeach; ?>
@@ -229,7 +284,7 @@ $activeNav  = 'texts';
                 </table>
                 </div>
                 <div class="form-actions">
-                    <button type="submit" class="btn btn-primary">Save limits</button>
+                    <button type="submit" class="btn btn-primary">Save</button>
                 </div>
             </form>
         </section>

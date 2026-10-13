@@ -38,14 +38,18 @@ $smsHint     = 'color:#6b7280;font-size:0.875rem;margin:0 0 1rem;max-width:44rem
 
     <section class="section">
         <div class="section-header"><h2 class="section-title">Texts this month</h2></div>
-        <p style="margin:0 0 0.5rem"><strong><?= number_format($smsUsed) ?></strong> of <?= number_format($smsLimit) ?> texts used in <?= e(date('F')) ?>.</p>
+        <?php $smsBundle = sms_bundle_balance((int) $clientId); ?>
+        <p style="margin:0 0 0.5rem"><strong><?= number_format($smsUsed) ?></strong> of your <?= number_format($smsLimit) ?> monthly texts used in <?= e(date('F')) ?><?=
+            $smsBundle > 0 ? ' &middot; <strong>' . number_format($smsBundle) . '</strong> bundle texts left' : '' ?>.</p>
         <div style="height:8px;max-width:28rem;background:var(--border);border-radius:999px;overflow:hidden;margin-bottom:0.75rem">
             <div style="height:100%;width:<?= $smsPct ?>%;background:<?= $smsPct >= 100 ? '#dc2626' : ($smsPct >= SMS_WARN_PERCENT ? '#d97706' : '#16a34a') ?>"></div>
         </div>
-        <?php if ($smsPct >= 100): ?>
-            <div class="alert alert-error" role="alert">You've reached this month's text limit, so no more texts will go out until next month. Contact YourBlinds support if you need it raised.</div>
+        <?php if ($smsPct >= 100 && $smsBundle > 0): ?>
+            <div class="alert alert-info" role="status">This month's texts are used up, so texts are coming out of your bundle (<?= number_format($smsBundle) ?> left). <a href="/billing/texts.php">Buy more texts &rarr;</a></div>
+        <?php elseif ($smsPct >= 100): ?>
+            <div class="alert alert-error" role="alert">This month's texts are used up and you have no bundle texts, so no more texts will go out until next month. <a href="/billing/texts.php">Buy more texts &rarr;</a></div>
         <?php elseif ($smsPct >= SMS_WARN_PERCENT): ?>
-            <div class="alert alert-info" role="status">You've used <?= $smsPct ?>% of this month's texts. Contact YourBlinds support if you need the limit raised.</div>
+            <div class="alert alert-info" role="status">You've used <?= $smsPct ?>% of this month's texts. When they run out, texts come from bundles you buy up front. <a href="/billing/texts.php">Buy more texts &rarr;</a></div>
         <?php endif; ?>
         <?php if (!sms_provider_configured()): ?>
             <p style="<?= $smsHint ?>"><strong>Texting isn't switched on for the platform yet</strong> — you can set everything up now and it will start working once it is.</p>

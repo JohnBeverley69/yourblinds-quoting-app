@@ -174,13 +174,18 @@ $activeNav = 'messages';
                 <h1 class="page-title">Messages</h1>
                 <p class="page-subtitle">
                     Texts and emails sent to your customers, and whether they arrived.
-                    <?php if ($smsOn): ?>
-                        &middot; <?= number_format($usedThisMonth) ?> of <?= number_format($limit) ?> texts used in <?= e(date('F')) ?>.
+                    <?php if ($smsOn): $bundleLeft = sms_bundle_balance($clientId); ?>
+                        &middot; <?= number_format($usedThisMonth) ?> of your <?= number_format($limit) ?> monthly texts used in <?= e(date('F')) ?><?=
+                            $bundleLeft > 0 ? ', plus ' . number_format($bundleLeft) . ' bundle texts left' : '' ?>.
+                        When the month&rsquo;s texts run out, texts come from bundles you can buy &mdash; any you don&rsquo;t use carry over.
                     <?php endif; ?>
                 </p>
             </div>
             <?php if (!empty($user['role']) && $user['role'] === 'admin'): ?>
-                <div><a href="/admin/settings.php#texts" class="btn btn-secondary">Text settings</a></div>
+                <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+                    <?php if ($smsOn): ?><a href="/billing/texts.php" class="btn btn-primary">Buy more texts</a><?php endif; ?>
+                    <a href="/admin/settings.php#texts" class="btn btn-secondary">Text settings</a>
+                </div>
             <?php endif; ?>
         </div>
 

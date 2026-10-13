@@ -1093,6 +1093,7 @@ CREATE TABLE `messages` (
   `from_addr` varchar(190) NOT NULL DEFAULT '',
   `body` text DEFAULT NULL,
   `segments` smallint(5) unsigned NOT NULL DEFAULT 1,
+  `from_bundle` tinyint(1) NOT NULL DEFAULT 0,
   `status` varchar(20) NOT NULL DEFAULT 'queued',
   `status_detail` varchar(255) DEFAULT NULL,
   `provider` varchar(20) DEFAULT NULL,
@@ -1763,6 +1764,26 @@ CREATE TABLE `sales_consultants` (
   PRIMARY KEY (`id`),
   KEY `idx_sc_active` (`active`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `sms_bundles` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `client_id` int(11) NOT NULL,
+  `texts` int(11) NOT NULL,
+  `price` decimal(10,2) NOT NULL,
+  `currency` char(3) NOT NULL DEFAULT 'GBP',
+  `status` varchar(12) NOT NULL DEFAULT 'pending',
+  `paypal_order_id` varchar(64) DEFAULT NULL,
+  `paypal_capture_id` varchar(64) DEFAULT NULL,
+  `bought_by_user_id` int(11) DEFAULT NULL,
+  `note` varchar(255) DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `paid_at` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_sms_bundle_order` (`paypal_order_id`),
+  KEY `idx_sms_bundle_client` (`client_id`,`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
