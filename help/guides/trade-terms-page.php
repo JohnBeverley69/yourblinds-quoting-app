@@ -381,8 +381,8 @@ return [
              &mdash; no special deal is set, so you buy at the standard trade price. A blue <b>&ldquo;Your trade terms aren&rsquo;t set up
              yet.&rdquo;</b> means the feature isn&rsquo;t switched on for your system yet. Either way, talk to your supplier.</div>
 
-          <p class="prose"><b>Not your own trade accounts.</b> If you sell to other businesses, the discount you give <em>them</em> is held per
-             account by the factory, under <b>Factory Console &rarr; Trade accounts</b>. This page is only about what <b>you</b> buy at. Worth a look
+          <p class="prose"><b>Not your own trade accounts.</b> If you sell to other businesses, the discount you give <em>them</em> is set on
+             their account, not here. This page is only about what <b>you</b> buy at. Worth a look
              after any price change, to check the new deal has landed.</p>',
         'script'  => $script,
 ];

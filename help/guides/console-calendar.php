@@ -214,12 +214,12 @@ return [
           <div class="demo-shell">
             <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / factory / calendar</span></div>
             <div class="app">
-              <div class="side">
+              <div class="side factory"><div class="fband">FACTORY</div>
                 <div class="logo">Your<b>Blinds</b></div><small>FACTORY CONSOLE</small>
                 <div class="navh">Work</div>
                 <a>Dashboard</a><a>Orders</a><a>Remakes</a><a class="on">Calendar (3 due)</a>
                 <div class="navh">Production</div>
-                <a>Incoming orders</a><a>Floor</a><a>Dispatch</a>
+                <a>Dispatch</a><a>Floor</a><a>Incoming orders</a><a>Label sheet</a><a>Scan log</a><a>Worksheets</a>
                 <div class="navh">Accounts</div>
                 <a>Invoices</a>
               </div>

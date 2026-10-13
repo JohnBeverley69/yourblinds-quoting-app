@@ -81,7 +81,7 @@ $board = static function (?callable $colAnim = null, ?callable $cardAnim = null,
     return $h . '</div>';
 };
 
-$head = '<div class="hd"><div class="ttl">Pipeline</div><div class="sub">Where every job is in the funnel.</div>'
+$head = '<div class="hd"><div class="ttl">Sales pipeline</div><div class="sub">Where every job is in the funnel.</div>'
       . '<span class="tray"><span>List</span><span class="on">Pipeline</span></span></div>';
 
 /** The filter bar. */
@@ -92,14 +92,14 @@ $bar = static fn (string $q = '', string $win = 'Last 90 days', string $all = '<
 return [
         'aud'     => 'admin',
         'section' => 'Orders',
-        'title'   => 'The Pipeline board',
-        'eyebrow' => 'Orders · Pipeline',
+        'title'   => 'The Sales pipeline board',
+        'eyebrow' => 'Orders · Sales pipeline',
         'v'       => 2,
         'blurb'   => 'Every job you have on, on one board — seven columns with a count and the money in each, what the flags on a card mean, and what actually moves a job from one column to the next.',
-        'lede'    => 'The <b>Pipeline</b> shows the same jobs as your <b>Quotes</b> and <b>Orders</b> lists &mdash; the whole funnel on one
+        'lede'    => 'The <b>Sales pipeline</b> shows the same jobs as your <b>Quotes</b> and <b>Orders</b> lists &mdash; the whole funnel on one
                       board instead of two tables. Seven columns, <b>Quote</b> to <b>Paid</b>, each with how many jobs are in it and what they
                       are worth. You <b>read</b> this board; you don&rsquo;t drag cards on it &mdash; jobs move from their own page, or by
-                      themselves. This guide goes <b>slowly</b>, one idea per chapter. To get there: <b>Pipeline</b>, under <b>Work</b> in the menu.',
+                      themselves. This guide goes <b>slowly</b>, one idea per chapter. To get there: <b>Sales pipeline</b>, under <b>Work</b> in the menu.',
         'open'    => '/orders/pipeline.php',
         'css'     => '
           .gd .sc{ position:relative; min-height:370px; }
@@ -184,7 +184,7 @@ return [
               <div class="side">
                 <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
                 <div class="navh">Work</div>
-                <a>Dashboard</a><a>Calendar</a><a class="on">Pipeline</a><a>Factory</a>
+                <a>Dashboard</a><a>Calendar</a><a class="on">Sales pipeline</a>
                 <div class="navh">Retail</div>
                 <a>Customers</a><a>Quotes</a><a>Orders</a>
               </div>
@@ -201,7 +201,7 @@ return [
                   <div class="a-fade" style="--d:.4s">' . $head . '</div>
                   ' . $board(static fn ($k, $i) => ['a-rise', '--d:' . (4.2 + $i * .5) . 's'], static fn ($k, $j) => ['a-drop', '--d:' . (8 + $j * .6) . 's']) . '
                   <div class="row" style="margin-top:.6rem">
-                    <span class="chip a-pop" style="--d:1.4s">Menu: <b>Work</b> &rarr; <b>Pipeline</b></span>
+                    <span class="chip a-pop" style="--d:1.4s">Menu: <b>Work</b> &rarr; <b>Sales pipeline</b></span>
                     <span class="chip a-pop" style="--d:6.4s">Same jobs as your Quotes + Orders lists</span>
                     <span class="chip ok a-pop" style="--d:13.6s">Nothing extra to keep up to date</span>
                   </div>
@@ -343,7 +343,7 @@ return [
 
                 <!-- 12 — always up to date -->
                 <div class="sc" data-scene="12" data-len="25">
-                  <div class="hd"><div class="ttl">Pipeline</div><div class="sub">Where every job is in the funnel.</div>
+                  <div class="hd"><div class="ttl">Sales pipeline</div><div class="sub">Where every job is in the funnel.</div>
                     <span class="tray a-ring" style="--d:19.4s"><span>List</span><span class="on">Pipeline</span></span></div>
                   ' . $board(null, null, [], null, ['accepted' => '<span class="a-drop" style="--d:7.2s;display:block">' . $card(['Ivy North', 'ABC-2026-0055', 'CV6 5JX', '1,075.00', 'just now', []]) . '</span>']) . '
                   <div class="row" style="margin-top:.6rem">
@@ -359,8 +359,8 @@ return [
             </div>
           </div>',
         'body'    => '
-          <p><b>Getting there.</b> <b>Pipeline</b> sits under <b>Work</b> in the menu (also the <b>Pipeline</b> half of the
-             <b>List</b> | <b>Pipeline</b> tray on the Orders list). It is headed <b>Pipeline</b> &mdash; <em>&ldquo;Where every job is in the
+          <p><b>Getting there.</b> <b>Sales pipeline</b> sits under <b>Work</b> in the menu (also the <b>Pipeline</b> half of the
+             <b>List</b> | <b>Pipeline</b> tray on the Orders list). It is headed <b>Sales pipeline</b> &mdash; <em>&ldquo;Where every job is in the
              funnel.&rdquo;</em> It shows the same jobs as your Quotes and Orders lists, retail and trade together; there is nothing separate to
              keep up to date.</p>
 
@@ -409,7 +409,7 @@ return [
              archive, ticking several jobs &mdash; use the <b>List</b>. If the page shows <em>&ldquo;The pipeline isn&rsquo;t available yet &mdash; the
              quotes table is missing on this database.&rdquo;</em>, tell support.</p>',
         'script'  => [
-            ['1', 'What the board is',        'The Pipeline is under Work, in the menu on the left. It shows the same jobs as your Quotes and Orders lists, but all on one board, so you can see the shape of everything at once. Nothing here is extra to keep up to date. It is simply another way of looking at the jobs you already have.', 1],
+            ['1', 'What the board is',        'The Sales pipeline is under Work, in the menu on the left. It shows the same jobs as your Quotes and Orders lists, but all on one board, so you can see the shape of everything at once. Nothing here is extra to keep up to date. It is simply another way of looking at the jobs you already have.', 1],
             ['2', 'Seven columns',            'There are seven columns, in the order a job travels. Quote holds the drafts and the sent quotes together, because a draft is just a quote that has not gone out yet. Declined has a column of its own, so lost jobs never clutter the live ones. Then come Accepted, Ordered, Fitted, Invoiced and Paid.', 2],
             ['3', 'How many, and how much',   'Under each column name are two figures. The bold one is how many jobs are sitting there. The grey one is what they are worth. Top right, the whole board is added up for you: the number of jobs, and the money in the pipeline. At a glance, you can see where the work is piling up. Not allowed to see money? Then you see the counts only.', 3],
             ['4', 'Reading a card',           'Each job is a card. The customer\'s name is at the top, with the quote number and postcode underneath. Then the value of the job, and on the right, how long since anyone touched it. Hover over that to see the exact time. Click anywhere on the card, and the job opens.', 4],

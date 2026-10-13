@@ -108,12 +108,12 @@ $rmb = '<span class="rmb">REMAKE</span>';
 $menu = static function (array $ring = [], string $rem = 'Remakes', string $cal = 'Calendar') : string {
     $sec = [
         'Work'       => [$cal, 'Dashboard', 'Orders', 'Pipeline', 'Quotes', $rem],   // A to Z, as the real menu
-        'Production' => ['Dispatch', 'Floor', 'Incoming orders'],
+        'Production' => ['Dispatch', 'Floor', 'Incoming orders', 'Label sheet', 'Scan log', 'Worksheets'],
         'Accounts'   => ['Bank', 'Commissions', 'Invoices', 'Statements', 'The Numbers', 'Trade accounts'],
         'Setup'      => [],
         'Platform'   => [],
     ];
-    $h = '<div class="cmnu"><div class="lg">Your<b>Blinds</b></div><small class="tag">FACTORY CONSOLE</small>';
+    $h = '<div class="cmnu"><div class="fband">FACTORY</div><div class="lg">Your<b>Blinds</b></div><small class="tag">FACTORY CONSOLE</small>';
     foreach ($sec as $name => $items) {
         [$c, $s] = $ring['§' . $name] ?? ['', ''];
         $h .= '<div class="nh"><span class="' . $c . '" style="' . $s . '">' . $name . ($items ? '' : ' &#9662;') . '</span></div>';
@@ -343,12 +343,12 @@ return [
           <div class="demo-shell">
             <div class="demo-bar"><i></i><i></i><i></i><span>yourblinds.uk / factory / dashboard</span></div>
             <div class="app">
-              <div class="side">
+              <div class="side factory"><div class="fband">FACTORY</div>
                 <div class="logo">Your<b>Blinds</b></div><small>FACTORY CONSOLE</small>
                 <div class="navh">Work</div>
                 <a>Calendar</a><a class="on">Dashboard</a><a>Orders</a><a>Pipeline</a><a>Quotes</a><a>Remakes</a>
                 <div class="navh">Production</div>
-                <a>Dispatch</a><a>Floor</a><a>Incoming orders</a>
+                <a>Dispatch</a><a>Floor</a><a>Incoming orders</a><a>Label sheet</a><a>Scan log</a><a>Worksheets</a>
                 <div class="navh">Accounts</div>
                 <a>Bank</a><a>Invoices</a><a>Statements</a>
               </div>
@@ -388,7 +388,7 @@ return [
                         <div class="ib" style="width:100%;margin-bottom:.3rem">sam@factory</div>
                         <span class="btnp a-press" style="' . $d(2, 'When you sign in', 1.2) . '">Sign in</span></div>
                       <div class="a-rise" style="' . $d(2, 'you land straight') . ';margin-top:.6rem">' . $dashHead . '</div>
-                      <div class="cmnu a-rise" style="' . $d(2, 'the menu says') . ';width:auto"><div class="lg">Your<b>Blinds</b></div><small class="tag a-ring" style="' . $d(2, 'Factory Console under') . ';display:inline-block;border-radius:4px;padding:0 .2rem">FACTORY CONSOLE</small></div>
+                      <div class="cmnu a-rise" style="' . $d(2, 'the menu says') . ';width:auto"><div class="fband">FACTORY</div><div class="lg">Your<b>Blinds</b></div><small class="tag a-ring" style="' . $d(2, 'Factory Console under') . ';display:inline-block;border-radius:4px;padding:0 .2rem">FACTORY CONSOLE</small></div>
                     </div>
                     <div class="scr a-rise" style="' . $d(2, 'If you open') . '"><b>Old screens take you to the console</b>
                       <div class="redir">

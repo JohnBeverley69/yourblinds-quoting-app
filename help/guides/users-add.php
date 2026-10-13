@@ -65,7 +65,7 @@ $sideUsers = '
               <div class="side">
                 <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
                 <div class="navh">Work</div>
-                <a>Dashboard</a><a>Calendar</a><a>Pipeline</a>
+                <a>Dashboard</a><a>Calendar</a><a>Sales pipeline</a>
                 <div class="navh">Retail</div>
                 <a>Customers</a><a>Quotes</a><a>Orders</a><a>Payments</a>
                 <div class="navh">Setup <span class="chev">&#9662;</span></div>
@@ -205,10 +205,8 @@ return [
                     ' . $field('First name', '<span class="a-type" style="--d:2.5s;--ts:4;--tt:.5s">Dave</span>', 'a-ring', '--d:2s') . '
                     ' . $field('Last name', '<span class="a-type" style="--d:4s;--ts:5;--tt:.5s">Perry</span>') . '
                   </div>
-                  <p class="note a-fade" style="--d:7s">Leave both blank for a <b>workstation</b> &mdash; &ldquo;Vertical Head Rail&rdquo; isn&rsquo;t a person and hasn&rsquo;t got a surname. It&rsquo;ll be known by its username.</p>
                   <div class="chips">
                     <span class="chip a-pop" style="--d:10s">&#128119; A person &rarr; their name</span>
-                    <span class="chip a-pop" style="--d:13s">&#128295; A workshop bench &rarr; no name, just a username</span>
                   </div>
                 </div>
 
@@ -439,7 +437,6 @@ return [
                 booking never gets stuck.)</li>
             <li><b>Office</b> is for your office staff. Like Sales and Fitter it says who someone is; what they can see and do comes
                 from the <b>Permissions</b>.</li>
-            <li>On the <b>factory account</b> there is a fifth tick, <b>Factory</b>, and a <b>Production area</b> box (see below).</li>
           </ul>
 
           <p class="prose"><b>3) Permissions &mdash; who sees what</b></p>
@@ -494,14 +491,6 @@ return [
                 can&rsquo;t untick your own admin.&rdquo;), and there is no Danger zone.</li>
           </ul>
 
-          <p class="prose"><b>5) If you&rsquo;re on the factory account</b></p>
-          <ul class="steps">
-            <li>As well as the <b>Factory</b> role, a <b>Production area</b> box of tick-boxes appears on <b>both</b> screens &mdash; the one place
-                a workshop login&rsquo;s work is set. It drives that login&rsquo;s <b>scan screen</b> and the <b>Floor</b>&rsquo;s default area,
-                and needs the <b>Factory</b> role ticked. It is the same list as <b>Factory &rarr; Production areas</b>; if that&rsquo;s empty you
-                see <code>No areas set up yet &mdash; add them on Factory &rarr; Production areas first.</code></li>
-          </ul>
-
           <div class="heads"><span class="hi">&#9888;</span><div><b>Two ticks decide who sees the money.</b> <b>Can see money</b> covers
              what customers pay &mdash; order values, payments, balances and revenue. <b>View costs</b> covers what <em>you</em> pay &mdash;
              your cost and profit. Leave both <b>off</b> for fitters. The Dashboard&rsquo;s <b>Gross profit</b> panel needs <b>both</b>.</div></div>
@@ -519,8 +508,8 @@ return [
              </ul></div>',
         'script'  => [
             ['1',  'One page, two jobs',              'Everyone who uses the system gets their own login. You make them on the Users page, under Setup. Only an admin can open it. The page does two jobs. At the top, the Add user form makes a new login. Underneath, Existing users lists everyone, with an Edit link on every row. You add someone at the top, then finish the job on Edit.', 1],
-            ['2',  'Who are they?',                   'Start with who they are: first name and last name. There is one exception. If you are setting up a bench in the workshop, rather than a person, leave both names blank. A bench is not a person, and has no surname. It will be known by its username instead.', 2],
-            ['3',  'Email or username',               'Next, how they sign in. Give them an email address, or a username. You need one or the other, not both. Workshop staff with no email can sign in with just a username. That is why the sign in box says username or email.', 3],
+            ['2',  'Who are they?',                   'Start with who they are: their first name and their last name. This is how they appear on appointments, on quotes, and in the Dashboard.', 2],
+            ['3',  'Email or username',               'Next, how they sign in. Give them an email address, or a username. You need one or the other, not both. Staff with no email can sign in with just a username. That is why the sign in box says username or email.', 3],
             ['4',  'A password',                      'Then a password, at least eight characters long. Because you added them yourself, the account is trusted. No confirmation email goes out, and they can sign in straight away. Just tell them the password.', 4],
             ['5',  'Roles',                           'Now the roles. Sales is already ticked when the form opens, so untick it if it is wrong. Tick every role this person fills. Dave fits blinds, and he sells, so he gets both. Admin is the one that matters most. Only an admin can open Products, Users, Settings, Trade terms and Billing.', 5],
             ['6',  'What Sales and Fitter do',        'Sales and Fitter have one job each. When you book a measure, the people offered are your sales people. When you book a fitting, they are your fitters. Office is for your office staff. Like the others, it says who someone is. What they can actually see and do is set by the permissions.', 6],

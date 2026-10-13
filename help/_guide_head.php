@@ -61,6 +61,14 @@
          so guides only need the grouped markup, not their own copy of this. */
       .gd .side .navh{ font-size:.56rem; letter-spacing:.12em; text-transform:uppercase; color:#6a7d8c; font-weight:700; margin:.6rem 0 .1rem; padding:0 .5rem; }
       .gd .side .navh .chev{ font-size:.6rem; margin-left:.15rem; }
+      /* The FACTORY side (2026-10-13): dark slate, amber edge, FACTORY band — as _partials/sidebar.php + app.css. */
+      .gd .side.factory{ background:#1c2530; box-shadow:inset -3px 0 0 #f59e0b; }
+      .gd .side.factory .logo b, .gd .cmnu .lg b{ color:#f59e0b; }
+      .gd .side.factory a.on{ background:rgba(245,158,11,.18); color:#fff; }
+      .gd .fband{ background:#f59e0b; color:#1c2530; font-size:.5rem; font-weight:800; letter-spacing:.24em; text-align:center; padding:.12rem 0; }
+      .gd .side.factory .fband{ margin:-.9rem -.8rem .7rem; }
+      .gd .cmnu .fband{ margin:-.6rem -.55rem .45rem; border-radius:10px 10px 0 0; }
+      .gd .cmnu{ box-shadow:inset -3px 0 0 #f59e0b; }
       .gd .stage{ position:relative; padding:1.1rem 1.2rem; background:var(--surface); }
       .gd .card-t{ font-weight:700; font-size:.95rem; margin-bottom:.9rem; color:var(--ink); }
       .gd .frow{ display:grid; grid-template-columns:1fr 1fr; gap:.7rem .8rem; }

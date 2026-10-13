@@ -456,13 +456,6 @@ return [
              <b>New order alerts</b> address isn&rsquo;t a proper email, that one setting is skipped &mdash; you still get &ldquo;Quote settings
              saved.&rdquo; and the old address comes back. Glance at the box after saving.</div></div>
 
-          <p><b>Factory login only.</b> Three more blocks appear only for the factory (super-admin) login:
-             <b>Default sale type</b> (<em>When you click New, start as</em> <b>Trade</b> / <b>Retail</b>),
-             <b>Factory &mdash; new order received</b> (<em>Email the factory when a trade order lands in the queue</em>; blank uses the address
-             above) and <b>Auto-order bought-in items</b> (<em>Automatically order bought-in blinds from their supplier when an order is
-             placed</em> &mdash; <b>off by default</b>, because it sends a real purchase order; a supplier with no email is left for you to order
-             by hand).</p>
-
           <div class="oops"><b>If a save goes wrong:</b>
              <code>Could not save settings: &hellip;</code> is followed by the reason &mdash; pass it to whoever looks after your setup.</div>
 

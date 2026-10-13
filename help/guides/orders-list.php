@@ -203,7 +203,7 @@ return [
               <div class="side">
                 <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
                 <div class="navh">Work</div>
-                <a>Dashboard</a><a>Calendar</a><a>Pipeline</a>
+                <a>Dashboard</a><a>Calendar</a><a>Sales pipeline</a>
                 <div class="navh">Retail</div>
                 <a>Customers</a><a>Quotes</a><a class="on">Orders</a><a>Payments</a>
                 <div class="navh">Trade</div>

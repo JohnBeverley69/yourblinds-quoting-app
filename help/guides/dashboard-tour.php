@@ -230,7 +230,7 @@ return [
               <div class="side">
                 <div class="logo">Your<b>Blinds</b></div><small>ADMIN CONSOLE</small>
                 <div class="navh">Work</div>
-                <a class="on">Dashboard</a><a>Calendar</a><a>Pipeline</a>
+                <a class="on">Dashboard</a><a>Calendar</a><a>Sales pipeline</a>
                 <div class="navh">Retail</div>
                 <a>Customers</a><a>Quotes</a><a>Orders</a>
                 <div class="navh">Setup <span class="chev">&#9662;</span></div>
