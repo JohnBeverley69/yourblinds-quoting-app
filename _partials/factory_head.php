@@ -9,13 +9,25 @@
  *                           where 1200px just buys you a scrollbar.
  * Close the page with _partials/factory_foot.php.
  *
- * Deliberately its OWN chrome (a top bar, not the tenant sidebar) so the
- * factory back-office reads as a standalone app at factory.yourblinds.uk.
+ * Everyone except a bench workstation gets the app's own sidebar, switched to
+ * the FACTORY side (dark amber, factory menu, Shop | Factory switch — see
+ * _partials/sidebar.php). Dropping into a separate top-bar app lost people:
+ * no sidebar, the logo went nowhere, and one menu sent some pages into each
+ * look (Tyler's critique, 2026-10-13). A workstation never crosses to the
+ * shop, so it keeps the compact top bar below, which leaves the floor's wide
+ * tables the whole screen.
  */
 $factoryTitle = $factoryTitle ?? 'Factory';
 $factoryNav   = $factoryNav   ?? '';
 $factoryWide  = $factoryWide  ?? false;
 $fu           = function_exists('current_user') ? current_user() : null;
+$factoryTopBar = function_exists('current_user_is_workstation') && current_user_is_workstation();
+// Sidebar key for each factory page (the factory menu in _partials/sidebar.php).
+$factorySidebarKey = [
+    'incoming' => 'factory', 'pipeline' => 'factory-pipeline', 'floor' => 'floor', 'scan' => 'scan-log',
+    'worksheets' => 'worksheets', 'labelsheet' => 'labelsheet', 'areas' => 'areas', 'routes' => 'routes',
+    'build' => 'build', 'settings' => 'factory-settings',
+][$factoryNav] ?? '';
 
 // Which factory is this? White-label: the shell brands itself with the acting
 // factory's name, not a hardcoded "Beverley". A super-admin manages their OWN
@@ -97,7 +109,7 @@ if (!function_exists('factory_user_is_office') || factory_user_is_office()) {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= e($factoryTitle) ?> &middot; <?= e($factoryName) ?></title>
+    <title>Factory &middot; <?= e($factoryTitle) ?> &middot; <?= e($factoryName) ?></title>
     <script>
     // Density (compact) pre-paint — the factory back-office has its own shell, so
     // it must stamp the yb_density cookie onto <html> itself (the main app does
@@ -175,6 +187,8 @@ if (!function_exists('factory_user_is_office') || factory_user_is_office()) {
            scrollbar on a screen that had the room all along. */
         .factory-main { max-width: 1200px; margin: 0 auto; padding: 1rem 1.25rem 1.5rem; }
         .factory-main.is-wide { max-width: none; }
+        /* Inside the app shell, .app-main already pads the page. */
+        .app-main > .factory-main { padding: 0; margin: 0; }
         /* If you add a screen here and it has a table wider than a phone, wrap it
            in <div class="table-wrap"> (app.css) so the table scrolls inside its
            own box. Left bare, a table narrower than its own content drags the
@@ -184,6 +198,18 @@ if (!function_exists('factory_user_is_office') || factory_user_is_office()) {
     </style>
 </head>
 <body class="factory-body">
+<?php if (!$factoryTopBar): ?>
+<div class="app-shell">
+<?php
+    // In its own scope: the sidebar sets a lot of variables ($section, $user,
+    // $isAdmin…) that must not leak into the factory page around it.
+    (static function ($user, $activeNav, $ybSide): void {
+        require __DIR__ . '/sidebar.php';
+    })($fu ?? [], $factorySidebarKey, 'factory');
+?>
+<main class="app-main">
+<div class="factory-main<?= $factoryWide ? ' is-wide' : '' ?>">
+<?php else: ?>
 <header class="factory-topbar">
     <div class="factory-brand"><?= e($factoryName) ?> <span>Factory</span></div>
     <nav class="factory-nav">
@@ -217,5 +243,6 @@ if (!function_exists('factory_user_is_office') || factory_user_is_office()) {
         <form id="ybLogoutForm" method="post" action="/auth/logout.php" style="display:none"><?= csrf_field() ?></form>
     </div>
 </header>
-<?php if ($fu) require __DIR__ . '/support_widget.php'; ?>
 <main class="factory-main<?= $factoryWide ? ' is-wide' : '' ?>">
+<?php endif; ?>
+<?php if ($fu && $factoryTopBar) require __DIR__ . '/support_widget.php'; // the sidebar brings its own ?>

@@ -72,7 +72,9 @@ test('the white-label factory cannot open or change the main factory\'s products
             if ($r->phpErrors) $problems[] = "$p: PHP problems: " . implode(' | ', array_slice($r->phpErrors, 0, 2));
             // Charlie's linked copies share the name, so look for the product's own build data instead.
             if ($p === '/factory/build-rules.php' || $p === '/factory/build-rules-v2.php') {
-                $src = (string) file_get_contents(APP_ROOT . $p);
+                // The page's own fixed text, plus the sidebar every factory page now carries
+                // (its "Spacing is compact…" button is not a build variable).
+                $src = (string) file_get_contents(APP_ROOT . $p) . (string) file_get_contents(APP_ROOT . '/_partials/sidebar.php');
                 foreach (t_rows('SELECT name AS variable FROM build_variables WHERE product_id = ? AND LENGTH(name) > 5', [$pid]) as $v) {
                     if (strpos($src, (string) $v['variable']) !== false) continue;   // a fixed label the page always shows
                     if (preg_match('/\b' . preg_quote((string) $v['variable'], '/') . '\b/', $r->body)) {
