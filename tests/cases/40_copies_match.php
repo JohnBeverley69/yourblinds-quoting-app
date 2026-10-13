@@ -273,6 +273,36 @@ test('pushing again changes nothing (the push is repeatable)', function () {
     check_same($before, $fp(), 'Alpha\'s catalogue after a second push');
 });
 
+test('a push still works after the master re-gates an option and deletes its old parent choice', function () {
+    // Live 2026-10-13: Forest Wood and Embassy failed on every account with a
+    // foreign-key error. Pruning the removed choice on the account deleted the
+    // option shown under it (cascade); the push then re-used that option's id.
+    $ins = static fn (string $sql, array $p) => (db()->prepare($sql)->execute($p) ? (int) db()->lastInsertId() : 0);
+    $pid = cp_insert('products', ['client_id' => 3, 'name' => 'Bev ZZ Regate Probe', 'active' => 1, 'price_source' => 'own',
+        'category_id' => null, 'requires_option' => 0, 'width_only' => 0, 'price_per_slat' => 0, 'price_per_sqm' => 0]);
+    $exA = $ins('INSERT INTO product_extras (client_id, product_id, name, active) VALUES (3, ?, ?, 1)', [$pid, 'Regate Parent']);
+    $c1  = $ins('INSERT INTO product_extra_choices (product_extra_id, label, active) VALUES (?, ?, 1)', [$exA, 'Old Parent']);
+    $c2  = $ins('INSERT INTO product_extra_choices (product_extra_id, label, active) VALUES (?, ?, 1)', [$exA, 'New Parent']);
+    $exB = $ins('INSERT INTO product_extras (client_id, product_id, parent_choice_id, name, active) VALUES (3, ?, ?, ?, 1)', [$pid, $c1, 'Regate Child']);
+    $ins('INSERT INTO product_extra_choices (product_extra_id, label, active) VALUES (?, ?, 1)', [$exB, 'Child Choice']);
+    $ins('INSERT INTO product_extra_parent_choices (product_extra_id, product_extra_choice_id) VALUES (?, ?)', [$exB, $c1]);
+
+    $sum = push_catalogue_to_client(db(), 3, 101, 'Bev ZZ Regate Probe');
+    check(empty($sum['errors']), 'first push errors: ' . t_show($sum['errors']));
+
+    // On the master: the child option now hangs off the new choice; the old one is deleted.
+    db()->prepare('UPDATE product_extras SET parent_choice_id = ? WHERE id = ?')->execute([$c2, $exB]);
+    db()->prepare('UPDATE product_extra_parent_choices SET product_extra_choice_id = ? WHERE product_extra_id = ?')->execute([$c2, $exB]);
+    db()->prepare('DELETE FROM product_extra_choices WHERE id = ?')->execute([$c1]);
+
+    $sum = push_catalogue_to_client(db(), 3, 101, 'Bev ZZ Regate Probe');
+    check(empty($sum['errors']), 'second push errors: ' . t_show($sum['errors']));
+    $gate = t_val("SELECT pc.label FROM product_extras e JOIN products p ON p.id = e.product_id
+                    JOIN product_extra_choices pc ON pc.id = e.parent_choice_id
+                   WHERE p.client_id = 101 AND p.name = 'Bev ZZ Regate Probe' AND e.name = 'Regate Child'");
+    check_same('New Parent', $gate, "the account's child option is shown under");
+});
+
 test('the DUPLICATE button copies every column', function () use (&$probe) {
     if (!$probe) skip('no probe');
     $h = as_user('super');   // admin of the factory account, which owns the probe
