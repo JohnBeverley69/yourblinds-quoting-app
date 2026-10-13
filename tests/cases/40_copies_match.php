@@ -31,9 +31,6 @@ const KNOWN_GAPS = [
     'push.products.sort_order'                    => 'deliberate: placed at the end of the tenant\'s own list',
     'duplicate.products.name'                     => 'deliberate: " (copy)" is added',
     'duplicate.products.sort_order'               => 'deliberate: the copy goes to the end of the list',
-    // Found by this test on 2026-10-12 and reported to John — not fixed yet.
-    'push.product_options.fabric_group'           => 'BUG: fabric group not pushed',
-    'push.product_extra_choices.markup_pct_override' => 'BUG (latent — no screen sets it): per-choice markup override not pushed',
 ];
 
 /** Columns that are identities or links — checked through the links, not compared raw. */
@@ -238,6 +235,14 @@ test('every row a new company gets carries its source marker (seed = push, #1056
     foreach ($checks as $t => $sql) check_same(0, (int) t_val($sql), "$t rows without a source marker in the new company");
     $want = (int) t_val('SELECT COUNT(*) FROM products WHERE client_id = 3 AND active = 1');
     check_same($want, (int) t_val('SELECT COUNT(*) FROM products WHERE client_id = 150'), 'products the new company got (every active, ready factory product)');
+});
+
+test('a new company gets our trade prices only — no markups or discounts copied from the factory', function () {
+    // John, 2026-10-13: the factory's client_discounts are BUYING discounts (40% off
+    // Forest Wood's list); copied across they became the company's selling discount.
+    check((int) t_val('SELECT COUNT(*) FROM client_discounts WHERE client_id = 3') > 0, 'fixture: the factory should have buying discounts to not copy');
+    check_same(0, (int) t_val('SELECT COUNT(*) FROM client_markups WHERE client_id = 150'), 'markup rows the new company got');
+    check_same(0, (int) t_val('SELECT COUNT(*) FROM client_discounts WHERE client_id = 150'), 'discount rows the new company got');
 });
 
 test('the seeded company and a pushed company end up with the same catalogue', function () {
