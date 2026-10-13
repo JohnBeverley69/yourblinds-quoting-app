@@ -79,7 +79,7 @@ foreach ($tables as $t => [$col, $kind]) {
         "SELECT x.id, x.client_id, x.product_id, x.system_id, x.$col v, x.created_at row_at,
                 c.company_name, c.created_at client_at, c.account_ref, c.is_factory,
                 p.name product, p.source_client_id, p.source_product_id,
-                s.name system, $srcSysCol src_sys
+                s.name sys_name, $srcSysCol src_sys
            FROM $t x
            JOIN clients c  ON c.id = x.client_id
            JOIN products p ON p.id = x.product_id
@@ -96,7 +96,7 @@ foreach ($tables as $t => [$col, $kind]) {
         $fs = 0;
         if ($r['system_id'] !== null) {
             if ((int) $r['src_sys'] > 0 && isset($facSysName[(int) $r['src_sys']])) $fs = (int) $r['src_sys'];
-            else $fs = $facSysByName[$fp . '|' . (string) $r['system']] ?? -1;
+            else $fs = $facSysByName[$fp . '|' . (string) $r['sys_name']] ?? -1;
         }
         $fv       = $fs >= 0 ? ($facVal[$t]["$fp|$fs"] ?? null) : null;
         $sameVal  = $fv !== null && abs($fv - (float) $r['v']) < 0.005;
@@ -120,7 +120,7 @@ foreach ($by as $cid => $list) {
     foreach ($list as $f) {
         printf("    %-8s %6s%%  %-38s %-28s factory: %-7s %s\n",
             $f['kind'], number_format((float) $f['v'], 2), mb_strimwidth((string) $f['product'], 0, 38, '…'),
-            mb_strimwidth((string) ($f['system'] ?? '(all systems)'), 0, 28, '…'),
+            mb_strimwidth((string) ($f['sys_name'] ?? '(all systems)'), 0, 28, '…'),
             $f['fac_v'] === null ? 'none' : number_format((float) $f['fac_v'], 2) . '%',
             trim(($f['same'] ? '= factory' : '') . ($f['at_setup'] ? '  made at setup' : '')));
     }
@@ -138,7 +138,7 @@ if ($own) {
     echo "Rows on factory products that look like the company's OWN choice (set after setup, different from ours) — left alone:\n";
     foreach ($own as $o) {
         printf("    client %-4d %-30s %-8s %6s%%  %-34s %s\n", (int) $o['client_id'], mb_strimwidth((string) $o['company_name'], 0, 30, '…'),
-            $o['kind'], number_format((float) $o['v'], 2), mb_strimwidth((string) $o['product'], 0, 34, '…'), (string) ($o['system'] ?? '(all systems)'));
+            $o['kind'], number_format((float) $o['v'], 2), mb_strimwidth((string) $o['product'], 0, 34, '…'), (string) ($o['sys_name'] ?? '(all systems)'));
     }
     echo "\n";
 }
