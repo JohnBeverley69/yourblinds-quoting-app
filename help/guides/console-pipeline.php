@@ -724,8 +724,8 @@ return [
           <p><b>The Pipeline is the only screen with these buttons.</b> <b>Incoming orders</b> is the workshop&rsquo;s view: where
              a step is due it names it and says <em>Do this on the Pipeline &rarr;</em>, which opens that order&rsquo;s card here. The
              Dashboard&rsquo;s order tiles open their column here, and the Orders list&rsquo;s <b>Next</b> links land on the order&rsquo;s
-             card. A white-label factory has the Pipeline too (<b>Factory pipeline</b> in its menu, and <b>Pipeline</b> in the factory
-             top bar), with one <b>Dispatched</b> column instead of the money columns.</p>
+             card. A white-label factory has the Pipeline too (<b>Pipeline</b> in its menu once you switch to the <b>Factory</b> side),
+             with one <b>Dispatched</b> column instead of the money columns.</p>
 
           <p><b>The one button</b> is the next step:</p>
           <ul class="steps">

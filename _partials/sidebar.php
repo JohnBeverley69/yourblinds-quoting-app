@@ -350,7 +350,74 @@ if ($isFactoryConsole) {
         // Platform (super-admin) carries over exactly as above.
         end($navSections),
     ];
+    // The rest of the factory lives in this menu too, so production pages keep
+    // the sidebar instead of dropping into a separate top-bar app.
+    $_ybOffice = $isSuperAdmin || (function_exists('factory_user_is_office') && factory_user_is_office());
+    $navSections[1]['items'] += [
+        'scan-log'   => ['/factory/scan-log.php',         'Scan log',    true],
+        'worksheets' => ['/factory/worksheets.php',       'Worksheets',  true],
+        'labelsheet' => ['/factory/label-test-sheet.php', 'Label sheet', true],
+    ];
+    $navSections[3]['items'] += [
+        'areas'  => ['/factory/production-areas.php', 'Production areas', $_ybOffice],
+        'routes' => ['/factory/routes.php',           'Routes',           $_ybOffice],
+        'build'  => ['/factory/build-rules-v2.php',   'Build rules',      $_ybOffice],
+    ];
 }
+
+// SHOP vs FACTORY (Tyler's critique, John 2026-10-13). A business that makes
+// blinds AND sells them has two sides: the shop (quotes, customers, calendar)
+// and the factory (making). The factory side keeps this same sidebar — no
+// jumping into a different-looking app — but it turns dark amber, says
+// FACTORY, and lists only factory screens; a Shop | Factory switch at the top
+// is the one way across. The main factory's Console is trade-only, so for it
+// every page is the factory side. Bench workstations never cross sides (they
+// keep the factory top bar, _partials/factory_head.php).
+$ybSide = $ybSide ?? (strpos((string) parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH), '/factory/') === 0 ? 'factory' : 'shop');
+if ($isFactoryConsole) $ybSide = 'factory';
+$_ybIsWorkstation = function_exists('current_user_is_workstation') && current_user_is_workstation();
+$ybBothSides      = $canSeeFactory && !$isFactoryConsole && !$_ybIsWorkstation && ($isStaff || $isSuperAdmin);
+$_ybFactoryOffice = $isSuperAdmin || (function_exists('factory_user_is_office') && factory_user_is_office());
+$ybFactoryHome    = $_ybFactoryOffice ? '/factory/pipeline.php' : '/factory/incoming-orders.php';
+if (!$isFactoryConsole) {
+    if ($ybSide === 'factory') {
+        $dashTag = 'Factory';
+        $navSections = [
+            [
+                'name'  => 'Factory',
+                'items' => [
+                    'factory-pipeline' => ['/factory/pipeline.php',         'Pipeline',        $_ybFactoryOffice],
+                    'factory'          => ['/factory/incoming-orders.php',  'Incoming orders', true],
+                    'floor'            => ['/factory/floor.php',            'Floor',           true],
+                    'scan-log'         => ['/factory/scan-log.php',         'Scan log',        true],
+                    'worksheets'       => ['/factory/worksheets.php',       'Worksheets',      true],
+                    'labelsheet'       => ['/factory/label-test-sheet.php', 'Label sheet',     true],
+                ],
+            ],
+            [
+                'name'        => 'Factory setup',
+                'collapsible' => true,
+                'items' => [
+                    'areas'            => ['/factory/production-areas.php', 'Production areas', $_ybFactoryOffice],
+                    'routes'           => ['/factory/routes.php',           'Routes',           $_ybFactoryOffice],
+                    'build'            => ['/factory/build-rules-v2.php',   'Build rules',      $_ybFactoryOffice],
+                    'factory-settings' => ['/factory/settings.php',         'Factory settings', $_ybFactoryOffice],
+                ],
+            ],
+            end($navSections),   // Platform (super-admin)
+        ];
+    } else {
+        // The shop's own Pipeline (quotes Draft → Paid) — named so it can't be
+        // mistaken for the factory's. With the switch showing, the factory links
+        // go: the switch is the way in, and the factory menu lists the rest.
+        $navSections[0]['items']['pipeline'][1] = 'Sales pipeline';
+        if ($ybBothSides) {
+            unset($navSections[0]['items']['factory'], $navSections[0]['items']['factory-pipeline']);
+        }
+    }
+}
+// Menu links that open in a new tab (a printable sheet — keeps the app open).
+$ybNavNewTab = ['labelsheet' => true];
 
 // Non-production badge — make it unmistakable that this is a test copy with
 // throwaway data, so nobody confuses staging for the live site. Inert on
@@ -395,6 +462,12 @@ $_ybEmailPaused = function_exists('app_setting_on') && app_setting_on('email_pau
         }
         document.documentElement.setAttribute('data-theme', pref);
     } catch (e) { /* swallow — defaults to light */ }
+<?php if ($ybSide === 'factory'): ?>
+    // Factory side: the amber band across the page (app.css [data-side]) and
+    // the browser tab says so too.
+    document.documentElement.setAttribute('data-side', 'factory');
+    if (document.title.indexOf('Factory') !== 0) document.title = 'Factory · ' + document.title;
+<?php endif; ?>
     // Density = comfortable (default) / compact. Cookie-backed, per device
     // (a big desktop and a phone can differ). Compact hides the guidance hints
     // and tightens spacing — see .app-main[data-density] rules in app.css.
@@ -429,11 +502,21 @@ window.addEventListener('pageshow', function (e) {
     </label>
     <label class="nav-backdrop" for="navToggle" aria-hidden="true"></label>
 
-    <aside class="app-sidebar" aria-label="Primary navigation">
+    <aside class="app-sidebar<?= $ybSide === 'factory' ? ' is-factory' : '' ?>" aria-label="Primary navigation">
+        <?php if ($ybSide === 'factory'): ?>
+            <div class="side-band" aria-hidden="true">Factory</div>
+        <?php endif; ?>
         <div class="app-sidebar-brand">
-            <a href="<?= $isFactoryConsole ? factory_console_home() : '/calendar/index.php' ?>" class="app-brand-mark">Your<span class="accent">Blinds</span></a>
+            <?php // The logo goes home on the side you're on; the switch below is the way across. ?>
+            <a href="<?= e($isFactoryConsole ? factory_console_home() : ($ybSide === 'factory' ? $ybFactoryHome : '/calendar/index.php')) ?>" class="app-brand-mark">Your<span class="accent">Blinds</span></a>
             <span class="app-brand-tag"><?= e($dashTag) ?></span>
         </div>
+        <?php if ($ybBothSides): ?>
+            <nav class="side-switch" aria-label="Shop or factory">
+                <a href="/calendar/index.php"<?= $ybSide === 'shop' ? ' class="is-on" aria-current="true"' : '' ?>>Shop</a>
+                <a href="<?= e($ybFactoryHome) ?>"<?= $ybSide === 'factory' ? ' class="is-on" aria-current="true"' : '' ?>>Factory</a>
+            </nav>
+        <?php endif; ?>
         <div class="app-sidebar-user">
             <div class="app-sidebar-user-name"><?= e($user['full_name']) ?></div>
             <div class="app-sidebar-user-meta">
@@ -450,7 +533,9 @@ window.addEventListener('pageshow', function (e) {
                 <?= e($user['company_name']) ?> &middot; <?= e($roleLabel) ?>
             </div>
         </div>
-        <?php if ($hasQuotes && ($canCreateQuotes || $isSuperAdmin)): ?>
+        <?php // New and InstaPrice are shop tools — not on a (non-Console) factory side. ?>
+        <?php $ybShopCtas = $isFactoryConsole || $ybSide !== 'factory'; ?>
+        <?php if ($ybShopCtas && $hasQuotes && ($canCreateQuotes || $isSuperAdmin)): ?>
             <!-- Primary CTA — one "New" button, pinned at the top. The factory
                  super-admin gets the trade/retail launcher; everyone else starts a
                  quote. Direct orders ("New order", no quote) were switched OFF
@@ -475,6 +560,7 @@ window.addEventListener('pageshow', function (e) {
         // between the two buttons no other permission combination gets.
         $ctaAbove = $hasQuotes && ($canCreateQuotes || $canCreateOrders || $isSuperAdmin);
         ?>
+        <?php if ($ybShopCtas): ?>
         <div class="sidebar-cta"<?= $ctaAbove ? ' style="padding-top:0.375rem"' : '' ?>>
             <a href="/instaprice/index.php"
                class="sidebar-cta-btn is-instaprice<?= $activeNav === 'instaprice' ? ' is-active' : '' ?>">
@@ -482,6 +568,7 @@ window.addEventListener('pageshow', function (e) {
                 InstaPrice
             </a>
         </div>
+        <?php endif; ?>
 
         <nav class="app-sidebar-nav">
 <?php
@@ -514,7 +601,7 @@ foreach ($navSections as $section):
             <?php foreach ($visGroups as $vg): ?>
                 <div class="nav-subheading"><?= e($vg['heading']) ?></div>
                 <?php foreach ($vg['items'] as $navKey => [$navHref, $navLabel, $navShow]): ?>
-                    <a href="<?= e($navHref) ?>"<?= $navKey === $activeNav ? ' class="active"' : '' ?>><?= e($navLabel) ?></a>
+                    <a href="<?= e($navHref) ?>"<?= $navKey === $activeNav ? ' class="active"' : '' ?><?= isset($ybNavNewTab[$navKey]) ? ' target="_blank" rel="noopener"' : '' ?>><?= e($navLabel) ?></a>
                 <?php endforeach; ?>
             <?php endforeach; ?>
         </details>
@@ -536,14 +623,14 @@ foreach ($navSections as $section):
         <details class="nav-section nav-section-collapsible"<?= $isOpen ? ' open' : '' ?>>
             <summary class="nav-section-heading"><?= e($section['name']) ?></summary>
             <?php foreach ($visibleItems as $navKey => [$navHref, $navLabel, $navShow]): ?>
-                <a href="<?= e($navHref) ?>"<?= $navKey === $activeNav ? ' class="active"' : '' ?>><?= e($navLabel) ?></a>
+                <a href="<?= e($navHref) ?>"<?= $navKey === $activeNav ? ' class="active"' : '' ?><?= isset($ybNavNewTab[$navKey]) ? ' target="_blank" rel="noopener"' : '' ?>><?= e($navLabel) ?></a>
             <?php endforeach; ?>
         </details>
     <?php else: ?>
         <div class="nav-section">
             <div class="nav-section-heading"><?= e($section['name']) ?></div>
             <?php foreach ($visibleItems as $navKey => [$navHref, $navLabel, $navShow]): ?>
-                <a href="<?= e($navHref) ?>"<?= $navKey === $activeNav ? ' class="active"' : '' ?>><?= e($navLabel) ?></a>
+                <a href="<?= e($navHref) ?>"<?= $navKey === $activeNav ? ' class="active"' : '' ?><?= isset($ybNavNewTab[$navKey]) ? ' target="_blank" rel="noopener"' : '' ?>><?= e($navLabel) ?></a>
             <?php endforeach; ?>
         </div>
     <?php endif; ?>

@@ -404,6 +404,37 @@ a { color: var(--link); }
     min-width: 0;
 }
 
+/* Shop | Factory (_partials/sidebar.php). The factory side keeps the same
+   layout but can't be mistaken for the shop: a dark slate sidebar with an
+   amber edge and FACTORY band, and an amber strip across the top of the page.
+   Same in light and dark themes — it's an identity colour, not a theme. */
+.app-sidebar.is-factory {
+    --bg-sidebar: #1c2530;
+    --brand-accent: #f59e0b;
+    --bg-sidebar-active: rgba(245, 158, 11, 0.16);
+    background: #1c2530;
+    box-shadow: inset -3px 0 0 #f59e0b;
+}
+.side-band {
+    background: #f59e0b; color: #1c2530;
+    font-size: 0.75rem; font-weight: 800; letter-spacing: 0.24em; text-transform: uppercase;
+    text-align: center; padding: 0.3rem 0;
+}
+html[data-side="factory"] .app-main { border-top: 4px solid #f59e0b; }
+html[data-side="factory"] .nav-fab,
+html[data-side="factory"] .nav-close { background: #1c2530; box-shadow: inset 0 -3px 0 #f59e0b, var(--shadow-fab); }
+.side-switch {
+    display: flex; gap: 0.25rem; margin: 0.75rem 1.25rem 0;
+    padding: 0.2rem; border-radius: 999px; background: rgba(255, 255, 255, 0.08);
+}
+.side-switch a {
+    flex: 1; text-align: center; padding: 0.4rem 0.5rem; border-radius: 999px;
+    color: var(--text-on-sidebar); text-decoration: none; font-size: 0.875rem; font-weight: 600;
+}
+.side-switch a:hover { color: #fff; background: rgba(255, 255, 255, 0.08); }
+.side-switch a.is-on { background: #fff; color: #1f3b5b; }
+.app-sidebar.is-factory .side-switch a.is-on { background: #f59e0b; color: #1c2530; }
+
 /* ===========================================================================
    Page header / sections
    =========================================================================== */
