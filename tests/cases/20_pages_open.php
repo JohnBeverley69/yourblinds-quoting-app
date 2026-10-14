@@ -83,11 +83,17 @@ test('a signed-out visitor is sent to the login page', function () use (&$state)
 
 test('every help guide opens (or is politely hidden) without PHP errors', function () {
     $people = ['alpha.admin' => as_user('alpha.admin'), 'super' => as_user('super')];
+    $hidden = ['quote-new-order'];   // kept on file, shown to nobody (help/_guides.php $HIDDEN)
     $problems = [];
     foreach (glob(APP_ROOT . '/help/guides/*.php') as $f) {
         $slug = basename($f, '.php');
         foreach ($people as $who => $h) {
             $r = $h->get('/help/guide.php?g=' . urlencode($slug));
+            if (in_array($slug, $hidden, true)) {
+                if ($r->status !== 404) $problems[] = "guide $slug as $who: should be hidden from everyone, got HTTP {$r->status}";
+                if (strpos($h->get('/help/index.php')->body, 'g=' . $slug) !== false) $problems[] = "guide $slug is listed on Help for $who";
+                continue;
+            }
             if ($r->phpErrors || !in_array($r->status, [200, 403], true)) {
                 $problems[] = "guide $slug as $who: HTTP {$r->status} " . implode(' | ', array_slice($r->phpErrors, 0, 2));
             }

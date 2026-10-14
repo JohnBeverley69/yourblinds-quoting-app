@@ -74,7 +74,7 @@ $ORDER = [
     'instaprice-quick',
     'quote-build',
     'quote-send-accept',
-    // 'quote-new-order' — direct orders switched off 2026-10-12.
+    // 'quote-new-order' — direct orders switched off 2026-10-12; hidden below.
     'quote-offline',
     'quote-order-invoice',
     'orders-list',
@@ -98,9 +98,15 @@ foreach ($ORDER as $slug) {
 
 // Anything present but not listed above — so a new guide file works the moment
 // it is dropped in, rather than vanishing until someone remembers this list.
+// Guides kept on file but not shown to anyone, until their feature comes back.
+// quote-new-order: direct orders ("New order" without a quote) were switched off
+// 2026-10-12 and need more work first (John, 2026-10-14) — the catch-all below
+// had been putting the guide back on the Help page regardless.
+$HIDDEN = ['quote-new-order'];
+
 foreach (glob($dir . '/*.php') ?: [] as $f) {
     $slug = basename($f, '.php');
-    if (!isset($GUIDES[$slug])) $GUIDES[$slug] = require $f;
+    if (!isset($GUIDES[$slug]) && !in_array($slug, $HIDDEN, true)) $GUIDES[$slug] = require $f;
 }
 
 return $GUIDES;
