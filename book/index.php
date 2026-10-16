@@ -53,6 +53,12 @@ if ($company === null) {
                 if (!$area['ok']) {
                     $step = 'outside';
                 } else {
+                    // Address list for "Pick your address" — one paid lookup per
+                    // new postcode, kept in the session (ob_lookup_addresses).
+                    if (($bag['addr_pc'] ?? '') !== $pc) {
+                        $bag['addr']    = ob_lookup_addresses($clientId, $pc, client_ip());
+                        $bag['addr_pc'] = $pc;
+                    }
                     header('Location: ' . $self . '&step=time');
                     exit;
                 }
@@ -145,7 +151,7 @@ $co = $company !== null ? ob_company_contact((int) $company['id']) : null;
     h2 { font-size: 1.15rem; margin: 0 0 4px; }
     .muted { color: var(--muted); font-size: .925rem; }
     label { display: block; font-weight: 600; font-size: .925rem; margin: 14px 0 4px; }
-    input[type=text], input[type=email], input[type=tel], textarea {
+    input[type=text], input[type=email], input[type=tel], textarea, select {
         width: 100%; padding: 10px 12px; font: inherit; color: var(--text); background: var(--card);
         border: 1px solid var(--line); border-radius: 8px;
     }
@@ -260,6 +266,17 @@ $co = $company !== null ? ob_company_contact((int) $company['id']) : null;
                     <input type="email" id="email" name="email" autocomplete="email" maxlength="150" required value="<?= $v('email') ?>">
                 </div>
             </div>
+            <?php $addrList = ($bag['addr_pc'] ?? '') === ($bag['pc'] ?? '') ? (array) ($bag['addr'] ?? []) : []; ?>
+            <?php if ($addrList): ?>
+                <label for="addr-pick">Pick your address</label>
+                <select id="addr-pick">
+                    <option value="">Choose from <?= count($addrList) ?> addresses at <?= e(ob_postcode_pretty((string) $bag['pc'])) ?>…</option>
+                    <?php foreach ($addrList as $i => $ad): ?>
+                        <option value="<?= (int) $i ?>" data-l1="<?= e($ad['line1']) ?>" data-l2="<?= e($ad['line2']) ?>" data-town="<?= e($ad['town']) ?>"><?= e(implode(', ', array_filter([$ad['line1'], $ad['line2']]))) ?></option>
+                    <?php endforeach; ?>
+                    <option value="none">My address isn't listed — I'll type it</option>
+                </select>
+            <?php endif; ?>
             <label for="address1">Address</label>
             <input type="text" id="address1" name="address1" autocomplete="address-line1" maxlength="150" required value="<?= $v('address1') ?>">
             <input type="text" id="address2" name="address2" autocomplete="address-line2" maxlength="150" value="<?= $v('address2') ?>" style="margin-top:8px" aria-label="Address line 2">
@@ -282,6 +299,17 @@ $co = $company !== null ? ob_company_contact((int) $company['id']) : null;
             <p class="muted" style="margin-top:14px">We'll only use your details to arrange this appointment and your quote.</p>
             <button class="btn" type="submit"><?= (string) $settings['mode'] === 'instant' ? 'Book appointment' : 'Request appointment' ?></button>
         </form>
+        <?php if ($addrList): ?>
+        <script>
+        document.getElementById('addr-pick').addEventListener('change', function () {
+            var o = this.options[this.selectedIndex];
+            if (!o.dataset.l1) { if (this.value === 'none') document.getElementById('address1').focus(); return; }
+            document.getElementById('address1').value = o.dataset.l1;
+            document.getElementById('address2').value = o.dataset.l2 || '';
+            document.getElementById('town').value = o.dataset.town || '';
+        });
+        </script>
+        <?php endif; ?>
         <?php endif; ?>
 
     <?php elseif ($step === 'done'): $done = $bag['done']; $dd = DateTimeImmutable::createFromFormat('!Y-m-d', (string) $done['date']); ?>

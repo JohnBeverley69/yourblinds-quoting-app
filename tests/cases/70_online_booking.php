@@ -235,3 +235,28 @@ test('instant mode books and confirms in one go', function () use ($alpha, $pers
     check_contains('couldn\'t be checked', (string) t_val('SELECT notes FROM appointments WHERE id = ?', [$r['appointment_id']]), 'the note to the office');
     db()->prepare("UPDATE online_booking_settings SET mode = 'request', districts = 'HU, YO25', base_postcode = NULL, radius_miles = NULL WHERE client_id = ?")->execute([$alpha]);
 });
+
+test('address lookup: off without a Postcoder key; each lookup is counted and capped at 6 an hour per visitor', function () use ($alpha) {
+    check(!ob_address_lookup_on($alpha), 'lookup on in a test run (there is no Postcoder key)');
+    check_same([], ob_lookup_addresses($alpha, 'HU179AB', '10.5.5.5'), 'addresses with no key');
+    check_same(0, (int) t_val("SELECT COUNT(*) FROM online_address_lookups WHERE ip_address = '10.5.5.5'"), 'a lookup counted that never happened');
+
+    $calls = 0;
+    $fake = static function (string $pc) use (&$calls): array {
+        $calls++;
+        return [
+            ['addressline1' => '1 Fake Street', 'addressline2' => 'Flat 2', 'posttown' => 'Beverley', 'postcode' => 'HU17 9AB'],
+            ['addressline1' => '', 'posttown' => 'Beverley'],   // no first line — left out
+            ['addressline1' => '3 Fake Street', 'posttown' => 'Beverley'],
+        ];
+    };
+    $list = ob_lookup_addresses($alpha, 'HU179AB', '10.5.5.6', $fake);
+    check_same([
+        ['line1' => '1 Fake Street', 'line2' => 'Flat 2', 'town' => 'Beverley'],
+        ['line1' => '3 Fake Street', 'line2' => '', 'town' => 'Beverley'],
+    ], $list, 'addresses offered');
+    for ($i = 0; $i < 7; $i++) ob_lookup_addresses($alpha, 'HU179AB', '10.5.5.6', $fake);
+    check_same(6, $calls, 'Postcoder calls from one visitor in an hour');
+    check_same(6, (int) t_val("SELECT COUNT(*) FROM online_address_lookups WHERE ip_address = '10.5.5.6'"), 'lookups counted');
+    check_same(1, count(ob_lookup_addresses($bravo = 102, 'HU179AB', '10.5.5.6', static fn () => [['addressline1' => 'x']])), 'the same visitor on another company\'s page');
+});

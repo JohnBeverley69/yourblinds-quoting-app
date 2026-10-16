@@ -1127,6 +1127,19 @@ CREATE TABLE `offline_refs` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `online_address_lookups` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `client_id` int(10) unsigned NOT NULL,
+  `ip_address` varchar(45) NOT NULL DEFAULT '',
+  `postcode` varchar(8) NOT NULL DEFAULT '',
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_oal_client_time` (`client_id`,`created_at`),
+  KEY `idx_oal_ip_time` (`ip_address`,`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `online_booking_settings` (
   `client_id` int(10) unsigned NOT NULL,
   `enabled` tinyint(1) NOT NULL DEFAULT 0,
