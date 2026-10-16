@@ -31,7 +31,7 @@ declare(strict_types=1);
  * SAFETY — this is the first public page that WRITES into a company's data:
  *  - everything is scoped to the one company the link name resolves to; the
  *    page never shows anything about other bookings, only "free" slots;
- *  - a repeat customer (same email or mobile) is booked against their existing
+ *  - a repeat customer (same email or mobile, and same surname) is booked against their existing
  *    record, but the public form NEVER changes that record — what they typed
  *    goes on the appointment and its notes, so nobody can alter someone else's
  *    address by booking with their email;
@@ -773,6 +773,20 @@ function ob_match_customer(int $clientId, string $email, string $phone): ?array
 }
 
 /**
+ * Do two names share a surname (the last word, letters only, any case)?
+ * "Mrs J Smith" / "John Smith" → yes; "Jones Beverley" / "Stan Rogers" → no.
+ */
+function ob_same_surname(string $a, string $b): bool
+{
+    $last = static function (string $n): string {
+        $words = preg_split('/\s+/', trim($n)) ?: [];
+        return strtolower(preg_replace('/[^a-z]/i', '', (string) end($words)) ?? '');
+    };
+    $x = $last($a);
+    return $x !== '' && $x === $last($b);
+}
+
+/**
  * Check what the customer typed. $in keys: name, email, phone, address1,
  * address2, town, postcode (compact), notes, date, slot. Returns an error
  * message or null.
@@ -828,7 +842,15 @@ function ob_create_booking(int $clientId, array $in, array $meta, ?DateTimeImmut
             return ['ok' => false, 'error' => 'Sorry, that time has just been taken. Please choose another.', 'taken' => true];
         }
 
-        $match = ob_match_customer($clientId, $in['email'], $in['phone']);
+        // Same email/phone is only the same customer if the surname matches too —
+        // a couple or a relative can share an email. Otherwise: a new customer,
+        // with a "possible duplicate" note so the office can merge them.
+        $match   = ob_match_customer($clientId, $in['email'], $in['phone']);
+        $similar = null;
+        if ($match !== null && !ob_same_surname((string) $match['name'], $in['name'])) {
+            $similar = $match;
+            $match   = null;
+        }
         if ($match !== null) {
             $customerId = (int) $match['id'];
         } else {
@@ -850,6 +872,8 @@ function ob_create_booking(int $clientId, array $in, array $meta, ?DateTimeImmut
         if ($area['miles'] !== null) $notes .= "\nAbout {$area['miles']} miles from your base (straight line).";
         if ($match !== null) {
             $notes .= "\nMatched to an existing customer. What they typed: {$in['name']}, {$in['phone']}, {$in['email']}.";
+        } elseif ($similar !== null) {
+            $notes .= "\nSame email or phone as {$similar['name']} — possible duplicate customer. Merge them if they're the same person.";
         }
         if ($in['notes'] !== '') $notes .= "\n\nCustomer's message: " . $in['notes'];
 

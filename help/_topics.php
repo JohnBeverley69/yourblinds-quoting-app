@@ -407,8 +407,10 @@ return [
       the customer is emailed either way, and a declined slot is freed up. No booking text or reminder goes out until you
       confirm. With the second, the customer is confirmed there and then. Online bookings aren&rsquo;t assigned to anyone,
       so give them to a salesperson from the appointment.</p>
-      <p><strong>Repeat customers</strong> (same email or phone) are booked against their existing record, but the online
-      form never changes that record &mdash; what they typed goes in the appointment&rsquo;s notes.</p>'],
+      <p><strong>Repeat customers</strong> (same email or phone <em>and</em> same surname) are booked against their existing
+      record, but the online form never changes that record &mdash; what they typed goes in the appointment&rsquo;s notes.
+      Same email or phone with a different surname (a partner, or someone booking for a relative) makes a new customer, and
+      the notes say <em>&ldquo;possible duplicate customer&rdquo;</em> so you can merge them if they&rsquo;re the same person.</p>'],
 
     ['admin', 'Calendar & customers', 'Can the calendar show what a job is worth?', 'calendar money value balance outstanding paid deposit show figures costs fitters navigation app google maps waze',
      '<p>It can, but think before you switch it on. The tick is
