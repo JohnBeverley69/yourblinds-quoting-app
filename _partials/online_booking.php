@@ -443,6 +443,107 @@ function ob_area_check(array $s, string $compact): array
 }
 
 /* ------------------------------------------------------------------
+ *  Address lookup (Postcoder) — "pick your address" on the details step
+ * ------------------------------------------------------------------ */
+
+/**
+ * Can this company's booking page offer the address list? It needs the
+ * Postcode lookup add-on (Silver/Gold, or the main factory) and the platform's
+ * Postcoder key. Each lookup costs YourBlinds money, hence the limits below.
+ */
+function ob_address_lookup_on(int $clientId): bool
+{
+    if (!defined('POSTCODER_API_KEY') || POSTCODER_API_KEY === '') return false;
+    if (function_exists('factory_client_id') && $clientId === (int) factory_client_id()) return true;
+    try {
+        $st = db()->prepare('SELECT COALESCE(feature_postcode_lookup, 0) FROM client_settings WHERE client_id = ?');
+        $st->execute([$clientId]);
+        return (int) $st->fetchColumn() === 1;
+    } catch (Throwable $e) {
+        return false;
+    }
+}
+
+/**
+ * Too many lookups? 6 an hour per visitor per company, 20 a day per visitor
+ * across all companies, 150 a day per company. Past the limit the customer
+ * just types the address — booking still works.
+ */
+function ob_address_rate_limited(int $clientId, string $ip): bool
+{
+    try {
+        $q = static function (string $sql, array $p): int {
+            $st = db()->prepare($sql);
+            $st->execute($p);
+            return (int) $st->fetchColumn();
+        };
+        if ($q('SELECT COUNT(*) FROM online_address_lookups WHERE client_id = ? AND ip_address = ? AND created_at > (NOW() - INTERVAL 1 HOUR)', [$clientId, $ip]) >= 6) return true;
+        if ($q('SELECT COUNT(*) FROM online_address_lookups WHERE ip_address = ? AND created_at > (NOW() - INTERVAL 1 DAY)', [$ip]) >= 20) return true;
+        if ($q('SELECT COUNT(*) FROM online_address_lookups WHERE client_id = ? AND created_at > (NOW() - INTERVAL 1 DAY)', [$clientId]) >= 150) return true;
+    } catch (Throwable $e) {
+        return true;   // not migrated / can't count — don't spend blind
+    }
+    return false;
+}
+
+/**
+ * The addresses at a compact postcode, for the customer to pick from:
+ *   [['line1' => …, 'line2' => …, 'town' => …], …]
+ * Returns [] when the lookup is off, over the limit, failed or found nothing —
+ * the customer then types the address, so a failure never stops a booking.
+ * $fetch replaces the Postcoder call (tests); it gets the postcode and returns
+ * Postcoder's decoded rows, or null.
+ */
+function ob_lookup_addresses(int $clientId, string $compact, string $ip, ?callable $fetch = null): array
+{
+    if ($fetch === null && !ob_address_lookup_on($clientId)) return [];
+    if (ob_address_rate_limited($clientId, $ip)) return [];
+    try {
+        db()->prepare('INSERT INTO online_address_lookups (client_id, ip_address, postcode) VALUES (?, ?, ?)')
+            ->execute([$clientId, mb_substr($ip, 0, 45), $compact]);
+    } catch (Throwable $e) {
+        return [];
+    }
+
+    $data = ($fetch ?? 'ob_postcoder_fetch')($compact);
+    if (!is_array($data)) return [];
+
+    $out = [];
+    foreach ($data as $a) {
+        if (!is_array($a)) continue;
+        $line1 = trim((string) ($a['addressline1'] ?? ''));
+        if ($line1 === '') continue;
+        $out[] = [
+            'line1' => mb_substr($line1, 0, 150),
+            'line2' => mb_substr(trim((string) ($a['addressline2'] ?? '')), 0, 150),
+            'town'  => mb_substr(trim((string) ($a['posttown'] ?? '')), 0, 100),
+        ];
+        if (count($out) >= 200) break;
+    }
+    return $out;
+}
+
+/** One Postcoder lookup: its decoded address rows, or null on any failure. */
+function ob_postcoder_fetch(string $compact): ?array
+{
+    $ch = curl_init('https://ws.postcoder.com/pcw/' . rawurlencode(POSTCODER_API_KEY)
+        . '/address/UK/' . rawurlencode($compact) . '?format=json&lines=2');
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_TIMEOUT        => 6,
+        CURLOPT_CONNECTTIMEOUT => 3,
+        CURLOPT_USERAGENT      => 'YourBlinds/1.0 (+online-booking)',
+        CURLOPT_HTTPHEADER     => ['Accept: application/json'],
+    ]);
+    $body   = curl_exec($ch);
+    $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    if ($status !== 200 || !is_string($body)) return null;
+    $data = json_decode($body, true);
+    return is_array($data) ? $data : null;
+}
+
+/* ------------------------------------------------------------------
  *  Spam limits
  * ------------------------------------------------------------------ */
 
