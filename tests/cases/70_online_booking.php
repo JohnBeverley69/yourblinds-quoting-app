@@ -167,12 +167,26 @@ test('the last place can\'t be taken twice; a repeat customer\'s record is never
 
     $cust = fx('customer_alpha');
     $was = t_row('SELECT name, email, address1, postcode FROM customers WHERE id = ?', [$cust]);
-    $r = ob_create_booking($alpha, $person(['email' => 'ALPHA.customer@example.test', 'name' => 'Somebody Else', 'address1' => '1 Other Way']), ['ip' => '10.0.0.3']);
+    $r = ob_create_booking($alpha, $person(['email' => 'ALPHA.customer@example.test', 'name' => 'Jo Customer', 'address1' => '1 Other Way']), ['ip' => '10.0.0.3']);
     check($r['ok'], 'repeat customer booking: ' . ($r['error'] ?? ''));
-    check_same($cust, (int) t_val('SELECT customer_id FROM appointments WHERE id = ?', [$r['appointment_id']]), 'booked against the existing customer');
+    check_same($cust, (int) t_val('SELECT customer_id FROM appointments WHERE id = ?', [$r['appointment_id']]), 'same email and surname: booked against the existing customer');
     check_same($was, t_row('SELECT name, email, address1, postcode FROM customers WHERE id = ?', [$cust]), 'the existing record');
-    check_contains('Somebody Else', (string) t_val('SELECT notes FROM appointments WHERE id = ?', [$r['appointment_id']]), 'what they typed, on the appointment');
+    check_contains('Jo Customer', (string) t_val('SELECT notes FROM appointments WHERE id = ?', [$r['appointment_id']]), 'what they typed, on the appointment');
     check_same('1 Other Way', (string) t_val('SELECT installation_address1 FROM appointments WHERE id = ?', [$r['appointment_id']]), 'the visit address');
+
+    // Same email, different surname (John's ABC test, 2026-10-16): a new customer, flagged.
+    $before = (int) t_val('SELECT COUNT(*) FROM customers WHERE client_id = ?', [$alpha]);
+    $r = ob_create_booking($alpha, $person(['email' => 'alpha.customer@example.test', 'name' => 'Stan Rogers', 'date' => $dayAfter]), ['ip' => '10.0.0.4']);
+    check($r['ok'], 'different-surname booking: ' . ($r['error'] ?? ''));
+    $newCust = (int) t_val('SELECT customer_id FROM appointments WHERE id = ?', [$r['appointment_id']]);
+    check($newCust !== $cust, 'Stan Rogers was booked as Mrs Alpha Customer');
+    check_same($before + 1, (int) t_val('SELECT COUNT(*) FROM customers WHERE client_id = ?', [$alpha]), 'a new customer made');
+    check_same('Stan Rogers', (string) t_val('SELECT name FROM customers WHERE id = ?', [$newCust]), 'the new customer\'s name');
+    check_contains('possible duplicate', (string) t_val('SELECT notes FROM appointments WHERE id = ?', [$r['appointment_id']]), 'the note to the office');
+    check_same($was, t_row('SELECT name, email, address1, postcode FROM customers WHERE id = ?', [$cust]), 'the existing record, untouched');
+
+    check(ob_same_surname('Mrs J Smith', 'John Smith') && ob_same_surname('ANNE O\'NEILL', 'Pat O\'Neill'), 'surnames that match');
+    check(!ob_same_surname('Jones Beverley', 'Stan Rogers') && !ob_same_surname('', 'Smith'), 'surnames that don\'t');
 });
 
 test('spam limits: 3 an hour from one visitor', function () use ($alpha, $person) {
