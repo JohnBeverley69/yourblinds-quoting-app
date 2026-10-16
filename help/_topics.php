@@ -364,7 +364,7 @@ return [
     ['admin', 'Calendar & customers', 'Can I book a Morning, Afternoon or Evening slot instead of a time?', 'am pm morning afternoon evening add time slot window half day slot slots time capacity bookings per day measure quote visit full fully booked appointment time slot email customer',
      '<p>Yes &mdash; switch on <strong>&ldquo;&#128344; Booking time slots&rdquo;</strong>. It&rsquo;s in
       <strong>Setup &rarr; Settings &rarr; Company</strong> tab, in the <strong>Calendar</strong> section. There is no
-      &ldquo;Calendar&rdquo; tab &mdash; the tabs are Company, Quoting, Legal, Status colours, Suppliers, Accounting and
+      &ldquo;Calendar&rdquo; tab &mdash; the tabs are Company, Quoting, Legal, Status colours, Suppliers, Accounting, Texts, Online booking and
       Back up data, and this lives on the first one.</p>
       <p>Tick the box, then give each slot a <strong>Name</strong>, a <strong>From</strong> and <strong>To</strong> time and
       its <strong>Bookings / day</strong> limit, and press <strong>Save</strong>. Out of the box that&rsquo;s
@@ -385,6 +385,27 @@ return [
       hour</strong>, which is rather the point. If saving fails with <em>&ldquo;Could not save: &hellip; have you run
       migrate_ampm_windows_list.php?&rdquo;</em>, the database update hasn&rsquo;t been run yet &mdash; ask whoever runs
       the platform for you.</p>'],
+
+    ['admin', 'Calendar & customers', 'Can customers book a visit online themselves?', 'online booking book online booking page booking link website facebook google book now button self booking customer books qr code request confirm decline instant area radius miles postcode district closed days holiday',
+     '<p>Yes, on the <strong>Silver</strong> and <strong>Gold</strong> plans. Go to <strong>Setup &rarr; Settings &rarr;
+      Online booking</strong>, tick <strong>Let customers book online</strong> and press <strong>Save online booking</strong>.
+      It uses your <strong>Booking time slots</strong> (Company tab, Calendar section), so switch those on first;
+      customers are offered the same slots, with the same number of visits per slot, as your own booking form.</p>
+      <p><strong>Your link.</strong> The tab shows your booking link and a QR code. Put the link on your website
+      (a &ldquo;Book a free quote&rdquo; button), on your Facebook page (Edit &rarr; Add a button &rarr; Book now) and on your
+      Google Business profile, and use the QR code on vans and leaflets.</p>
+      <p><strong>What the customer does.</strong> They enter their postcode, pick a day and a free time slot, and
+      leave their name, phone, email and address. If you&rsquo;ve set an <strong>area</strong> (a distance from your base
+      postcode, a list such as <em>HU, YO25</em>, or both), a postcode outside it is given your phone number and email instead.
+      <strong>Closed days</strong> stop online bookings on holidays without affecting your own booking form.</p>
+      <p><strong>&ldquo;I&rsquo;ll confirm it&rdquo; or &ldquo;Book it straight away&rdquo;.</strong> With the first (the
+      standard choice), the visit goes in your calendar with the slot held, and a blue notice on the calendar says it is
+      <em>waiting for you to confirm</em>. Open it and press <strong>Confirm booking</strong> or <strong>Decline</strong>;
+      the customer is emailed either way, and a declined slot is freed up. No booking text or reminder goes out until you
+      confirm. With the second, the customer is confirmed there and then. Online bookings aren&rsquo;t assigned to anyone,
+      so give them to a salesperson from the appointment.</p>
+      <p><strong>Repeat customers</strong> (same email or phone) are booked against their existing record, but the online
+      form never changes that record &mdash; what they typed goes in the appointment&rsquo;s notes.</p>'],
 
     ['admin', 'Calendar & customers', 'Can the calendar show what a job is worth?', 'calendar money value balance outstanding paid deposit show figures costs fitters navigation app google maps waze',
      '<p>It can, but think before you switch it on. The tick is
@@ -1092,7 +1113,7 @@ return [
       <li><strong>Bronze</strong> — free to start. Quotes, calendar, customers, orders and products.</li>
       <li><strong>Silver</strong> — everything in Bronze plus <strong>Maps</strong> (the day run planner with directions,
       and one-tap Google Maps / Waze navigation), <strong>Postcode lookup</strong> and <strong>customer texts</strong>
-      (a monthly allowance; buy more as bundles if you need them).</li>
+      (a monthly allowance; buy more as bundles if you need them), and <strong>online booking</strong> (customers book a visit from your website).</li>
       <li><strong>Gold</strong> — everything in Silver plus <strong>Accounts</strong>: payment tracking, outstanding
       balances and the account summary.</li>
       </ul>

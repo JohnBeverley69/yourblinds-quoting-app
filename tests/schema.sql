@@ -148,6 +148,7 @@ CREATE TABLE `appointments` (
   `has_issue` tinyint(1) NOT NULL DEFAULT 0,
   `issue_note` varchar(280) DEFAULT NULL,
   `slot_window` varchar(2) DEFAULT NULL,
+  `online_request` tinyint(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
   KEY `idx_appointments_client_date` (`client_id`,`appointment_date`),
   KEY `idx_appointments_client_status` (`client_id`,`status`),
@@ -353,6 +354,7 @@ CREATE TABLE `client_settings` (
   `qfu_method` varchar(10) NOT NULL DEFAULT 'email',
   `process_skip_summary` tinyint(1) NOT NULL DEFAULT 0,
   `floor_sees_lanes` tinyint(1) NOT NULL DEFAULT 0,
+  `feature_online_booking` tinyint(1) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uniq_client_settings_client` (`client_id`),
   CONSTRAINT `fk_client_settings_client` FOREIGN KEY (`client_id`) REFERENCES `clients` (`id`) ON DELETE CASCADE ON UPDATE CASCADE
@@ -1125,6 +1127,50 @@ CREATE TABLE `offline_refs` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `online_booking_settings` (
+  `client_id` int(10) unsigned NOT NULL,
+  `enabled` tinyint(1) NOT NULL DEFAULT 0,
+  `slug` varchar(60) DEFAULT NULL,
+  `mode` varchar(10) NOT NULL DEFAULT 'request',
+  `min_notice_days` tinyint(3) unsigned NOT NULL DEFAULT 1,
+  `max_days_ahead` smallint(5) unsigned NOT NULL DEFAULT 28,
+  `weekdays` varchar(20) NOT NULL DEFAULT '1,2,3,4,5',
+  `closed_dates` text DEFAULT NULL,
+  `base_postcode` varchar(10) DEFAULT NULL,
+  `radius_miles` smallint(5) unsigned DEFAULT NULL,
+  `districts` text DEFAULT NULL,
+  `intro_text` text DEFAULT NULL,
+  `notify_email` varchar(190) DEFAULT NULL,
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`client_id`),
+  UNIQUE KEY `uq_obs_slug` (`slug`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `online_bookings` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `client_id` int(10) unsigned NOT NULL,
+  `appointment_id` int(10) unsigned DEFAULT NULL,
+  `customer_id` int(10) unsigned DEFAULT NULL,
+  `matched_existing` tinyint(1) NOT NULL DEFAULT 0,
+  `status` varchar(12) NOT NULL DEFAULT 'requested',
+  `area_check` varchar(12) NOT NULL DEFAULT 'none',
+  `distance_miles` decimal(6,1) DEFAULT NULL,
+  `ip_address` varchar(45) NOT NULL DEFAULT '',
+  `user_agent` varchar(255) DEFAULT NULL,
+  `submitted` text DEFAULT NULL,
+  `decided_by` int(10) unsigned DEFAULT NULL,
+  `decided_at` datetime DEFAULT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_ob_client_time` (`client_id`,`created_at`),
+  KEY `idx_ob_ip_time` (`ip_address`,`created_at`),
+  KEY `idx_ob_appt` (`appointment_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `password_resets` (
   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
   `user_id` int(10) unsigned NOT NULL,
@@ -1208,6 +1254,17 @@ CREATE TABLE `platform_config` (
   `value` text DEFAULT NULL,
   `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   PRIMARY KEY (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `postcode_geo` (
+  `postcode` varchar(8) NOT NULL,
+  `found` tinyint(1) NOT NULL DEFAULT 1,
+  `lat` decimal(9,6) DEFAULT NULL,
+  `lng` decimal(9,6) DEFAULT NULL,
+  `fetched_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`postcode`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;

@@ -855,6 +855,37 @@ $activeNav = 'calendar';
         <?php endif; ?>
 
         <?php
+            // Online bookings waiting to be confirmed (_partials/online_booking.php).
+            // Unassigned, so only shown to people who see everyone's jobs.
+            $obWaiting = [];
+            $obCanSee  = $user['role'] === 'admin';
+            if (!$obCanSee) {
+                $obPerm = db()->prepare('SELECT COALESCE(can_view_all_customer_jobs, 0) FROM client_users WHERE id = ? AND client_id = ? LIMIT 1');
+                $obPerm->execute([(int) $user['user_id'], $clientId]);
+                $obCanSee = (int) $obPerm->fetchColumn() === 1;
+            }
+            if ($obCanSee) {
+                try {
+                    $obSt = db()->prepare(
+                        "SELECT id, title, appointment_date, slot_window FROM appointments
+                          WHERE client_id = ? AND online_request = 1 AND status = 'booked'
+                       ORDER BY appointment_date, appointment_time LIMIT 10"
+                    );
+                    $obSt->execute([$clientId]);
+                    $obWaiting = $obSt->fetchAll();
+                } catch (Throwable $e) { /* not migrated */ }
+            }
+        ?>
+        <?php if ($obWaiting): ?>
+            <div role="status" style="background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;border-radius:8px;
+                 padding:0.75rem 1rem;margin-bottom:1rem;font-size:0.9375rem">
+                &#128338; <strong><?= count($obWaiting) === 1 ? '1 online booking is' : count($obWaiting) . ' online bookings are' ?> waiting for you to confirm:</strong>
+                <?php foreach ($obWaiting as $i => $w): ?><?= $i ? ' · ' : ' ' ?><a href="/calendar/view.php?id=<?= (int) $w['id'] ?>"><?= e((string) $w['title']) ?>,
+                    <?= e(date('D j M', strtotime((string) $w['appointment_date']))) ?><?= ($sl = slot_window_short_label((string) $w['slot_window'])) !== '' ? ' ' . e(strtolower($sl)) : '' ?></a><?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+
+        <?php
             // Preserve mine=1 across week navigation so the diary view
             // doesn't break out to "show all" when the user clicks
             // prev/next week. Helper hands back a fully-formed href.
