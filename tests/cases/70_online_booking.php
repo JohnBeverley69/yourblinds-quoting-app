@@ -142,7 +142,7 @@ test('the public journey: postcode → time → book — held as a request, no t
     check_same(1, (int) $a['online_request'], 'waiting for the office');
     check_same('booked', (string) $a['status'], 'status (holds the slot)');
     check_same('am', (string) $a['slot_window'], 'slot');
-    check_same(null, $a['client_user_id'], 'assigned to nobody');
+    check_same(fx('user_alpha_sales'), (int) $a['client_user_id'], 'given to Alpha\'s salesperson automatically');
     check_same('HU17 9AB', (string) $a['installation_postcode'], 'postcode from the session, tidied');
     check_contains('Shutters', (string) $a['notes'], 'the customer\'s message');
     check_same($before + 1, (int) t_val('SELECT COUNT(*) FROM customers WHERE client_id = ?', [$alpha]), 'new customer made');
@@ -338,4 +338,129 @@ test('exact times: Settings saves them and refuses hours too short for a visit',
     db()->prepare("UPDATE online_booking_settings SET booking_style = 'slots' WHERE client_id = ?")->execute([$alpha]);
     check_same(404, (new YbHttp())->get('/book/?c=alpha-blinds')->status, 'booking page by time slot with time slots off');
     db()->prepare('UPDATE client_settings SET feature_ampm_slots = 1 WHERE client_id = ?')->execute([$alpha]);
+});
+
+/* ---------------- Phase 2 ---------------- */
+
+$d = static fn (int $n): string => (new DateTimeImmutable('tomorrow'))->modify("+$n days")->format('Y-m-d');
+
+test('the name customers see, and the ready-made website button', function () use ($alpha, $settingsForm) {
+    $a = as_user('alpha.admin');
+    t_submit($a, '/admin/online_booking_save.php', $settingsForm(['display_name' => 'Alpha Home Blinds']));
+    check_same('Alpha Home Blinds', (string) t_val('SELECT display_name FROM online_booking_settings WHERE client_id = ?', [$alpha]), 'saved name');
+    $pub = (new YbHttp())->get('/book/?c=alpha-blinds');
+    check_page_ok($pub, 'booking page');
+    check_contains('<h1>Alpha Home Blinds</h1>', $pub->body, 'the name on the booking page');
+    $set = $a->get('/admin/settings.php');
+    check_contains('A ready-made button for your website', $set->body, 'the website button');
+    check_contains('Book a free measure &amp;amp; quote', $set->body, 'the button\'s code to copy');
+});
+
+test('change-or-cancel link: move to another time, too late on the day, cancel, at most 3 moves', function () use ($alpha, $person, $d) {
+    ob_cache_reset();
+    $r = ob_create_booking($alpha, $person(['date' => $d(6), 'slot' => 'pm', 'email' => 'mover@example.test', 'phone' => '07700 900701']), ['ip' => '10.0.4.1']);
+    check($r['ok'], 'booking: ' . ($r['error'] ?? ''));
+    $token = (string) t_val('SELECT manage_token FROM online_bookings WHERE appointment_id = ?', [$r['appointment_id']]);
+    check(preg_match('/^[a-f0-9]{64}$/', $token) === 1, 'no change-or-cancel token');
+
+    $c = new YbHttp();
+    $page = $c->get('/book/manage.php?t=' . $token);
+    check_page_ok($page, 'change-or-cancel page');
+    check_contains('Choose a different time', $page->body, 'the move button');
+    check_same(404, $c->get('/book/manage.php?t=' . str_repeat('0', 64))->status, 'a made-up link');
+    check_page_ok($c->get('/book/manage.php?t=' . $token . '&move=1'), 'choosing a new time');
+
+    $m = ob_customer_move($token, $d(7), 'am');
+    check($m['ok'], 'move: ' . $m['message']);
+    $a = t_row('SELECT appointment_date, appointment_time, slot_window, online_request, notes FROM appointments WHERE id = ?', [$r['appointment_id']]);
+    check_same([$d(7), '09:00:00', 'am', 1], [$a['appointment_date'], $a['appointment_time'], $a['slot_window'], (int) $a['online_request']], 'the moved visit (waiting to confirm again)');
+    check_contains('Moved online by the customer', (string) $a['notes'], 'the note to the office');
+    check_same(1, (int) t_val('SELECT reschedules FROM online_bookings WHERE appointment_id = ?', [$r['appointment_id']]), 'moves counted');
+
+    [$ok, $why] = ob_customer_cancel($token, new DateTimeImmutable($d(7) . ' 08:00'));
+    check(!$ok && strpos($why, 'too late') !== false, 'cancelled on the day of the visit');
+    [$ok] = ob_customer_cancel($token);
+    check($ok, 'cancel');
+    check_same('cancelled', (string) t_val('SELECT status FROM appointments WHERE id = ?', [$r['appointment_id']]), 'visit status');
+    check_same('cancelled', (string) t_val('SELECT status FROM online_bookings WHERE appointment_id = ?', [$r['appointment_id']]), 'log status');
+    [$ok] = ob_customer_cancel($token);
+    check(!$ok, 'cancelled twice');
+
+    $r2 = ob_create_booking($alpha, $person(['date' => $d(6), 'slot' => 'pm', 'email' => 'mover2@example.test', 'phone' => '07700 900702']), ['ip' => '10.0.4.2']);
+    $t2 = (string) t_val('SELECT manage_token FROM online_bookings WHERE appointment_id = ?', [$r2['appointment_id']]);
+    db()->prepare('UPDATE online_bookings SET reschedules = 3 WHERE appointment_id = ?')->execute([$r2['appointment_id']]);
+    check(!ob_customer_move($t2, $d(8), 'pm')['ok'], 'a fourth move');
+
+    // Cancelling through the page itself.
+    $p = $c->get('/book/manage.php?t=' . $t2);
+    $c->post('/book/manage.php?t=' . $t2, ['_csrf' => YbHttp::csrf($p->body), '_action' => 'cancel']);
+    check_same('cancelled', (string) t_val('SELECT status FROM appointments WHERE id = ?', [$r2['appointment_id']]), 'cancelled on the page');
+    check_contains('is <strong>cancelled</strong>', $c->get('/book/manage.php?t=' . $t2)->body, 'the page after cancelling');
+});
+
+test('who goes: each salesperson\'s own area, shared out, grouped by area, auto-assign off', function () use ($alpha, $person, $d, $settingsForm) {
+    // Distances without the internet: seed the postcode cache (HU17 to YO25 is about 11 miles).
+    foreach (['HU179AB' => [53.8400, -0.4300], 'HU170AA' => [53.8450, -0.4400], 'YO251AA' => [54.0050, -0.4400]] as $pc => $ll) {
+        db()->prepare('REPLACE INTO postcode_geo (postcode, found, lat, lng) VALUES (?, 1, ?, ?)')->execute([$pc, $ll[0], $ll[1]]);
+    }
+    db()->prepare("INSERT INTO client_users (client_id, username, full_name, email, password_hash, role, active, home_postcode)
+                   VALUES (?, 'alpha.sales2', 'Alpha Sales Two', 'alpha.sales2@example.test', 'x', 'sales', 1, 'YO25 1AA')")->execute([$alpha]);
+    $s2 = (int) db()->lastInsertId();
+    db()->prepare("INSERT INTO client_user_roles (user_id, role) VALUES (?, 'sales')")->execute([$s2]);
+    $s1 = fx('user_alpha_sales');
+    ob_cache_reset();
+    check_same(2, count(ob_staff($alpha)), 'salespeople taking online bookings');
+
+    $a = as_user('alpha.admin');
+    t_submit($a, '/admin/online_booking_save.php', $settingsForm([
+        'auto_assign' => '1', 'group_miles' => '0',
+        'staff' => [$s1 => ['seen' => '1', 'takes' => '1', 'radius' => '', 'districts' => 'hu'],
+                    $s2 => ['seen' => '1', 'takes' => '1', 'radius' => '', 'districts' => 'YO25']],
+    ]));
+    check_same('YO25', (string) t_val('SELECT districts FROM online_booking_staff WHERE user_id = ?', [$s2]), 'Sales Two postcodes');
+    check_page_ok($a->get('/admin/settings.php'), 'Settings with the salespeople table');
+
+    $who = static function (array $r): ?int {
+        if (!$r['ok']) return -1;
+        $u = t_val('SELECT client_user_id FROM appointments WHERE id = ?', [$r['appointment_id']]);
+        return $u === null ? null : (int) $u;
+    };
+    ob_cache_reset();
+    check_same($s1, $who(ob_create_booking($alpha, $person(['date' => $d(8), 'slot' => 'pm', 'email' => 'hu@example.test', 'phone' => '07700 900801']), ['ip' => '10.0.5.1'])), 'an HU customer');
+    check_same($s2, $who(ob_create_booking($alpha, $person(['date' => $d(8), 'slot' => 'pm', 'postcode' => 'YO25 1AA', 'email' => 'yo@example.test', 'phone' => '07700 900802']), ['ip' => '10.0.5.2'])), 'a YO25 customer');
+
+    // Nobody's area covers it: anyone (the one with fewer visits that day).
+    db()->prepare("UPDATE online_booking_staff SET districts = 'HU1' WHERE user_id = ?")->execute([$s1]);
+    ob_cache_reset();
+    $r = ob_create_booking($alpha, $person(['date' => $d(9), 'slot' => 'pm', 'email' => 'nobody@example.test', 'phone' => '07700 900803']), ['ip' => '10.0.5.3']);
+    check($r['ok'] && in_array($who($r), [$s1, $s2], true), 'a postcode no one covers still gets someone');
+
+    // Group visits by area (5 miles): whoever is already in YO25 that day isn't sent to HU17.
+    db()->prepare('UPDATE online_booking_staff SET districts = NULL WHERE client_id = ?')->execute([$alpha]);
+    db()->prepare('UPDATE online_booking_settings SET group_miles = 5 WHERE client_id = ?')->execute([$alpha]);
+    ob_cache_reset();
+    $day = $d(10);
+    $first  = $who(ob_create_booking($alpha, $person(['date' => $day, 'slot' => 'pm', 'postcode' => 'YO25 1AA', 'email' => 'g1@example.test', 'phone' => '07700 900811']), ['ip' => '10.0.5.4']));
+    $second = $who(ob_create_booking($alpha, $person(['date' => $day, 'slot' => 'pm', 'email' => 'g2@example.test', 'phone' => '07700 900812']), ['ip' => '10.0.5.5']));
+    $third  = $who(ob_create_booking($alpha, $person(['date' => $day, 'slot' => 'pm', 'postcode' => 'HU17 0AA', 'email' => 'g3@example.test', 'phone' => '07700 900813']), ['ip' => '10.0.5.6']));
+    check($first !== -1 && $second !== -1 && $first !== $second, 'the HU17 visit went to whoever was already in YO25');
+    check_same($second, $third, 'a second HU17 visit goes to the person already in HU17');
+
+    // Exact times: two salespeople = two visits at the same time, a third refused.
+    db()->prepare("UPDATE online_booking_settings SET booking_style = 'times', group_miles = NULL WHERE client_id = ?")->execute([$alpha]);
+    ob_cache_reset();
+    $t = ob_day_starts(ob_settings($alpha, true), (int) (new DateTimeImmutable($d(11)))->format('N'))[1];
+    $x1 = ob_create_booking($alpha, $person(['date' => $d(11), 'slot' => $t, 'email' => 't1@example.test', 'phone' => '07700 900821']), ['ip' => '10.0.5.7']);
+    $x2 = ob_create_booking($alpha, $person(['date' => $d(11), 'slot' => $t, 'email' => 't2@example.test', 'phone' => '07700 900822']), ['ip' => '10.0.5.8']);
+    $x3 = ob_create_booking($alpha, $person(['date' => $d(11), 'slot' => $t, 'email' => 't3@example.test', 'phone' => '07700 900823']), ['ip' => '10.0.5.9']);
+    check($x1['ok'] && $x2['ok'] && $who($x1) !== $who($x2), 'two salespeople, two visits at the same time');
+    check(!$x3['ok'], 'a third visit at the same time with two salespeople');
+
+    // Auto-assign off: unassigned.
+    db()->prepare("UPDATE online_booking_settings SET booking_style = 'slots', auto_assign = 0 WHERE client_id = ?")->execute([$alpha]);
+    ob_cache_reset();
+    check_same(null, $who(ob_create_booking($alpha, $person(['date' => $d(12), 'slot' => 'pm', 'email' => 'u@example.test', 'phone' => '07700 900831']), ['ip' => '10.0.5.10'])), 'auto-assign off');
+
+    db()->prepare('UPDATE online_booking_settings SET auto_assign = 1 WHERE client_id = ?')->execute([$alpha]);
+    db()->prepare('UPDATE client_users SET active = 0 WHERE id = ?')->execute([$s2]);
 });

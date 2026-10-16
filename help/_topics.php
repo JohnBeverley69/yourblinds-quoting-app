@@ -386,7 +386,7 @@ return [
       migrate_ampm_windows_list.php?&rdquo;</em>, the database update hasn&rsquo;t been run yet &mdash; ask whoever runs
       the platform for you.</p>'],
 
-    ['admin', 'Calendar & customers', 'Can customers book a visit online themselves?', 'online booking exact time start time visit length gap opening hours book online booking page booking link website facebook google book now button self booking customer books qr code request confirm decline instant area radius miles postcode district closed days holiday',
+    ['admin', 'Calendar & customers', 'Can customers book a visit online themselves?', 'online booking change cancel reschedule move territory area salesperson assign auto assign group visits button website exact time start time visit length gap opening hours book online booking page booking link website facebook google book now button self booking customer books qr code request confirm decline instant area radius miles postcode district closed days holiday',
      '<p>Yes, on the <strong>Silver</strong> and <strong>Gold</strong> plans. Go to <strong>Setup &rarr; Settings &rarr;
       Online booking</strong>, tick <strong>Let customers book online</strong> and press <strong>Save online booking</strong>.
       Under <strong>How customers pick a time</strong> choose <strong>Time slots</strong> (your Booking time slots from the
@@ -405,8 +405,19 @@ return [
       standard choice), the visit goes in your calendar with the slot held, and a blue notice on the calendar says it is
       <em>waiting for you to confirm</em>. Open it and press <strong>Confirm booking</strong> or <strong>Decline</strong>;
       the customer is emailed either way, and a declined slot is freed up. No booking text or reminder goes out until you
-      confirm. With the second, the customer is confirmed there and then. Online bookings aren&rsquo;t assigned to anyone,
-      so give them to a salesperson from the appointment.</p>
+      confirm. With the second, the customer is confirmed there and then.</p>
+      <p><strong>Who goes.</strong> Each booking is given automatically to a salesperson (anyone with the Sales role) whose
+      area covers the customer and who is free &mdash; whoever has the fewest visits that day. In the <strong>Who goes</strong>
+      table you can untick someone, or give them their own area: miles from their home postcode, or a list like
+      <em>HU, YO25</em>. If nobody&rsquo;s area covers a customer, anyone free can take it. <strong>Group visits by area</strong>
+      keeps a salesperson who already has a visit that day to customers near it. Untick <strong>Give each online booking to a
+      salesperson automatically</strong> to leave them unassigned instead.</p>
+      <p><strong>Customers changing or cancelling.</strong> Their emails carry a link where they can move the visit to another
+      free time or cancel it, up to the day before (at most three moves). You get an email either way; a moved booking needs
+      confirming again if you confirm bookings yourself.</p>
+      <p><strong>On your website.</strong> Under your link there&rsquo;s <strong>A ready-made button for your website</strong>
+      &mdash; copy the code and paste it into your site, or send it to whoever looks after it. <strong>Name customers
+      see</strong> changes the name on the booking page and its emails.</p>
       <p><strong>Repeat customers</strong> (same email or phone <em>and</em> same surname) are booked against their existing
       record, but the online form never changes that record &mdash; what they typed goes in the appointment&rsquo;s notes.
       Same email or phone with a different surname (a partner, or someone booking for a relative) makes a new customer, and

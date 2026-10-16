@@ -18,6 +18,7 @@ $obPending  = ob_pending_count((int) $clientId);
 $obStyle    = ob_style($obS);
 $obHours    = ob_hours($obS);
 $obSales    = count(ob_sales_ids((int) $clientId));
+$obStaff    = ob_staff((int) $clientId, true);
 $obHint     = 'color:#6b7280;font-size:0.875rem;margin:0 0 1rem;max-width:44rem';
 ?>
 <div class="settings-panel" data-panel="online-booking" role="tabpanel" aria-labelledby="tab-online-booking">
@@ -60,6 +61,21 @@ $obHint     = 'color:#6b7280;font-size:0.875rem;margin:0 0 1rem;max-width:44rem'
                         <button type="button" class="btn btn-secondary btn-sm" id="ob-copy">Copy</button>
                     </div>
                     <p style="margin:.5rem 0 0"><a href="<?= e($obLink) ?>" target="_blank" rel="noopener">Open the booking page &rarr;</a></p>
+                    <?php
+                        $obBtn = '<a href="' . e($obLink) . '" target="_blank" rel="noopener" style="display:inline-block;'
+                               . 'padding:12px 22px;background:#1d4ed8;color:#ffffff;border-radius:8px;'
+                               . 'font:600 16px/1.2 Arial,sans-serif;text-decoration:none">Book a free measure &amp; quote</a>';
+                    ?>
+                    <details style="margin-top:.75rem;max-width:36rem">
+                        <summary style="cursor:pointer;font-weight:600">A ready-made button for your website</summary>
+                        <p style="<?= $obHint ?>;margin:.5rem 0">Copy this and paste it into your website where you want the
+                           button &mdash; or send it to whoever looks after your website. It looks like this:</p>
+                        <p><?= $obBtn ?></p>
+                        <div style="display:flex;gap:.5rem;align-items:flex-start">
+                            <textarea id="ob-btn" readonly rows="4" style="flex:1;font-family:monospace;font-size:.8rem" onfocus="this.select()"><?= e($obBtn) ?></textarea>
+                            <button type="button" class="btn btn-secondary btn-sm" id="ob-btn-copy">Copy</button>
+                        </div>
+                    </details>
                 </div>
                 <div style="text-align:center">
                     <div style="background:#fff;padding:6px;border-radius:6px;display:inline-block;line-height:0"><?= qr_svg($obLink, 30.0, 'M') ?></div>
@@ -70,6 +86,11 @@ $obHint     = 'color:#6b7280;font-size:0.875rem;margin:0 0 1rem;max-width:44rem'
             <script>
             document.getElementById('ob-copy').addEventListener('click', function () {
                 var i = document.getElementById('ob-link'); i.select();
+                try { navigator.clipboard.writeText(i.value); } catch (e) { document.execCommand('copy'); }
+                this.textContent = 'Copied';
+            });
+            document.getElementById('ob-btn-copy').addEventListener('click', function () {
+                var i = document.getElementById('ob-btn'); i.select();
                 try { navigator.clipboard.writeText(i.value); } catch (e) { document.execCommand('copy'); }
                 this.textContent = 'Copied';
             });
@@ -97,6 +118,13 @@ $obHint     = 'color:#6b7280;font-size:0.875rem;margin:0 0 1rem;max-width:44rem'
                 <label for="ob_slug">Link name <span style="color:#9ca3af;font-weight:400">(letters, numbers and dashes)</span></label>
                 <input id="ob_slug" name="slug" type="text" maxlength="50" value="<?= e($obSlug) ?>" pattern="[a-z0-9-]{3,50}">
                 <p style="<?= $obHint ?>;margin-top:.25rem">Your link will be <?= e(ob_link('')) ?><strong>link-name</strong>. Changing it stops the old link working.</p>
+            </div>
+
+            <div class="form-group" style="max-width:28rem">
+                <label for="ob_display">Name customers see <span style="color:#9ca3af;font-weight:400">(optional)</span></label>
+                <input id="ob_display" name="display_name" type="text" maxlength="150" value="<?= e((string) ($obS['display_name'] ?? '')) ?>"
+                       placeholder="<?= e((string) ($client['company_name'] ?? '')) ?>">
+                <p style="<?= $obHint ?>;margin-top:.25rem">On the booking page and its emails. Leave empty to use your company name.</p>
             </div>
 
             <fieldset class="form-group" style="border:0;padding:0;margin:0 0 1rem">
@@ -230,6 +258,55 @@ $obHint     = 'color:#6b7280;font-size:0.875rem;margin:0 0 1rem;max-width:44rem'
                    <strong>YO25</strong> just that district, <strong>DN14 6</strong> just that part of it.
                    Distance is measured in a straight line, so allow a little extra for roads.</p>
             </div>
+
+            <h3 style="font-size:1rem;margin:1.25rem 0 .25rem">Who goes</h3>
+            <?php if (!$obStaff): ?>
+                <p style="<?= $obHint ?>">Nobody has the <strong>Sales</strong> role, so online bookings come in unassigned
+                   for you to give out. Give your salespeople the Sales role on <a href="/admin/users.php">Users</a> to
+                   share bookings out automatically and give each one their own area.</p>
+            <?php else: ?>
+                <div class="form-row full">
+                    <label style="display:flex;gap:.5rem;align-items:center;font-weight:400">
+                        <input type="checkbox" name="auto_assign" value="1" <?= (int) ($obS['auto_assign'] ?? 1) === 1 ? 'checked' : '' ?>>
+                        Give each online booking to a salesperson automatically
+                    </label>
+                    <p style="<?= $obHint ?>;margin:.25rem 0 0 1.6rem">It goes to someone whose area covers the customer and who is
+                       free, sharing the work out (whoever has fewest visits that day). Untick to leave them unassigned.</p>
+                </div>
+                <div style="overflow-x:auto;max-width:48rem;margin:.75rem 0">
+                <table class="table" style="width:100%;font-size:.9rem">
+                    <thead><tr><th style="text-align:left">Takes online bookings</th><th style="text-align:left">Home postcode</th>
+                        <th style="text-align:left">Within (miles)</th><th style="text-align:left">Postcodes covered</th></tr></thead>
+                    <tbody>
+                    <?php foreach ($obStaff as $st): ?>
+                        <tr>
+                            <td><label style="display:flex;gap:.4rem;align-items:center;font-weight:400;margin:0">
+                                <input type="hidden" name="staff[<?= (int) $st['id'] ?>][seen]" value="1">
+                                <input type="checkbox" name="staff[<?= (int) $st['id'] ?>][takes]" value="1" <?= $st['takes'] ? 'checked' : '' ?>>
+                                <?= e($st['name']) ?></label></td>
+                            <td><?= $st['home'] !== null ? e(ob_postcode_pretty($st['home'])) : '<a href="/admin/users_edit.php?id=' . (int) $st['id'] . '">Add</a>' ?></td>
+                            <td><input type="number" name="staff[<?= (int) $st['id'] ?>][radius]" min="1" max="300" style="width:6rem"
+                                       value="<?= $st['radius'] !== null ? (int) $st['radius'] : '' ?>" aria-label="<?= e($st['name']) ?> miles"></td>
+                            <td><input type="text" name="staff[<?= (int) $st['id'] ?>][districts]" style="width:100%;min-width:10rem"
+                                       value="<?= e(implode(', ', $st['districts'])) ?>" placeholder="anywhere" aria-label="<?= e($st['name']) ?> postcodes"></td>
+                        </tr>
+                    <?php endforeach; ?>
+                    </tbody>
+                </table>
+                </div>
+                <p style="<?= $obHint ?>">Leave someone's miles and postcodes empty and they cover your whole area. Miles are measured
+                   from their home postcode (set on their user record). If nobody's area covers a customer, anyone free can take it.</p>
+                <div class="form-group" style="max-width:20rem">
+                    <label for="ob_group">Group visits by area</label>
+                    <select id="ob_group" name="group_miles">
+                        <?php foreach ([0 => 'Off', 5 => 'Within 5 miles', 10 => 'Within 10 miles', 15 => 'Within 15 miles', 20 => 'Within 20 miles', 30 => 'Within 30 miles'] as $n => $lab): ?>
+                            <option value="<?= $n ?>" <?= (int) ($obS['group_miles'] ?? 0) === $n ? 'selected' : '' ?>><?= e($lab) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <p style="<?= $obHint ?>;margin-top:.25rem">On a day a salesperson already has a visit, only offer their time to
+                       customers within this distance of it &mdash; so nobody criss-crosses the map.</p>
+                </div>
+            <?php endif; ?>
 
             <h3 style="font-size:1rem;margin:1.25rem 0 .25rem">Booking page</h3>
             <div class="form-group" style="max-width:36rem">

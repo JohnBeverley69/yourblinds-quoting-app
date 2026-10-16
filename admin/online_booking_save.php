@@ -105,28 +105,64 @@ $intro = mb_substr(trim(str_replace("\r\n", "\n", (string) ($_POST['intro_text']
 
 $enabled = !empty($_POST['enabled']) ? 1 : 0;
 
+// Phase 2: the name customers see, who goes, grouping.
+$display = mb_substr(trim((string) ($_POST['display_name'] ?? '')), 0, 150);
+$autoAssign = !empty($_POST['auto_assign']) || !isset($_POST['staff']) ? 1 : 0;   // no salespeople on the form = keep it on
+$group = (int) ($_POST['group_miles'] ?? 0);
+if (!in_array($group, [0, 5, 10, 15, 20, 30], true)) $group = 0;
+
+$staffRows = [];
+$salesIds  = ob_sales_ids($clientId);
+foreach ((array) ($_POST['staff'] ?? []) as $uid => $row) {
+    $uid = (int) $uid;
+    if (!in_array($uid, $salesIds, true) || !is_array($row)) continue;   // only this company's salespeople
+    $name = ''; $home = null;
+    foreach (ob_staff($clientId, true) as $st) if ($st['id'] === $uid) { $name = $st['name']; $home = $st['home']; }
+    $r = trim((string) ($row['radius'] ?? ''));
+    $radiusU = $r === '' ? null : (int) $r;
+    if ($radiusU !== null && ($radiusU < 1 || $radiusU > 300)) $fail("$name's distance must be between 1 and 300 miles.");
+    if ($radiusU !== null && $home === null) $fail("$name has no home postcode, so a distance can't be measured — add it on their user record, or use postcodes instead.");
+    $dl = ob_parse_districts((string) ($row['districts'] ?? ''), $badD);
+    if ($badD) $fail("$name's postcodes couldn't be read: " . implode(', ', array_slice($badD, 0, 5)) . '.');
+    $staffRows[$uid] = [!empty($row['takes']) ? 1 : 0, $radiusU, $dl ? implode(', ', $dl) : null];
+}
+
 try {
     db()->prepare(
         'INSERT INTO online_booking_settings
            (client_id, enabled, slug, mode, min_notice_days, max_days_ahead, weekdays, closed_dates,
             base_postcode, radius_miles, districts, intro_text, notify_email,
-            booking_style, visit_minutes, gap_minutes, hours_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            booking_style, visit_minutes, gap_minutes, hours_json, display_name, auto_assign, group_miles)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), slug = VALUES(slug), mode = VALUES(mode),
             min_notice_days = VALUES(min_notice_days), max_days_ahead = VALUES(max_days_ahead),
             weekdays = VALUES(weekdays), closed_dates = VALUES(closed_dates),
             base_postcode = VALUES(base_postcode), radius_miles = VALUES(radius_miles),
             districts = VALUES(districts), intro_text = VALUES(intro_text), notify_email = VALUES(notify_email),
             booking_style = VALUES(booking_style), visit_minutes = VALUES(visit_minutes),
-            gap_minutes = VALUES(gap_minutes), hours_json = VALUES(hours_json)'
+            gap_minutes = VALUES(gap_minutes), hours_json = VALUES(hours_json),
+            display_name = VALUES(display_name), auto_assign = VALUES(auto_assign), group_miles = VALUES(group_miles)'
     )->execute([
         $clientId, $enabled, $slug, $mode, $notice, $ahead, implode(',', $days), $closed !== '' ? $closed : null,
         $base !== null ? ob_postcode_pretty($base) : null, $radius,
         $districtList ? implode(', ', $districtList) : null, $intro !== '' ? $intro : null, $notify !== '' ? $notify : null,
         $style, $visit, $gap, json_encode($hours),
+        $display !== '' ? $display : null, $autoAssign, $group > 0 ? $group : null,
     ]);
 } catch (Throwable $e) {
-    $fail('Could not save — have migrate_online_booking.php and migrate_online_booking_times.php been run?');
+    $fail('Could not save — have the online booking migrations (including migrate_online_booking_phase2.php) been run?');
+}
+
+if ($staffRows) {
+    try {
+        $up = db()->prepare(
+            'INSERT INTO online_booking_staff (client_id, user_id, takes_online, radius_miles, districts) VALUES (?, ?, ?, ?, ?)
+             ON DUPLICATE KEY UPDATE takes_online = VALUES(takes_online), radius_miles = VALUES(radius_miles), districts = VALUES(districts)'
+        );
+        foreach ($staffRows as $uid => [$takes, $rad, $dist]) $up->execute([$clientId, $uid, $takes, $rad, $dist]);
+    } catch (Throwable $e) {
+        $fail('Could not save who goes — has migrate_online_booking_phase2.php been run?');
+    }
 }
 
 [$live, $why] = ob_status($clientId);

@@ -1159,8 +1159,23 @@ CREATE TABLE `online_booking_settings` (
   `visit_minutes` smallint(5) unsigned NOT NULL DEFAULT 60,
   `gap_minutes` smallint(5) unsigned NOT NULL DEFAULT 30,
   `hours_json` text DEFAULT NULL,
+  `display_name` varchar(150) DEFAULT NULL,
+  `auto_assign` tinyint(1) NOT NULL DEFAULT 1,
+  `group_miles` smallint(5) unsigned DEFAULT NULL,
   PRIMARY KEY (`client_id`),
   UNIQUE KEY `uq_obs_slug` (`slug`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `online_booking_staff` (
+  `client_id` int(10) unsigned NOT NULL,
+  `user_id` int(10) unsigned NOT NULL,
+  `takes_online` tinyint(1) NOT NULL DEFAULT 1,
+  `radius_miles` smallint(5) unsigned DEFAULT NULL,
+  `districts` text DEFAULT NULL,
+  `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`client_id`,`user_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
@@ -1180,7 +1195,11 @@ CREATE TABLE `online_bookings` (
   `decided_by` int(10) unsigned DEFAULT NULL,
   `decided_at` datetime DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  `manage_token` char(64) DEFAULT NULL,
+  `reschedules` tinyint(3) unsigned NOT NULL DEFAULT 0,
+  `cancelled_at` datetime DEFAULT NULL,
   PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_ob_manage_token` (`manage_token`),
   KEY `idx_ob_client_time` (`client_id`,`created_at`),
   KEY `idx_ob_ip_time` (`ip_address`,`created_at`),
   KEY `idx_ob_appt` (`appointment_id`)
