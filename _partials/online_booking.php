@@ -26,7 +26,18 @@ declare(strict_types=1);
  * reminder goes out while it is waiting (sms.php checks the flag).
  * INSTANT mode: booked and confirmed in one go.
  *
- * Bookings are left unassigned — the office gives them to a salesperson.
+ * WHO GOES (Phase 2): every salesperson (Sales role) takes online bookings
+ * unless unticked in Settings, each optionally with their own area (a radius
+ * from their home postcode and/or a postcode list). A time is offered when a
+ * salesperson whose area covers the postcode can do it — or anyone, if no one's
+ * area covers it. "Group visits by area" (group_miles) keeps a salesperson who
+ * already has a visit that day to customers near it. The booking is given to
+ * the free salesperson with the fewest visits that day (auto_assign), or left
+ * unassigned. A company with no salespeople works as before: unassigned.
+ *
+ * CHANGE OR CANCEL (Phase 2): the customer's emails carry a secret link
+ * (online_bookings.manage_token → book/manage.php) to move the visit to
+ * another free time or cancel it, up to the day before.
  *
  * SAFETY — this is the first public page that WRITES into a company's data:
  *  - everything is scoped to the one company the link name resolves to; the
@@ -41,7 +52,7 @@ declare(strict_types=1);
  *    online-booking row, so two customers can't both take the last place.
  *
  * Plans: Silver and Gold (feature_online_booking), plus the main factory.
- * Tables: migrate_online_booking.php.
+ * Tables: migrate_online_booking.php (+ _lookups, _times, _phase2).
  */
 
 require_once __DIR__ . '/slot_window.php';
@@ -71,6 +82,9 @@ function ob_default_settings(): array
         'visit_minutes'   => 60,
         'gap_minutes'     => 30,
         'hours_json'      => null,
+        'display_name'    => null,
+        'auto_assign'     => 1,
+        'group_miles'     => null,
     ];
 }
 
@@ -282,9 +296,10 @@ function ob_time_label(string $hhmm): string
  * The salespeople who go out on quote visits (the 'sales' role). How many
  * exact-time visits may overlap is this count — at least 1.
  */
-function ob_sales_ids(int $clientId): array
+function ob_sales_ids(int $clientId, bool $reset = false): array
 {
     static $cache = [];
+    if ($reset) { $cache = []; return []; }
     if (isset($cache[$clientId])) return $cache[$clientId];
     try {
         $st = db()->prepare(
@@ -307,7 +322,7 @@ function ob_sales_ids(int $clientId): array
  * aren't fittings, and anything assigned to a salesperson. Cancelled and
  * no-show don't count.
  */
-function ob_time_busy(int $clientId, array $s, string $date, string $hhmm): int
+function ob_time_busy(int $clientId, array $s, string $date, string $hhmm, int $excludeId = 0): int
 {
     $visit = max(15, (int) ($s['visit_minutes'] ?? 60));
     $gap   = max(0, (int) ($s['gap_minutes'] ?? 30));
@@ -318,13 +333,13 @@ function ob_time_busy(int $clientId, array $s, string $date, string $hhmm): int
            . ($sales ? ' OR client_user_id IN (' . implode(',', $sales) . ')' : '');
     $st = db()->prepare(
         "SELECT COUNT(*) FROM appointments
-          WHERE client_id = ? AND appointment_date = ?
+          WHERE client_id = ? AND appointment_date = ? AND id <> ?
             AND (status IS NULL OR status NOT IN ('cancelled', 'no_show'))
             AND ({$who})
             AND (HOUR(appointment_time) * 60 + MINUTE(appointment_time)) < ?
             AND (HOUR(appointment_time) * 60 + MINUTE(appointment_time) + duration_minutes) > ?"
     );
-    $st->execute([$clientId, $date, $end, $start]);
+    $st->execute([$clientId, $date, $excludeId, $end, $start]);
     return (int) $st->fetchColumn();
 }
 
@@ -332,6 +347,208 @@ function ob_time_busy(int $clientId, array $s, string $date, string $hhmm): int
 function ob_time_capacity(int $clientId): int
 {
     return max(1, count(ob_sales_ids($clientId)));
+}
+
+/**
+ * The salespeople who take online bookings, with their areas:
+ *   [['id' => 7, 'name' => 'Sam', 'home' => 'HU179AB'|null, 'radius' => 20|null, 'districts' => ['HU', …],
+ *     'takes' => bool], …]
+ * Every Sales-role user is listed; 'takes' is false only when unticked in
+ * Settings (online_booking_staff). $all = include the unticked ones.
+ */
+function ob_staff(int $clientId, bool $all = false, bool $reset = false): array
+{
+    static $cache = [];
+    if ($reset) { $cache = []; return []; }
+    if (!isset($cache[$clientId])) {
+        $ids  = ob_sales_ids($clientId);
+        $rows = [];
+        if ($ids) {
+            $in = implode(',', $ids);
+            $users = db()->query("SELECT id, full_name, home_postcode FROM client_users WHERE id IN ($in) ORDER BY full_name")->fetchAll(PDO::FETCH_ASSOC);
+            $own = [];
+            try {
+                $st = db()->prepare('SELECT * FROM online_booking_staff WHERE client_id = ?');
+                $st->execute([$clientId]);
+                foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) $own[(int) $r['user_id']] = $r;
+            } catch (Throwable $e) { /* not migrated — everyone, anywhere */ }
+            foreach ($users as $u) {
+                $o = $own[(int) $u['id']] ?? null;
+                $rows[] = [
+                    'id'        => (int) $u['id'],
+                    'name'      => (string) $u['full_name'],
+                    'home'      => ob_postcode((string) ($u['home_postcode'] ?? '')),
+                    'radius'    => $o !== null && (int) $o['radius_miles'] > 0 ? (int) $o['radius_miles'] : null,
+                    'districts' => $o !== null ? ob_parse_districts((string) ($o['districts'] ?? '')) : [],
+                    'takes'     => $o === null || (int) $o['takes_online'] === 1,
+                ];
+            }
+        }
+        $cache[$clientId] = $rows;
+    }
+    return $all ? $cache[$clientId] : array_values(array_filter($cache[$clientId], static fn ($r) => $r['takes']));
+}
+
+/**
+ * Does a salesperson's own area cover a postcode? No area set = anywhere.
+ * A radius that can't be measured (lookup down, no home postcode) counts as
+ * covered, so a customer is never turned away by a missing distance.
+ */
+function ob_staff_covers(array $st, string $compact): bool
+{
+    $useRadius = $st['radius'] !== null && $st['home'] !== null;
+    if (!$st['districts'] && !$useRadius) return true;
+    if ($st['districts'] && ob_district_match($compact, $st['districts'])) return true;
+    if (!$useRadius) return false;
+    $a = ob_geo($st['home']);
+    $b = ob_geo($compact);
+    return $a === null || $b === null || ob_miles($a, $b) <= $st['radius'];
+}
+
+/** Forget this request's cached diary and salespeople (call before re-checking inside a booking). */
+function ob_cache_reset(): void
+{
+    ob_day_visits(0, '', 0, true);
+    ob_sales_ids(0, true);
+    ob_staff(0, false, true);
+}
+
+/**
+ * One day's visits for a company, for the who-is-free checks, cached per request:
+ *   [['id', 'user' => ?int, 'fitting' => bool, 'from' => minutes, 'to' => minutes, 'postcode' => ?string], …]
+ * Cancelled and no-show are left out; so is $excludeId (a visit being moved).
+ */
+function ob_day_visits(int $clientId, string $date, int $excludeId = 0, bool $reset = false): array
+{
+    static $cache = [];
+    if ($reset) { $cache = []; return []; }
+    $k = "$clientId|$date|$excludeId";
+    if (isset($cache[$k])) return $cache[$k];
+    $st = db()->prepare(
+        "SELECT id, client_user_id, COALESCE(appt_kind, 'measure') AS kind, appointment_time, duration_minutes, installation_postcode
+           FROM appointments
+          WHERE client_id = ? AND appointment_date = ? AND id <> ?
+            AND (status IS NULL OR status NOT IN ('cancelled', 'no_show'))"
+    );
+    $st->execute([$clientId, $date, $excludeId]);
+    $out = [];
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $from  = ob_minutes(substr((string) $r['appointment_time'], 0, 5));
+        $out[] = [
+            'id'       => (int) $r['id'],
+            'user'     => $r['client_user_id'] !== null ? (int) $r['client_user_id'] : null,
+            'fitting'  => (string) $r['kind'] === 'fitting',
+            'from'     => $from,
+            'to'       => $from + (int) $r['duration_minutes'],
+            'postcode' => ob_postcode((string) ($r['installation_postcode'] ?? '')),
+        ];
+    }
+    return $cache[$k] = $out;
+}
+
+/**
+ * The salespeople who could take a visit at this postcode on this day:
+ * those whose own area covers it (or everyone, if no one's does), less — when
+ * "group visits by area" is on — anyone who already has visits that day and
+ * none of them within the group distance. A distance that can't be measured
+ * never rules anyone out.
+ */
+function ob_candidates(int $clientId, array $s, string $date, ?string $compact, int $excludeId = 0): array
+{
+    $staff = ob_staff($clientId);
+    if ($compact === null) return $staff;
+    $covering = array_values(array_filter($staff, static fn ($st) => ob_staff_covers($st, $compact)));
+    $cands = $covering ?: $staff;
+
+    $group = (int) ($s['group_miles'] ?? 0);
+    if ($group <= 0) return $cands;
+    $here = ob_geo($compact);
+    if ($here === null) return $cands;
+    $visits = ob_day_visits($clientId, $date, $excludeId);
+    return array_values(array_filter($cands, static function ($st) use ($visits, $here, $group): bool {
+        $known = false;
+        foreach ($visits as $v) {
+            if ($v['user'] !== $st['id'] || $v['postcode'] === null) continue;
+            $there = ob_geo($v['postcode']);
+            if ($there === null) return true;      // can't measure — don't rule them out
+            $known = true;
+            if (ob_miles($here, $there) <= $group) return true;
+        }
+        return !$known;                            // no visits yet that day — free to go anywhere
+    }));
+}
+
+/** How many visits a salesperson has on a day (for sharing the work out). */
+function ob_visits_for(array $visits, int $userId): int
+{
+    $n = 0;
+    foreach ($visits as $v) if ($v['user'] === $userId) $n++;
+    return $n;
+}
+
+/**
+ * Can this day + slot/time be booked for this postcode, and by whom?
+ * Returns null when it can't, else ['user' => ?int] — the salesperson it would
+ * go to (null = leave it unassigned). The single source of truth for both
+ * showing a time and booking it; ob_slot_open() is the yes/no form.
+ */
+function ob_slot_pick(int $clientId, array $s, string $date, string $key, ?DateTimeImmutable $now = null,
+                      ?string $compact = null, int $excludeId = 0): ?array
+{
+    $now = $now ?? new DateTimeImmutable('now');
+    $day = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+    if ($day === false || $day->format('Y-m-d') !== $date || !ob_day_allowed($s, $day, $now)) return null;
+    $staff  = ob_staff($clientId);
+    $assign = (int) ($s['auto_assign'] ?? 1) === 1;
+
+    if (ob_style($s) === 'times') {
+        if (!in_array($key, ob_day_starts($s, (int) $day->format('N')), true)) return null;
+        if ($date === $now->format('Y-m-d') && $key . ':00' <= $now->format('H:i:s')) return null;
+        if (!$staff) {
+            return ob_time_busy($clientId, $s, $date, $key, $excludeId) < ob_time_capacity($clientId) ? ['user' => null] : null;
+        }
+        $visit  = max(15, (int) ($s['visit_minutes'] ?? 60));
+        $gap    = max(0, (int) ($s['gap_minutes'] ?? 30));
+        $from   = ob_minutes($key) - $gap;
+        $to     = ob_minutes($key) + $visit + $gap;
+        $visits = ob_day_visits($clientId, $date, $excludeId);
+        $overlaps = static fn ($v): bool => $v['from'] < $to && $v['to'] > $from;
+        $unassigned = count(array_filter($visits, static fn ($v) => $v['user'] === null && !$v['fitting'] && $overlaps($v)));
+        $free = [];
+        foreach (ob_candidates($clientId, $s, $date, $compact, $excludeId) as $st) {
+            $busy = false;
+            foreach ($visits as $v) if ($v['user'] === $st['id'] && $overlaps($v)) { $busy = true; break; }
+            if (!$busy) $free[] = $st;
+        }
+        if (count($free) - $unassigned <= 0) return null;
+        usort($free, static fn ($a, $b) => ob_visits_for($visits, $a['id']) <=> ob_visits_for($visits, $b['id']) ?: $a['id'] <=> $b['id']);
+        return ['user' => $assign ? $free[0]['id'] : null];
+    }
+
+    $wins = ob_windows($clientId);
+    if (!isset($wins[$key])) return null;
+    if ($date === $now->format('Y-m-d') && $wins[$key]['time'] <= $now->format('H:i:s')) return null;
+    if (ampm_window_count(db(), $clientId, $date, $key, $excludeId) >= ampm_window_capacity(db(), $clientId, $key)) return null;
+    if (!$staff) return ['user' => null];
+    $cands = ob_candidates($clientId, $s, $date, $compact, $excludeId);
+    if (!$cands) return null;
+    $visits = ob_day_visits($clientId, $date, $excludeId);
+    usort($cands, static fn ($a, $b) => ob_visits_for($visits, $a['id']) <=> ob_visits_for($visits, $b['id']) ?: $a['id'] <=> $b['id']);
+    return ['user' => $assign ? $cands[0]['id'] : null];
+}
+
+/** The name customers see: the booking-page name, or the company name. */
+function ob_display_name(int $clientId, string $companyName): string
+{
+    $n = trim((string) (ob_settings($clientId)['display_name'] ?? ''));
+    return $n !== '' ? $n : $companyName;
+}
+
+/** The customer's "change or cancel" link for a manage token. */
+function ob_manage_link(string $token): string
+{
+    $base = rtrim((string) (env('APP_URL', '') ?: 'https://yourblinds.uk'), '/');
+    return $base . '/book/manage.php?t=' . rawurlencode($token);
 }
 
 /** What the customer picked, in words: 'Morning (9am–1pm)' or '10:30am'. */
@@ -402,22 +619,10 @@ function ob_parse_closed(?string $text, &$bad = null): array
  * allowed (notice, how far ahead, weekday, closed days), the slot exists, it
  * hasn't started yet when same-day booking is allowed, and it still has room.
  */
-function ob_slot_open(int $clientId, array $s, string $date, string $key, ?DateTimeImmutable $now = null): bool
+function ob_slot_open(int $clientId, array $s, string $date, string $key, ?DateTimeImmutable $now = null,
+                      ?string $compact = null, int $excludeId = 0): bool
 {
-    $now  = $now ?? new DateTimeImmutable('now');
-    $day  = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
-    if (ob_style($s) === 'times') {
-        if ($day === false || $day->format('Y-m-d') !== $date || !ob_day_allowed($s, $day, $now)) return false;
-        if (!in_array($key, ob_day_starts($s, (int) $day->format('N')), true)) return false;
-        if ($date === $now->format('Y-m-d') && $key . ':00' <= $now->format('H:i:s')) return false;
-        return ob_time_busy($clientId, $s, $date, $key) < ob_time_capacity($clientId);
-    }
-    $wins = ob_windows($clientId);
-    if ($day === false || $day->format('Y-m-d') !== $date || !isset($wins[$key])) return false;
-    if (!ob_day_allowed($s, $day, $now)) return false;
-    if ($date === $now->format('Y-m-d') && $wins[$key]['time'] <= $now->format('H:i:s')) return false;
-    $taken = ampm_window_count(db(), $clientId, $date, $key);
-    return $taken < ampm_window_capacity(db(), $clientId, $key);
+    return ob_slot_pick($clientId, $s, $date, $key, $now, $compact, $excludeId) !== null;
 }
 
 /** Notice, how far ahead, weekday and closed days for one day. */
@@ -436,7 +641,7 @@ function ob_day_allowed(array $s, DateTimeImmutable $day, DateTimeImmutable $now
  *   [['date' => 'Y-m-d', 'label' => 'Tue 20 Oct', 'slots' => ['am' => 'Morning (9am–1pm)', …]], …]
  * Days with nothing free are left out.
  */
-function ob_available_days(int $clientId, ?DateTimeImmutable $now = null): array
+function ob_available_days(int $clientId, ?DateTimeImmutable $now = null, ?string $compact = null, int $excludeId = 0): array
 {
     $now  = $now ?? new DateTimeImmutable('now');
     $s    = ob_settings($clientId);
@@ -450,13 +655,13 @@ function ob_available_days(int $clientId, ?DateTimeImmutable $now = null): array
         $slots = [];
         if (ob_style($s) === 'times') {
             foreach (ob_day_starts($s, (int) $day->format('N')) as $t) {
-                if (ob_slot_open($clientId, $s, $date, $t, $now)) $slots[$t] = ob_time_label($t);
+                if (ob_slot_open($clientId, $s, $date, $t, $now, $compact, $excludeId)) $slots[$t] = ob_time_label($t);
             }
             if ($slots) $out[] = ['date' => $date, 'label' => $day->format('D j M'), 'slots' => $slots];
             continue;
         }
         foreach ($wins as $k => $w) {
-            if (ob_slot_open($clientId, $s, $date, (string) $k, $now)) {
+            if (ob_slot_open($clientId, $s, $date, (string) $k, $now, $compact, $excludeId)) {
                 $slots[(string) $k] = $w['label'] . ' (' . $w['range'] . ')';
             }
         }
@@ -837,7 +1042,9 @@ function ob_create_booking(int $clientId, array $in, array $meta, ?DateTimeImmut
         // One online booking at a time per company: the slot check and the
         // insert can't interleave with another customer's.
         $pdo->prepare('SELECT client_id FROM online_booking_settings WHERE client_id = ? FOR UPDATE')->execute([$clientId]);
-        if (!ob_slot_open($clientId, $s, $in['date'], $in['slot'], $now)) {
+        ob_cache_reset();
+        $pick = ob_slot_pick($clientId, $s, $in['date'], $in['slot'], $now, $pc);
+        if ($pick === null) {
             $pdo->rollBack();
             return ['ok' => false, 'error' => 'Sorry, that time has just been taken. Please choose another.', 'taken' => true];
         }
@@ -875,6 +1082,11 @@ function ob_create_booking(int $clientId, array $in, array $meta, ?DateTimeImmut
         } elseif ($similar !== null) {
             $notes .= "\nSame email or phone as {$similar['name']} — possible duplicate customer. Merge them if they're the same person.";
         }
+        if ($pick['user'] !== null) {
+            foreach (ob_staff($clientId) as $st) {
+                if ($st['id'] === $pick['user']) $notes .= "\nGiven to {$st['name']} automatically.";
+            }
+        }
         if ($in['notes'] !== '') $notes .= "\n\nCustomer's message: " . $in['notes'];
 
         $pdo->prepare(
@@ -882,9 +1094,9 @@ function ob_create_booking(int $clientId, array $in, array $meta, ?DateTimeImmut
                (client_id, client_user_id, customer_id, title, appointment_date, appointment_time, duration_minutes,
                 installation_address1, installation_address2, installation_town, installation_postcode,
                 notes, status, slot_window, online_request)
-             VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \'booked\', ?, ?)'
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, \'booked\', ?, ?)'
         )->execute([
-            $clientId, $customerId, $in['name'], $in['date'], $win['time'], $win['duration'],
+            $clientId, $pick['user'], $customerId, $in['name'], $in['date'], $win['time'], $win['duration'],
             $in['address1'], $in['address2'] !== '' ? $in['address2'] : null, $in['town'], ob_postcode_pretty($pc),
             $notes, $slotKey, $requested ? 1 : 0,
         ]);
@@ -901,7 +1113,14 @@ function ob_create_booking(int $clientId, array $in, array $meta, ?DateTimeImmut
             mb_substr((string) ($meta['ip'] ?? ''), 0, 45), mb_substr((string) ($meta['user_agent'] ?? ''), 0, 255),
             json_encode(array_intersect_key($in, array_flip(['name', 'email', 'phone', 'address1', 'address2', 'town', 'postcode', 'notes'])), JSON_UNESCAPED_UNICODE),
         ]);
+        // The customer's "change or cancel" link. Separate so a booking still
+        // saves if migrate_online_booking_phase2.php hasn't run yet.
+        try {
+            $pdo->prepare('UPDATE online_bookings SET manage_token = ? WHERE id = ?')
+                ->execute([bin2hex(random_bytes(32)), (int) $pdo->lastInsertId()]);
+        } catch (Throwable $e) { /* no token column yet — no link in the emails */ }
         $pdo->commit();
+        ob_cache_reset();
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
         error_log('ob_create_booking(' . $clientId . '): ' . $e->getMessage());
@@ -969,6 +1188,138 @@ function ob_decide(int $clientId, int $apptId, string $decision, int $userId): a
 }
 
 /* ------------------------------------------------------------------
+ *  The customer's "change or cancel" link (book/manage.php)
+ * ------------------------------------------------------------------ */
+
+const OB_MAX_RESCHEDULES = 3;
+
+/** The booking behind a manage token, with its visit, or null. */
+function ob_manage_load(string $token): ?array
+{
+    if (preg_match('/^[a-f0-9]{64}$/', $token) !== 1) return null;
+    try {
+        $st = db()->prepare(
+            'SELECT ob.id AS ob_id, ob.client_id, ob.appointment_id, ob.status AS ob_status, ob.reschedules, ob.submitted,
+                    a.appointment_date, a.appointment_time, a.duration_minutes, a.slot_window, a.status AS appt_status,
+                    a.online_request, a.installation_postcode, a.title, a.client_user_id
+               FROM online_bookings ob
+               JOIN appointments a ON a.id = ob.appointment_id AND a.client_id = ob.client_id
+              WHERE ob.manage_token = ? LIMIT 1'
+        );
+        $st->execute([$token]);
+        $r = $st->fetch(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        return null;
+    }
+    return $r ?: null;
+}
+
+/**
+ * Can the customer still change or cancel it online? Returns [ok, reason] —
+ * the reason is shown to the customer. Up to the day before the visit.
+ */
+function ob_manage_can_change(array $b, ?DateTimeImmutable $now = null): array
+{
+    $now = $now ?? new DateTimeImmutable('now');
+    if ((string) $b['appt_status'] !== 'booked') return [false, 'This appointment has been cancelled.'];
+    if ((string) $b['appointment_date'] <= $now->format('Y-m-d')) {
+        return [false, "It's too late to change this appointment online. Please give us a call."];
+    }
+    if (!ob_status((int) $b['client_id'])[0]) return [false, "Online changes aren't available at the moment. Please give us a call."];
+    return [true, ''];
+}
+
+/** The customer cancels. Returns [ok, message]. */
+function ob_customer_cancel(string $token, ?DateTimeImmutable $now = null): array
+{
+    $b = ob_manage_load($token);
+    if ($b === null) return [false, 'Booking not found.'];
+    [$ok, $why] = ob_manage_can_change($b, $now);
+    if (!$ok) return [false, $why];
+    $cid = (int) $b['client_id'];
+    $aid = (int) $b['appointment_id'];
+    $pdo = db();
+    $pdo->prepare(
+        "UPDATE appointments SET status = 'cancelled', online_request = 0,
+                notes = CONCAT(COALESCE(notes, ''), '\nCancelled online by the customer.')
+          WHERE id = ? AND client_id = ? AND status = 'booked'"
+    )->execute([$aid, $cid]);
+    $pdo->prepare("UPDATE online_bookings SET status = 'cancelled', cancelled_at = NOW() WHERE id = ?")->execute([(int) $b['ob_id']]);
+    ob_email_customer($cid, $aid, 'cancelled');
+    ob_email_company($cid, $aid, false, 'cancelled');
+    return [true, 'Your appointment is cancelled. We\'ve sent you an email to confirm.'];
+}
+
+/**
+ * The customer moves the visit to another free time. Goes back to "waiting to
+ * confirm" in request mode. Returns ['ok' => bool, 'message' => string, 'requested' => bool].
+ */
+function ob_customer_move(string $token, string $date, string $key, ?DateTimeImmutable $now = null): array
+{
+    $b = ob_manage_load($token);
+    if ($b === null) return ['ok' => false, 'message' => 'Booking not found.'];
+    [$ok, $why] = ob_manage_can_change($b, $now);
+    if (!$ok) return ['ok' => false, 'message' => $why];
+    if ((int) $b['reschedules'] >= OB_MAX_RESCHEDULES) {
+        return ['ok' => false, 'message' => "This appointment has already been moved " . OB_MAX_RESCHEDULES . " times online. Please give us a call."];
+    }
+    $cid = (int) $b['client_id'];
+    $aid = (int) $b['appointment_id'];
+    $s   = ob_settings($cid, true);
+    $pc  = ob_postcode((string) $b['installation_postcode']);
+
+    if (ob_style($s) === 'times') {
+        if (preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $key) !== 1) return ['ok' => false, 'message' => 'Please choose a day and a time.'];
+        $time = $key . ':00'; $dur = max(15, (int) $s['visit_minutes']); $slot = null;
+    } else {
+        $win = ob_windows($cid)[$key] ?? null;
+        if ($win === null) return ['ok' => false, 'message' => 'Please choose a day and a time.'];
+        $time = $win['time']; $dur = $win['duration']; $slot = $key;
+    }
+
+    require_once __DIR__ . '/sms.php';
+    $prevKey   = sms_appointment_key($cid, $aid);
+    $was       = date('D j M', strtotime((string) $b['appointment_date'])) . ', '
+               . ob_appt_time_label($cid, $b['slot_window'] !== null ? (string) $b['slot_window'] : null,
+                     (string) $b['appointment_time'], (int) $b['duration_minutes']);
+    $requested = (string) $s['mode'] !== 'instant';
+    $pdo = db();
+    try {
+        $pdo->beginTransaction();
+        $pdo->prepare('SELECT client_id FROM online_booking_settings WHERE client_id = ? FOR UPDATE')->execute([$cid]);
+        ob_cache_reset();
+        $pick = ob_slot_pick($cid, $s, $date, $key, $now, $pc, $aid);
+        if ($pick === null) {
+            $pdo->rollBack();
+            return ['ok' => false, 'message' => 'Sorry, that time has just been taken. Please choose another.'];
+        }
+        $user = (int) ($s['auto_assign'] ?? 1) === 1 ? $pick['user'] : ($b['client_user_id'] !== null ? (int) $b['client_user_id'] : null);
+        $pdo->prepare(
+            "UPDATE appointments
+                SET appointment_date = ?, appointment_time = ?, duration_minutes = ?, slot_window = ?,
+                    client_user_id = ?, online_request = ?,
+                    notes = CONCAT(COALESCE(notes, ''), ?)
+              WHERE id = ? AND client_id = ? AND status = 'booked'"
+        )->execute([$date, $time, $dur, $slot, $user, $requested ? 1 : 0,
+                    "\nMoved online by the customer (it was {$was}).", $aid, $cid]);
+        $pdo->prepare('UPDATE online_bookings SET reschedules = reschedules + 1, status = ? WHERE id = ?')
+            ->execute([$requested ? 'requested' : 'instant', (int) $b['ob_id']]);
+        $pdo->commit();
+        ob_cache_reset();
+    } catch (Throwable $e) {
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        error_log('ob_customer_move(' . $aid . '): ' . $e->getMessage());
+        return ['ok' => false, 'message' => 'Sorry, we couldn\'t move your appointment. Please try again, or give us a call.'];
+    }
+
+    ob_email_customer($cid, $aid, $requested ? 'requested' : 'confirmed');
+    ob_email_company($cid, $aid, $requested, 'moved', $was);
+    if (!$requested) sms_after_appointment_saved($cid, $aid, $prevKey);
+    return ['ok' => true, 'requested' => $requested,
+            'message' => $requested ? "We've got your new time and will confirm it by email shortly." : 'Your appointment has been moved. A confirmation is on its way.'];
+}
+
+/* ------------------------------------------------------------------
  *  Emails
  * ------------------------------------------------------------------ */
 
@@ -991,6 +1342,7 @@ function ob_company_contact(int $clientId): array
             $c['reply_to']  = (string) ($r['reply_to_email'] ?? '');
         }
     } catch (Throwable $e) { /* optional columns — fall back */ }
+    $c['name'] = ob_display_name($clientId, $c['name']);
     if ($c['from_name'] === '') $c['from_name'] = $c['name'] !== '' ? $c['name'] : 'YourBlinds';
     return $c;
 }
@@ -999,7 +1351,7 @@ function ob_company_contact(int $clientId): array
  * The customer's email for one stage: 'requested', 'confirmed' or 'declined'.
  * Pure — no database, no sending — so it can be tested. Returns subject + body.
  */
-function ob_compose_customer_email(string $kind, array $co, string $name, string $date, string $slotLabel, string $address, string $bookLink = '', bool $exactTime = false): array
+function ob_compose_customer_email(string $kind, array $co, string $name, string $date, string $slotLabel, string $address, string $bookLink = '', bool $exactTime = false, string $manageLink = ''): array
 {
     $d       = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
     $dateStr = $d ? $d->format('l j F Y') : $date;
@@ -1014,7 +1366,15 @@ function ob_compose_customer_email(string $kind, array $co, string $name, string
         return [
             'subject' => 'We\'ve received your booking request' . ($co['name'] !== '' ? ' — ' . $co['name'] : ''),
             'body'    => $hello . "Thank you for booking with {$company}. You asked for:\n\n" . $when
-                       . "We'll check our diary and confirm by email shortly. If you need to change anything, just {$contact}.\n\n" . $sign,
+                       . "We'll check our diary and confirm by email shortly. If you need to change anything, just {$contact}.\n\n"
+                       . ($manageLink !== '' ? "To change the time or cancel: {$manageLink}\n\n" : '') . $sign,
+        ];
+    }
+    if ($kind === 'cancelled') {
+        return [
+            'subject' => 'Your appointment is cancelled' . ($co['name'] !== '' ? ' — ' . $co['name'] : ''),
+            'body'    => $hello . "As you asked, we've cancelled your appointment on {$dateStr}, {$slotLabel}.\n\n"
+                       . ($bookLink !== '' ? "If you'd like to book again: {$bookLink}\n\n" : '') . $sign,
         ];
     }
     if ($kind === 'declined') {
@@ -1030,7 +1390,8 @@ function ob_compose_customer_email(string $kind, array $co, string $name, string
         'subject' => 'Your appointment is booked' . ($co['name'] !== '' ? ' with ' . $co['name'] : '') . ' — ' . ($d ? $d->format('j M Y') : $date),
         'body'    => $hello . "This confirms your appointment:\n\n" . $when
                    . ($exactTime ? '' : "We'll aim to be with you within that time slot rather than at a fixed time. ")
-                   . "If you need to change or cancel, just {$contact}.\n\n" . $sign,
+                   . "If you need to change or cancel, just {$contact}.\n\n"
+                   . ($manageLink !== '' ? "Or change the time or cancel here: {$manageLink}\n\n" : '') . $sign,
     ];
 }
 
@@ -1049,9 +1410,10 @@ function ob_email_customer(int $clientId, int $apptId, string $kind): bool
         $st->execute([$apptId, $clientId]);
         $a = $st->fetch(PDO::FETCH_ASSOC);
         // The address typed on the public form (a matched customer's record may hold an older one).
-        $sub = db()->prepare('SELECT submitted FROM online_bookings WHERE appointment_id = ? AND client_id = ? LIMIT 1');
+        $sub = db()->prepare('SELECT * FROM online_bookings WHERE appointment_id = ? AND client_id = ? LIMIT 1');
         $sub->execute([$apptId, $clientId]);
-        $typed = json_decode((string) $sub->fetchColumn(), true);
+        $obRow = $sub->fetch(PDO::FETCH_ASSOC) ?: [];
+        $typed = json_decode((string) ($obRow['submitted'] ?? ''), true);
         $to    = is_array($typed) && !empty($typed['email']) ? (string) $typed['email'] : (string) ($a['email'] ?? '');
         $name  = is_array($typed) && !empty($typed['name']) ? (string) $typed['name'] : (string) ($a['name'] ?? '');
         if (!$a || !filter_var($to, FILTER_VALIDATE_EMAIL)) return false;
@@ -1064,7 +1426,8 @@ function ob_email_customer(int $clientId, int $apptId, string $kind): bool
         $mail = ob_compose_customer_email($kind, $co, $name, (string) $a['appointment_date'],
             ob_appt_time_label($clientId, $a['slot_window'] !== null ? (string) $a['slot_window'] : null,
                 (string) $a['appointment_time'], (int) $a['duration_minutes']),
-            $addr, $slug !== '' ? ob_link($slug) : '', (string) ($a['slot_window'] ?? '') === '');
+            $addr, $slug !== '' ? ob_link($slug) : '', (string) ($a['slot_window'] ?? '') === '',
+            !in_array($kind, ['declined', 'cancelled'], true) && !empty($obRow['manage_token']) ? ob_manage_link((string) $obRow['manage_token']) : '');
 
         require_once __DIR__ . '/../mailer.php';
         $opts = ['from_name' => $co['from_name'],
@@ -1081,7 +1444,7 @@ function ob_email_customer(int $clientId, int $apptId, string $kind): bool
 }
 
 /** Tell the company a booking came in. Goes to the notify address, else the reply-to, else the company email. */
-function ob_email_company(int $clientId, int $apptId, bool $requested): bool
+function ob_email_company(int $clientId, int $apptId, bool $requested, string $event = 'new', string $was = ''): bool
 {
     try {
         $co = ob_company_contact($clientId);
@@ -1090,8 +1453,10 @@ function ob_email_company(int $clientId, int $apptId, bool $requested): bool
         if (!filter_var($to, FILTER_VALIDATE_EMAIL)) return false;
 
         $st = db()->prepare(
-            'SELECT a.appointment_date, a.slot_window, a.appointment_time, a.duration_minutes, a.installation_postcode, a.title
-               FROM appointments a WHERE a.id = ? AND a.client_id = ? LIMIT 1'
+            'SELECT a.appointment_date, a.slot_window, a.appointment_time, a.duration_minutes, a.installation_postcode, a.title,
+                    u.full_name AS assignee
+               FROM appointments a LEFT JOIN client_users u ON u.id = a.client_user_id
+              WHERE a.id = ? AND a.client_id = ? LIMIT 1'
         );
         $st->execute([$apptId, $clientId]);
         $a = $st->fetch(PDO::FETCH_ASSOC);
@@ -1102,14 +1467,25 @@ function ob_email_company(int $clientId, int $apptId, bool $requested): bool
               . ob_appt_time_label($clientId, $a['slot_window'] !== null ? (string) $a['slot_window'] : null,
                   (string) $a['appointment_time'], (int) $a['duration_minutes']);
         $base = rtrim((string) (env('APP_URL', '') ?: 'https://yourblinds.uk'), '/');
-        $subject = ($requested ? 'Online booking request: ' : 'New online booking: ') . $a['title'] . ' — ' . $when;
-        $body = "A customer has booked online.\n\n"
+        if ($event === 'cancelled') {
+            $subject = 'Online booking cancelled by the customer: ' . $a['title'] . ' — ' . $when;
+            $body = "The customer has cancelled their online booking, using the link in their email.\n\n"
+                  . "  {$a['title']}\n  {$when}\n  {$a['installation_postcode']}\n\n"
+                  . "The time is free again. The appointment is marked Cancelled:\n"
+                  . $base . '/calendar/view.php?id=' . $apptId . "\n";
+            require_once __DIR__ . '/../mailer.php';
+            return mailer_send($to, $subject, $body, null, null,
+                ['from_name' => 'YourBlinds', 'log' => ['client_id' => $clientId, 'kind' => 'online_booking']]);
+        }
+        $subject = ($event === 'moved' ? 'Online booking moved by the customer: ' : ($requested ? 'Online booking request: ' : 'New online booking: '))
+                 . $a['title'] . ' — ' . $when;
+        $body = ($event === 'moved' ? "The customer has moved their online booking" . ($was !== '' ? " (it was {$was})" : '') . ".\n\n" : "A customer has booked online.\n\n")
               . "  {$a['title']}\n  {$when}\n  {$a['installation_postcode']}\n\n"
               . ($requested
                   ? "It's in your calendar and the time slot is held. Open it to confirm or decline — the customer is waiting to hear:\n"
                   : "It's in your calendar and the customer has been sent a confirmation:\n")
               . $base . '/calendar/view.php?id=' . $apptId . "\n\n"
-              . "It isn't assigned to anyone yet.\n";
+              . (!empty($a['assignee']) ? "It has been given to {$a['assignee']}.\n" : "It isn't assigned to anyone yet.\n");
 
         require_once __DIR__ . '/../mailer.php';
         return mailer_send($to, $subject, $body, null, null,
