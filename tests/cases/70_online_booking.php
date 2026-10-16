@@ -260,3 +260,68 @@ test('address lookup: off without a Postcoder key; each lookup is counted and ca
     check_same(6, (int) t_val("SELECT COUNT(*) FROM online_address_lookups WHERE ip_address = '10.5.5.6'"), 'lookups counted');
     check_same(1, count(ob_lookup_addresses($bravo = 102, 'HU179AB', '10.5.5.6', static fn () => [['addressline1' => 'x']])), 'the same visitor on another company\'s page');
 });
+
+test('exact times: start times from the hours, one visit per salesperson, gap respected, fittings ignored', function () use ($alpha, $person) {
+    $hours = [];
+    foreach (range(1, 7) as $d) $hours[(string) $d] = ['from' => '09:00', 'to' => '17:00'];
+    db()->prepare("UPDATE online_booking_settings SET booking_style = 'times', visit_minutes = 60, gap_minutes = 30, hours_json = ?,
+                   weekdays = '1,2,3,4,5,6,7', mode = 'request', districts = 'HU' WHERE client_id = ?")->execute([json_encode($hours), $alpha]);
+    $s = ob_settings($alpha, true);
+    check_same(['09:00', '10:30', '12:00', '13:30', '15:00'], ob_day_starts($s, 1), 'start times for 9–5, 1 hour + 30 minutes');
+    check_same(1, ob_time_capacity($alpha), 'visits at once (Alpha has one salesperson)');
+
+    $day = (new DateTimeImmutable('tomorrow'))->modify('+4 days')->format('Y-m-d');
+    $offered = static function () use ($alpha, $day): array {
+        foreach (ob_available_days($alpha) as $d) if ($d['date'] === $day) return array_keys($d['slots']);
+        return [];
+    };
+    check_same(['09:00', '10:30', '12:00', '13:30', '15:00'], $offered(), 'times offered on an empty day');
+
+    $r = ob_create_booking($alpha, $person(['date' => $day, 'slot' => '10:30', 'email' => 'exact@example.test', 'phone' => '07700 900601']), ['ip' => '10.0.3.1']);
+    check($r['ok'], 'exact-time booking: ' . ($r['error'] ?? ''));
+    check_same(['appointment_time' => '10:30:00', 'duration_minutes' => 60, 'slot_window' => null],
+        t_row('SELECT appointment_time, duration_minutes, slot_window FROM appointments WHERE id = ?', [$r['appointment_id']]), 'the visit as booked');
+    check_same(['09:00', '12:00', '13:30', '15:00'], $offered(), 'after booking 10:30 (09:00 and 12:00 still clear with the 30-minute gap)');
+    $again = ob_create_booking($alpha, $person(['date' => $day, 'slot' => '10:30', 'email' => 'exact2@example.test', 'phone' => '07700 900602']), ['ip' => '10.0.3.2']);
+    check(!$again['ok'] && !empty($again['taken']), 'the same time booked twice');
+    check(!ob_create_booking($alpha, $person(['date' => $day, 'slot' => '10:15']), ['ip' => '10.0.3.3'])['ok'], 'a time that isn\'t one of the start times');
+
+    // The salesperson's own 1pm visit blocks 12:00 (gap) and 13:30; a fitter's job blocks nothing.
+    $add = static function (int $user, string $kind, string $time) use ($alpha, $day): void {
+        db()->prepare("INSERT INTO appointments (client_id, client_user_id, title, appointment_date, appointment_time, duration_minutes, status, appt_kind)
+                       VALUES (?, ?, 'Office booking', ?, ?, 60, 'booked', ?)")->execute([$alpha, $user, $day, $time, $kind]);
+    };
+    $add(fx('user_alpha_sales'), 'measure', '13:00:00');
+    $add(fx('user_alpha_fitter'), 'fitting', '09:00:00');
+    check_same(['09:00', '15:00'], $offered(), 'after the salesperson\'s 1pm visit and a fitter\'s 9am fitting');
+
+    $mail = ob_compose_customer_email('confirmed', ['name' => 'Alpha', 'phone' => '', 'email' => '', 'from_name' => '', 'reply_to' => ''],
+        'Sam', $day, ob_appt_time_label($alpha, null, '10:30:00', 60), '', '', true);
+    check_contains('10:30am–11:30am', $mail['body'], 'the time in the confirmation');
+    check_not_contains('within that time slot', $mail['body'], 'time-slot wording on an exact-time booking');
+});
+
+test('exact times: Settings saves them and refuses hours too short for a visit', function () use ($alpha, $settingsForm) {
+    $a = as_user('alpha.admin');
+    $hours = static function (string $from, string $to): array {
+        $f = []; $t = [];
+        foreach (range(1, 7) as $d) { $f[$d] = $from; $t[$d] = $to; }
+        return ['hours_from' => $f, 'hours_to' => $t];
+    };
+    t_submit($a, '/admin/online_booking_save.php', $settingsForm(['booking_style' => 'times', 'visit_minutes' => '120', 'gap_minutes' => '15'] + $hours('10:00', '11:00')));
+    check_same('60', (string) t_val('SELECT visit_minutes FROM online_booking_settings WHERE client_id = ?', [$alpha]), 'saved with no room for a 2-hour visit');
+    t_submit($a, '/admin/online_booking_save.php', $settingsForm(['booking_style' => 'times', 'visit_minutes' => '90', 'gap_minutes' => '15'] + $hours('08:30', '16:30')));
+    $row = t_row('SELECT booking_style, visit_minutes, gap_minutes, hours_json FROM online_booking_settings WHERE client_id = ?', [$alpha]);
+    check_same(['times', 90, 15], [$row['booking_style'], (int) $row['visit_minutes'], (int) $row['gap_minutes']], 'saved');
+    check_same(['from' => '08:30', 'to' => '16:30'], json_decode((string) $row['hours_json'], true)['3'] ?? null, 'Wednesday hours');
+    $page = $a->get('/admin/settings.php');
+    check_page_ok($page, 'Settings with exact times');
+    check_contains('Start times on Monday: 8:30am, 10:15am, 12pm, 1:45pm', $page->body, 'the start-time preview');
+
+    // Time slots switched off: exact times still bookable, slots mode says why it isn't.
+    db()->prepare('UPDATE client_settings SET feature_ampm_slots = 0 WHERE client_id = ?')->execute([$alpha]);
+    check_page_ok((new YbHttp())->get('/book/?c=alpha-blinds'), 'booking page with exact times and no time slots');
+    db()->prepare("UPDATE online_booking_settings SET booking_style = 'slots' WHERE client_id = ?")->execute([$alpha]);
+    check_same(404, (new YbHttp())->get('/book/?c=alpha-blinds')->status, 'booking page by time slot with time slots off');
+    db()->prepare('UPDATE client_settings SET feature_ampm_slots = 1 WHERE client_id = ?')->execute([$alpha]);
+});

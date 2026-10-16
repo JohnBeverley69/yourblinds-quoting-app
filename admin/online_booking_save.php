@@ -81,6 +81,23 @@ if (($base === null) !== ($radius === null)) $fail('For a distance, fill in both
 $districtList = ob_parse_districts((string) ($_POST['districts'] ?? ''), $badDistricts);
 if ($badDistricts) $fail('These postcodes couldn\'t be read: ' . implode(', ', array_slice($badDistricts, 0, 5)) . '. Use areas like HU, districts like YO25, or DN14 6.');
 
+$style = (string) ($_POST['booking_style'] ?? 'slots') === 'times' ? 'times' : 'slots';
+$visit = (int) ($_POST['visit_minutes'] ?? 60);
+if (!in_array($visit, [30, 45, 60, 90, 120, 150, 180], true)) $visit = 60;
+$gap = (int) ($_POST['gap_minutes'] ?? 30);
+if (!in_array($gap, [0, 15, 30, 45, 60], true)) $gap = 30;
+$hours = [];
+$isTime = static fn ($t): bool => is_string($t) && preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $t) === 1;
+foreach (OB_WEEKDAY_NAMES as $d => $lab) {
+    $from = substr(trim((string) ($_POST['hours_from'][$d] ?? '09:00')), 0, 5);
+    $to   = substr(trim((string) ($_POST['hours_to'][$d] ?? '17:00')), 0, 5);
+    if (!$isTime($from) || !$isTime($to)) $fail("$lab's hours couldn't be read — use times like 09:00 and 17:00.");
+    if ($style === 'times' && isset($days[$d]) && ob_minutes($from) + $visit > ob_minutes($to)) {
+        $fail("On $lab there isn't room for a " . ob_duration_words($visit) . " visit between $from and $to.");
+    }
+    $hours[(string) $d] = ['from' => $from, 'to' => $to];
+}
+
 $notify = trim((string) ($_POST['notify_email'] ?? ''));
 if ($notify !== '' && !filter_var($notify, FILTER_VALIDATE_EMAIL)) $fail('Please enter a valid email address for new bookings.');
 
@@ -92,20 +109,24 @@ try {
     db()->prepare(
         'INSERT INTO online_booking_settings
            (client_id, enabled, slug, mode, min_notice_days, max_days_ahead, weekdays, closed_dates,
-            base_postcode, radius_miles, districts, intro_text, notify_email)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            base_postcode, radius_miles, districts, intro_text, notify_email,
+            booking_style, visit_minutes, gap_minutes, hours_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON DUPLICATE KEY UPDATE enabled = VALUES(enabled), slug = VALUES(slug), mode = VALUES(mode),
             min_notice_days = VALUES(min_notice_days), max_days_ahead = VALUES(max_days_ahead),
             weekdays = VALUES(weekdays), closed_dates = VALUES(closed_dates),
             base_postcode = VALUES(base_postcode), radius_miles = VALUES(radius_miles),
-            districts = VALUES(districts), intro_text = VALUES(intro_text), notify_email = VALUES(notify_email)'
+            districts = VALUES(districts), intro_text = VALUES(intro_text), notify_email = VALUES(notify_email),
+            booking_style = VALUES(booking_style), visit_minutes = VALUES(visit_minutes),
+            gap_minutes = VALUES(gap_minutes), hours_json = VALUES(hours_json)'
     )->execute([
         $clientId, $enabled, $slug, $mode, $notice, $ahead, implode(',', $days), $closed !== '' ? $closed : null,
         $base !== null ? ob_postcode_pretty($base) : null, $radius,
         $districtList ? implode(', ', $districtList) : null, $intro !== '' ? $intro : null, $notify !== '' ? $notify : null,
+        $style, $visit, $gap, json_encode($hours),
     ]);
 } catch (Throwable $e) {
-    $fail('Could not save — has migrate_online_booking.php been run?');
+    $fail('Could not save — have migrate_online_booking.php and migrate_online_booking_times.php been run?');
 }
 
 [$live, $why] = ob_status($clientId);

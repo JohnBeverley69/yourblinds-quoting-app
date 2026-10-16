@@ -1155,6 +1155,10 @@ CREATE TABLE `online_booking_settings` (
   `intro_text` text DEFAULT NULL,
   `notify_email` varchar(190) DEFAULT NULL,
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  `booking_style` varchar(10) NOT NULL DEFAULT 'slots',
+  `visit_minutes` smallint(5) unsigned NOT NULL DEFAULT 60,
+  `gap_minutes` smallint(5) unsigned NOT NULL DEFAULT 30,
+  `hours_json` text DEFAULT NULL,
   PRIMARY KEY (`client_id`),
   UNIQUE KEY `uq_obs_slug` (`slug`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
