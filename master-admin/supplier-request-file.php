@@ -11,12 +11,20 @@ require __DIR__ . '/../auth/middleware.php';
 
 requireSuperAdmin();
 
-$id = (int) ($_GET['id'] ?? 0);
-if ($id <= 0) { http_response_code(404); exit('Not found'); }
+// ?file=N = one of a request's attachments (supplier_request_files);
+// ?id=N   = the single price list on a request made before those existed.
+$fileId = (int) ($_GET['file'] ?? 0);
+$id     = (int) ($_GET['id'] ?? 0);
+if ($fileId <= 0 && $id <= 0) { http_response_code(404); exit('Not found'); }
 
 try {
-    $st = db()->prepare('SELECT file_name, file_path FROM supplier_requests WHERE id = ? LIMIT 1');
-    $st->execute([$id]);
+    if ($fileId > 0) {
+        $st = db()->prepare('SELECT file_name, file_path FROM supplier_request_files WHERE id = ? LIMIT 1');
+        $st->execute([$fileId]);
+    } else {
+        $st = db()->prepare('SELECT file_name, file_path FROM supplier_requests WHERE id = ? LIMIT 1');
+        $st->execute([$id]);
+    }
     $row = $st->fetch(PDO::FETCH_ASSOC);
 } catch (Throwable $e) {
     http_response_code(404);

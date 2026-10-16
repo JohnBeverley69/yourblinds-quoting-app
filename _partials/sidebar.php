@@ -233,6 +233,16 @@ $navSections = [
         ],
     ],
     [
+        // Supplier ranges held on the master catalogue + "Request a supplier"
+        // (library/index.php). Demand-driven: companies ask for the suppliers
+        // they buy from, with any price lists / option / EDI files attached.
+        'name'  => 'Supplier catalogues',
+        'items' => [
+            'supplier-catalogues' => ['/library/index.php',          'Supplier ranges',    $isAdmin],
+            'request-supplier'    => ['/library/index.php#request',  'Request a supplier', $isAdmin],
+        ],
+    ],
+    [
         // Platform / catalogue ops for the operator who runs the whole system
         // (was "Master admin"). Collapsed by default and split into four
         // scannable sub-groups so the 20 items aren't a wall of links.

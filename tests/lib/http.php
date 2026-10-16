@@ -71,7 +71,9 @@ final class YbHttp
         curl_setopt($this->ch, CURLOPT_URL, $url);
         if ($method === 'POST') {
             curl_setopt($this->ch, CURLOPT_POST, true);
-            curl_setopt($this->ch, CURLOPT_POSTFIELDS, http_build_query($fields ?? []));
+            // A CURLFile among the fields = a file upload: send multipart, as a browser would.
+            $hasFile = (bool) array_filter($fields ?? [], static fn ($v) => $v instanceof CURLFile);
+            curl_setopt($this->ch, CURLOPT_POSTFIELDS, $hasFile ? $fields : http_build_query($fields ?? []));
         } else {
             curl_setopt($this->ch, CURLOPT_HTTPGET, true);
         }
