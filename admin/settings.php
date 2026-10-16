@@ -1016,6 +1016,7 @@ $activeNav = 'settings';
             <button type="button" class="settings-tab" id="tab-suppliers" data-tab="suppliers" role="tab" aria-selected="false">Suppliers</button>
             <button type="button" class="settings-tab" id="tab-accounting" data-tab="accounting" role="tab" aria-selected="false">Accounting</button>
             <button type="button" class="settings-tab" id="tab-texts" data-tab="texts" role="tab" aria-selected="false">Texts</button>
+            <button type="button" class="settings-tab" id="tab-online-booking" data-tab="online-booking" role="tab" aria-selected="false">Online booking</button>
             <button type="button" class="settings-tab" id="tab-backup" data-tab="backup" role="tab" aria-selected="false">Back up data</button>
         </div>
 
@@ -2367,6 +2368,8 @@ $activeNav = 'settings';
         </div><!-- /tab: accounting -->
 
         <?php require __DIR__ . '/../_partials/settings_texts_panel.php'; ?>
+
+        <?php require __DIR__ . '/../_partials/settings_online_booking_panel.php'; ?>
 
         <div class="settings-panel" data-panel="backup" role="tabpanel" aria-labelledby="tab-backup">
         <section class="section">

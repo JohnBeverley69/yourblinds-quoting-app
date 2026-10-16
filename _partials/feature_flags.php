@@ -10,4 +10,5 @@ return [
     'feature_postcode_lookup' => 'Postcode lookup',
     'feature_accounts'        => 'Accounts',
     'feature_sms'             => 'Texts',
+    'feature_online_booking'  => 'Online booking',
 ];

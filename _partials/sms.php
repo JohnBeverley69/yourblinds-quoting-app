@@ -619,6 +619,20 @@ function sms_first_name(string $name): string
     return $parts[0];
 }
 
+/** Is appointments.online_request there yet? (migrate_online_booking.php) */
+function sms_has_online_request_col(): bool
+{
+    static $has = null;
+    if ($has === null) {
+        try {
+            $has = (bool) db()->query("SHOW COLUMNS FROM appointments LIKE 'online_request'")->fetchColumn();
+        } catch (Throwable $e) {
+            $has = false;
+        }
+    }
+    return $has;
+}
+
 /** Everything a text about one appointment needs, or null if it doesn't exist. */
 function sms_appointment(int $clientId, int $apptId): ?array
 {
@@ -627,6 +641,7 @@ function sms_appointment(int $clientId, int $apptId): ?array
     try {
         if ($pdo->query("SHOW COLUMNS FROM appointments LIKE 'slot_window'")->fetchColumn()) $slotCol = 'a.slot_window, ';
     } catch (Throwable $e) { /* no AM/PM column */ }
+    if (sms_has_online_request_col()) $slotCol .= 'a.online_request, ';
     $st = $pdo->prepare(
         "SELECT {$slotCol}a.id, a.client_id, a.customer_id, a.client_user_id, a.status,
                 a.appointment_date, a.appointment_time,
@@ -710,6 +725,8 @@ function sms_after_appointment_saved(int $clientId, int $apptId, ?string $previo
         if ($key === null || $key === $previousKey) return;
         $a = sms_appointment($clientId, $apptId);
         if (!$a || (string) $a['status'] !== 'booked') return;
+        // An online booking waiting for the office to confirm — the text goes when it's confirmed.
+        if ((int) ($a['online_request'] ?? 0) === 1) return;
         if ((string) $a['appointment_date'] < date('Y-m-d')) return;
 
         // Already confirmed for exactly this date/time? (e.g. saved twice)
@@ -804,7 +821,8 @@ function sms_run_day_before(?DateTimeImmutable $now = null): array
         "SELECT a.id, a.client_id
            FROM appointments a
            JOIN client_settings s ON s.client_id = a.client_id
-          WHERE a.appointment_date = ? AND a.status = 'booked'
+          WHERE a.appointment_date = ? AND a.status = 'booked'"
+          . (sms_has_online_request_col() ? ' AND a.online_request = 0' : '') . "
             AND s.sms_day_before = 1
             AND NOT EXISTS (SELECT 1 FROM messages m
                              WHERE m.appointment_id = a.id AND m.kind = 'day_before' AND m.ref_key = ?)"

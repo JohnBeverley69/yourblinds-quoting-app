@@ -147,6 +147,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     }
 
+    if ($action === 'online_decision') {
+        // Confirm or decline a customer's online booking request
+        // (_partials/online_booking.php). Same permission as reassigning:
+        // an admin, or someone who sees everyone's jobs — the booking isn't
+        // assigned to anyone yet.
+        $canDecide = $isAdmin;
+        if (!$canDecide) {
+            $permSt = db()->prepare(
+                'SELECT COALESCE(can_view_all_customer_jobs, 0)
+                   FROM client_users WHERE id = ? AND client_id = ? LIMIT 1'
+            );
+            $permSt->execute([(int) $user['user_id'], $clientId]);
+            $canDecide = ((int) $permSt->fetchColumn()) === 1;
+        }
+        if (!$canDecide) {
+            $_SESSION['flash_error'] = 'You don\'t have permission to confirm online bookings.';
+        } else {
+            require_once __DIR__ . '/../_partials/online_booking.php';
+            [$ok, $msg] = ob_decide((int) $clientId, $id, (string) ($_POST['decision'] ?? ''), (int) $user['user_id']);
+            $_SESSION[$ok ? 'flash_success' : 'flash_error'] = $msg;
+        }
+        header('Location: /calendar/view.php?id=' . $id);
+        exit;
+    }
+
     if ($action === 'update_assignee') {
         // Permission re-check on the server — the form's hidden in the
         // UI for users without it but we can't trust that alone.
@@ -571,6 +596,21 @@ $activeNav = 'calendar';
         <?php endif; ?>
         <?php if ($flashErr !== null): ?>
             <div class="alert alert-error" role="alert"><?= e((string) $flashErr) ?></div>
+        <?php endif; ?>
+
+        <?php if ((int) ($appt['online_request'] ?? 0) === 1 && (string) $appt['status'] === 'booked'): ?>
+            <div role="status" style="background:#eff6ff;border:1px solid #bfdbfe;color:#1e3a8a;border-radius:8px;
+                 padding:0.75rem 1rem;margin-bottom:1rem;font-size:0.9375rem;display:flex;flex-wrap:wrap;gap:.75rem;align-items:center">
+                <span style="flex:1 1 18rem">&#128338; <strong>Booked online — waiting for you to confirm.</strong>
+                    The time slot is held. The customer gets an email when you confirm or decline.</span>
+                <form method="post" action="/calendar/view.php?id=<?= (int) $appt['id'] ?>" style="display:flex;gap:.5rem;margin:0">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="_action" value="online_decision">
+                    <button type="submit" name="decision" value="confirm" class="btn btn-success btn-sm">Confirm booking</button>
+                    <button type="submit" name="decision" value="decline" class="btn btn-secondary btn-sm"
+                            onclick="return confirm('Decline this booking? The customer will be emailed and the time slot freed up.');">Decline</button>
+                </form>
+            </div>
         <?php endif; ?>
 
         <?php if ($assignClash !== null): ?>
