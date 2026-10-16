@@ -10,9 +10,13 @@ declare(strict_types=1);
  *   1. types their postcode — checked against the company's area: a radius in
  *      miles from a base postcode and/or a list of postcode areas (HU, YO25…);
  *      passing either one is enough, and no rules at all means "anywhere";
- *   2. picks a day and one of the company's time slots (Settings → Calendar →
- *      time slots — online booking needs those on). Only slots with room left
- *      are offered, counted exactly as the office booking form counts them;
+ *   2. picks a day and a time. Two ways, chosen in Settings (booking_style):
+ *      SLOTS — one of the company's Booking time slots (Company tab), offered
+ *      only while it has room, counted exactly as the office booking form
+ *      counts them; or EXACT TIMES — start times worked out from the opening
+ *      hours for that day, every visit length + gap (60 + 30 → 9:00, 10:30,
+ *      12:00…), offered while fewer visits overlap it than the company has
+ *      salespeople (ob_time_busy);
  *   3. leaves their details and books.
  *
  * REQUEST mode (the default): the visit goes in the diary straight away so the
@@ -63,6 +67,10 @@ function ob_default_settings(): array
         'districts'       => null,
         'intro_text'      => null,
         'notify_email'    => null,
+        'booking_style'   => 'slots',
+        'visit_minutes'   => 60,
+        'gap_minutes'     => 30,
+        'hours_json'      => null,
     ];
 }
 
@@ -103,8 +111,14 @@ function ob_status(int $clientId): array
     $s = ob_settings($clientId);
     if ((int) $s['enabled'] !== 1)       return [false, 'Online booking is switched off.'];
     if ((string) ($s['slug'] ?? '') === '') return [false, 'There is no booking link name yet.'];
+    if (ob_style($s) === 'times') {
+        foreach (ob_weekdays($s) as $dow) {
+            if (ob_day_starts($s, $dow)) return [true, ''];
+        }
+        return [false, 'None of your booking days has room for a visit — check the hours and the visit length.'];
+    }
     if (!ampm_settings(db(), $clientId)['on']) {
-        return [false, 'Online booking uses your time slots — switch on "Booking time slots" on the Company tab (under Calendar) first.'];
+        return [false, 'Booking by time slot uses your Booking time slots — switch them on on the Company tab (under Calendar), or choose "Exact times" below.'];
     }
     if (!ob_windows($clientId)) return [false, 'There are no time slots set up.'];
     return [true, ''];
@@ -203,6 +217,141 @@ function ob_window_label(int $clientId, ?string $key): string
     return $w ? $w['label'] . ' (' . $w['range'] . ')' : '';
 }
 
+/** 'times' (exact start times) or 'slots' (the company's Booking time slots). */
+function ob_style(array $s): string
+{
+    return (string) ($s['booking_style'] ?? 'slots') === 'times' ? 'times' : 'slots';
+}
+
+/** Opening hours per weekday for exact-time booking: [1 => ['from' => '09:00', 'to' => '17:00'], …]. */
+function ob_hours(array $s): array
+{
+    $saved = json_decode((string) ($s['hours_json'] ?? ''), true);
+    $ok    = static fn ($t): bool => is_string($t) && preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $t) === 1;
+    $out   = [];
+    foreach (OB_WEEKDAY_NAMES as $d => $_) {
+        $h = is_array($saved) && isset($saved[(string) $d]) && is_array($saved[(string) $d]) ? $saved[(string) $d] : [];
+        $out[$d] = [
+            'from' => $ok($h['from'] ?? null) ? $h['from'] : '09:00',
+            'to'   => $ok($h['to'] ?? null) ? $h['to'] : '17:00',
+        ];
+    }
+    return $out;
+}
+
+/** Minutes since midnight for 'HH:MM'. */
+function ob_minutes(string $hhmm): int
+{
+    return (int) substr($hhmm, 0, 2) * 60 + (int) substr($hhmm, 3, 2);
+}
+
+/**
+ * Start times on one weekday for exact-time booking, as 'HH:MM': from the
+ * opening time, every visit length + gap, while the visit still finishes by
+ * the closing time. 9:00–17:00 with 60 + 30 → 09:00, 10:30, 12:00, 13:30, 15:00.
+ */
+function ob_day_starts(array $s, int $dow): array
+{
+    $h     = ob_hours($s)[$dow] ?? null;
+    $visit = max(15, min(480, (int) ($s['visit_minutes'] ?? 60)));
+    $step  = $visit + max(0, min(240, (int) ($s['gap_minutes'] ?? 30)));
+    if ($h === null) return [];
+    $out = [];
+    for ($t = ob_minutes($h['from']); $t + $visit <= ob_minutes($h['to']) && count($out) < 48; $t += $step) {
+        $out[] = sprintf('%02d:%02d', intdiv($t, 60), $t % 60);
+    }
+    return $out;
+}
+
+/** 90 → '1½ hours'; 60 → '1 hour'; 45 → '45 minutes'. */
+function ob_duration_words(int $minutes): string
+{
+    if ($minutes < 60 || $minutes % 30 !== 0) return $minutes . ' minutes';
+    $h = intdiv($minutes, 60);
+    $half = $minutes % 60 === 30 ? '½' : '';
+    return $h . $half . ($h === 1 && $half === '' ? ' hour' : ' hours');
+}
+
+/** '13:30' → '1:30pm'; '09:00' → '9am'. */
+function ob_time_label(string $hhmm): string
+{
+    return ampm_fmt_time(substr($hhmm, 0, 5) . ':00');
+}
+
+/**
+ * The salespeople who go out on quote visits (the 'sales' role). How many
+ * exact-time visits may overlap is this count — at least 1.
+ */
+function ob_sales_ids(int $clientId): array
+{
+    static $cache = [];
+    if (isset($cache[$clientId])) return $cache[$clientId];
+    try {
+        $st = db()->prepare(
+            "SELECT DISTINCT u.id FROM client_users u JOIN client_user_roles r ON r.user_id = u.id
+              WHERE u.client_id = ? AND u.active = 1 AND r.role = 'sales'"
+        );
+        $st->execute([$clientId]);
+        $ids = $st->fetchAll(PDO::FETCH_COLUMN);
+    } catch (Throwable $e) {
+        $st = db()->prepare("SELECT id FROM client_users WHERE client_id = ? AND active = 1 AND role = 'sales'");
+        $st->execute([$clientId]);
+        $ids = $st->fetchAll(PDO::FETCH_COLUMN);
+    }
+    return $cache[$clientId] = array_map('intval', $ids);
+}
+
+/**
+ * How many visits already overlap a proposed exact-time visit, with the gap
+ * either side (travel time between visits). Counted: unassigned visits that
+ * aren't fittings, and anything assigned to a salesperson. Cancelled and
+ * no-show don't count.
+ */
+function ob_time_busy(int $clientId, array $s, string $date, string $hhmm): int
+{
+    $visit = max(15, (int) ($s['visit_minutes'] ?? 60));
+    $gap   = max(0, (int) ($s['gap_minutes'] ?? 30));
+    $start = ob_minutes($hhmm) - $gap;
+    $end   = ob_minutes($hhmm) + $visit + $gap;
+    $sales = ob_sales_ids($clientId);
+    $who   = "(client_user_id IS NULL AND COALESCE(appt_kind, 'measure') <> 'fitting')"
+           . ($sales ? ' OR client_user_id IN (' . implode(',', $sales) . ')' : '');
+    $st = db()->prepare(
+        "SELECT COUNT(*) FROM appointments
+          WHERE client_id = ? AND appointment_date = ?
+            AND (status IS NULL OR status NOT IN ('cancelled', 'no_show'))
+            AND ({$who})
+            AND (HOUR(appointment_time) * 60 + MINUTE(appointment_time)) < ?
+            AND (HOUR(appointment_time) * 60 + MINUTE(appointment_time) + duration_minutes) > ?"
+    );
+    $st->execute([$clientId, $date, $end, $start]);
+    return (int) $st->fetchColumn();
+}
+
+/** How many exact-time visits can happen at once: one per salesperson, at least 1. */
+function ob_time_capacity(int $clientId): int
+{
+    return max(1, count(ob_sales_ids($clientId)));
+}
+
+/** What the customer picked, in words: 'Morning (9am–1pm)' or '10:30am'. */
+function ob_slot_label(int $clientId, array $s, string $key): string
+{
+    return ob_style($s) === 'times' ? ob_time_label($key) : ob_window_label($clientId, $key);
+}
+
+/** A booked visit's time in words: its slot name, or its start–finish time. */
+function ob_appt_time_label(int $clientId, ?string $slotWindow, string $time, int $minutes): string
+{
+    if ($slotWindow !== null && $slotWindow !== '') {
+        $l = ob_window_label($clientId, $slotWindow);
+        if ($l !== '') return $l;
+    }
+    $t   = substr($time, 0, 5);
+    $end = ob_minutes($t) + $minutes;
+    return ob_time_label($t) . '–' . ob_time_label(sprintf('%02d:%02d', intdiv($end, 60) % 24, $end % 60));
+}
+
 /** Allowed weekdays as ISO numbers (1 = Monday … 7 = Sunday). */
 function ob_weekdays(array $s): array
 {
@@ -257,6 +406,12 @@ function ob_slot_open(int $clientId, array $s, string $date, string $key, ?DateT
 {
     $now  = $now ?? new DateTimeImmutable('now');
     $day  = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+    if (ob_style($s) === 'times') {
+        if ($day === false || $day->format('Y-m-d') !== $date || !ob_day_allowed($s, $day, $now)) return false;
+        if (!in_array($key, ob_day_starts($s, (int) $day->format('N')), true)) return false;
+        if ($date === $now->format('Y-m-d') && $key . ':00' <= $now->format('H:i:s')) return false;
+        return ob_time_busy($clientId, $s, $date, $key) < ob_time_capacity($clientId);
+    }
     $wins = ob_windows($clientId);
     if ($day === false || $day->format('Y-m-d') !== $date || !isset($wins[$key])) return false;
     if (!ob_day_allowed($s, $day, $now)) return false;
@@ -293,6 +448,13 @@ function ob_available_days(int $clientId, ?DateTimeImmutable $now = null): array
         if (!ob_day_allowed($s, $day, $now)) continue;
         $date  = $day->format('Y-m-d');
         $slots = [];
+        if (ob_style($s) === 'times') {
+            foreach (ob_day_starts($s, (int) $day->format('N')) as $t) {
+                if (ob_slot_open($clientId, $s, $date, $t, $now)) $slots[$t] = ob_time_label($t);
+            }
+            if ($slots) $out[] = ['date' => $date, 'label' => $day->format('D j M'), 'slots' => $slots];
+            continue;
+        }
         foreach ($wins as $k => $w) {
             if (ob_slot_open($clientId, $s, $date, (string) $k, $now)) {
                 $slots[(string) $k] = $w['label'] . ' (' . $w['range'] . ')';
@@ -644,8 +806,14 @@ function ob_create_booking(int $clientId, array $in, array $meta, ?DateTimeImmut
     $area = ob_area_check($s, $pc);
     if (!$area['ok']) return ['ok' => false, 'error' => 'Sorry, we don\'t cover ' . ob_postcode_pretty($pc) . ' online.'];
 
-    $wins = ob_windows($clientId);
-    $win  = $wins[$in['slot']] ?? null;
+    if (ob_style($s) === 'times') {
+        $win = preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $in['slot']) === 1
+            ? ['time' => $in['slot'] . ':00', 'duration' => max(15, (int) $s['visit_minutes'])] : null;
+        $slotKey = null;
+    } else {
+        $win = ob_windows($clientId)[$in['slot']] ?? null;
+        $slotKey = $in['slot'];
+    }
     if ($win === null) return ['ok' => false, 'error' => 'Please choose a day and a time.'];
 
     $requested = (string) $s['mode'] !== 'instant' || $area['check'] === 'unchecked';
@@ -694,7 +862,7 @@ function ob_create_booking(int $clientId, array $in, array $meta, ?DateTimeImmut
         )->execute([
             $clientId, $customerId, $in['name'], $in['date'], $win['time'], $win['duration'],
             $in['address1'], $in['address2'] !== '' ? $in['address2'] : null, $in['town'], ob_postcode_pretty($pc),
-            $notes, $in['slot'], $requested ? 1 : 0,
+            $notes, $slotKey, $requested ? 1 : 0,
         ]);
         $apptId = (int) $pdo->lastInsertId();
 
@@ -807,7 +975,7 @@ function ob_company_contact(int $clientId): array
  * The customer's email for one stage: 'requested', 'confirmed' or 'declined'.
  * Pure — no database, no sending — so it can be tested. Returns subject + body.
  */
-function ob_compose_customer_email(string $kind, array $co, string $name, string $date, string $slotLabel, string $address, string $bookLink = ''): array
+function ob_compose_customer_email(string $kind, array $co, string $name, string $date, string $slotLabel, string $address, string $bookLink = '', bool $exactTime = false): array
 {
     $d       = DateTimeImmutable::createFromFormat('!Y-m-d', $date);
     $dateStr = $d ? $d->format('l j F Y') : $date;
@@ -837,7 +1005,7 @@ function ob_compose_customer_email(string $kind, array $co, string $name, string
     return [
         'subject' => 'Your appointment is booked' . ($co['name'] !== '' ? ' with ' . $co['name'] : '') . ' — ' . ($d ? $d->format('j M Y') : $date),
         'body'    => $hello . "This confirms your appointment:\n\n" . $when
-                   . "We'll aim to be with you within that time slot rather than at a fixed time. "
+                   . ($exactTime ? '' : "We'll aim to be with you within that time slot rather than at a fixed time. ")
                    . "If you need to change or cancel, just {$contact}.\n\n" . $sign,
     ];
 }
@@ -847,7 +1015,8 @@ function ob_email_customer(int $clientId, int $apptId, string $kind): bool
 {
     try {
         $st = db()->prepare(
-            'SELECT a.appointment_date, a.slot_window, a.installation_address1, a.installation_town, a.installation_postcode,
+            'SELECT a.appointment_date, a.slot_window, a.appointment_time, a.duration_minutes,
+                    a.installation_address1, a.installation_town, a.installation_postcode,
                     a.customer_id, c.name, c.email
                FROM appointments a
                JOIN customers c ON c.id = a.customer_id AND c.client_id = a.client_id
@@ -869,7 +1038,9 @@ function ob_email_customer(int $clientId, int $apptId, string $kind): bool
         ], static fn ($v) => trim($v) !== ''));
         $slug = (string) (ob_settings($clientId)['slug'] ?? '');
         $mail = ob_compose_customer_email($kind, $co, $name, (string) $a['appointment_date'],
-            ob_window_label($clientId, (string) $a['slot_window']), $addr, $slug !== '' ? ob_link($slug) : '');
+            ob_appt_time_label($clientId, $a['slot_window'] !== null ? (string) $a['slot_window'] : null,
+                (string) $a['appointment_time'], (int) $a['duration_minutes']),
+            $addr, $slug !== '' ? ob_link($slug) : '', (string) ($a['slot_window'] ?? '') === '');
 
         require_once __DIR__ . '/../mailer.php';
         $opts = ['from_name' => $co['from_name'],
@@ -895,7 +1066,7 @@ function ob_email_company(int $clientId, int $apptId, bool $requested): bool
         if (!filter_var($to, FILTER_VALIDATE_EMAIL)) return false;
 
         $st = db()->prepare(
-            'SELECT a.appointment_date, a.slot_window, a.installation_postcode, a.title
+            'SELECT a.appointment_date, a.slot_window, a.appointment_time, a.duration_minutes, a.installation_postcode, a.title
                FROM appointments a WHERE a.id = ? AND a.client_id = ? LIMIT 1'
         );
         $st->execute([$apptId, $clientId]);
@@ -903,7 +1074,9 @@ function ob_email_company(int $clientId, int $apptId, bool $requested): bool
         if (!$a) return false;
 
         $d    = DateTimeImmutable::createFromFormat('!Y-m-d', (string) $a['appointment_date']);
-        $when = ($d ? $d->format('D j M Y') : $a['appointment_date']) . ', ' . ob_window_label($clientId, (string) $a['slot_window']);
+        $when = ($d ? $d->format('D j M Y') : $a['appointment_date']) . ', '
+              . ob_appt_time_label($clientId, $a['slot_window'] !== null ? (string) $a['slot_window'] : null,
+                  (string) $a['appointment_time'], (int) $a['duration_minutes']);
         $base = rtrim((string) (env('APP_URL', '') ?: 'https://yourblinds.uk'), '/');
         $subject = ($requested ? 'Online booking request: ' : 'New online booking: ') . $a['title'] . ' — ' . $when;
         $body = "A customer has booked online.\n\n"

@@ -386,11 +386,14 @@ return [
       migrate_ampm_windows_list.php?&rdquo;</em>, the database update hasn&rsquo;t been run yet &mdash; ask whoever runs
       the platform for you.</p>'],
 
-    ['admin', 'Calendar & customers', 'Can customers book a visit online themselves?', 'online booking book online booking page booking link website facebook google book now button self booking customer books qr code request confirm decline instant area radius miles postcode district closed days holiday',
+    ['admin', 'Calendar & customers', 'Can customers book a visit online themselves?', 'online booking exact time start time visit length gap opening hours book online booking page booking link website facebook google book now button self booking customer books qr code request confirm decline instant area radius miles postcode district closed days holiday',
      '<p>Yes, on the <strong>Silver</strong> and <strong>Gold</strong> plans. Go to <strong>Setup &rarr; Settings &rarr;
       Online booking</strong>, tick <strong>Let customers book online</strong> and press <strong>Save online booking</strong>.
-      It uses your <strong>Booking time slots</strong> (Company tab, Calendar section), so switch those on first;
-      customers are offered the same slots, with the same number of visits per slot, as your own booking form.</p>
+      Under <strong>How customers pick a time</strong> choose <strong>Time slots</strong> (your Booking time slots from the
+      Company tab, with the same number of visits per slot as your own booking form) or <strong>Exact times</strong>: set
+      your hours beside each day, how long a visit takes and the gap after it, and customers pick a start time &mdash;
+      9am&ndash;5pm with 1 hour + 30 minutes gives 9am, 10:30am, 12pm, 1:30pm and 3pm. A time is offered while fewer
+      visits overlap it than you have people with the Sales role.</p>
       <p><strong>Your link.</strong> The tab shows your booking link and a QR code. Put the link on your website
       (a &ldquo;Book a free quote&rdquo; button), on your Facebook page (Edit &rarr; Add a button &rarr; Book now) and on your
       Google Business profile, and use the QR code on vans and leaflets.</p>

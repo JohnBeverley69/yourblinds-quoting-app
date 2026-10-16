@@ -15,6 +15,9 @@ if ($obSlug === '') $obSlug = ob_suggest_slug((string) ($client['company_name'] 
 $obAmpmOn   = ampm_settings(db(), (int) $clientId)['on'];
 $obDays     = ob_weekdays($obS);
 $obPending  = ob_pending_count((int) $clientId);
+$obStyle    = ob_style($obS);
+$obHours    = ob_hours($obS);
+$obSales    = count(ob_sales_ids((int) $clientId));
 $obHint     = 'color:#6b7280;font-size:0.875rem;margin:0 0 1rem;max-width:44rem';
 ?>
 <div class="settings-panel" data-panel="online-booking" role="tabpanel" aria-labelledby="tab-online-booking">
@@ -82,12 +85,6 @@ $obHint     = 'color:#6b7280;font-size:0.875rem;margin:0 0 1rem;max-width:44rem'
             <?= csrf_field() ?>
             <input type="hidden" name="_action" value="save">
 
-            <?php if (!$obAmpmOn): ?>
-                <p style="<?= $obHint ?>"><strong>Online booking uses your time slots.</strong> Switch on
-                   &ldquo;Booking time slots&rdquo; on the <a href="/admin/settings.php#company">Company</a> tab
-                   (under Calendar) and set up your slots first. Customers are offered the same slots, with the same
-                   number of visits per slot, as your booking form.</p>
-            <?php endif; ?>
 
             <div class="form-row full">
                 <label style="display:flex;gap:.5rem;align-items:center;font-weight:600">
@@ -116,6 +113,48 @@ $obHint     = 'color:#6b7280;font-size:0.875rem;margin:0 0 1rem;max-width:44rem'
                 </label>
             </fieldset>
 
+            <fieldset class="form-group" style="border:0;padding:0;margin:0 0 1rem">
+                <legend style="font-weight:600;margin-bottom:.25rem">How customers pick a time</legend>
+                <label style="display:flex;gap:.5rem;align-items:flex-start;font-weight:400">
+                    <input type="radio" name="booking_style" value="slots" <?= $obStyle === 'slots' ? 'checked' : '' ?>>
+                    <span><strong>Time slots</strong> — they choose one of your Booking time slots, such as Morning or
+                    Afternoon, with the same number of visits per slot as your own booking form.
+                    <?php if (!$obAmpmOn): ?><br><em>Your Booking time slots are switched off — switch them on on the
+                    <a href="/admin/settings.php#company">Company</a> tab (under Calendar) to use this.</em><?php endif; ?></span>
+                </label>
+                <label style="display:flex;gap:.5rem;align-items:flex-start;font-weight:400;margin-top:.4rem">
+                    <input type="radio" name="booking_style" value="times" <?= $obStyle === 'times' ? 'checked' : '' ?>>
+                    <span><strong>Exact times</strong> — they choose a start time, such as 10:30am. Set your hours
+                    beside each day below, how long a visit takes and the gap you need between visits.</span>
+                </label>
+            </fieldset>
+
+            <div class="ob-times-only" style="display:flex;flex-wrap:wrap;gap:1rem 1.5rem">
+                <div class="form-group" style="max-width:14rem">
+                    <label for="ob_visit">A visit takes</label>
+                    <select id="ob_visit" name="visit_minutes">
+                        <?php foreach ([30, 45, 60, 90, 120, 150, 180] as $n): ?>
+                            <option value="<?= $n ?>" <?= (int) $obS['visit_minutes'] === $n ? 'selected' : '' ?>><?= e(ob_duration_words($n)) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="form-group" style="max-width:16rem">
+                    <label for="ob_gap">Gap after each visit <span style="color:#9ca3af;font-weight:400">(travel)</span></label>
+                    <select id="ob_gap" name="gap_minutes">
+                        <?php foreach ([0 => 'No gap', 15 => '15 minutes', 30 => '30 minutes', 45 => '45 minutes', 60 => '1 hour'] as $n => $lab): ?>
+                            <option value="<?= $n ?>" <?= (int) $obS['gap_minutes'] === $n ? 'selected' : '' ?>><?= e($lab) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <p style="<?= $obHint ?>;flex-basis:100%;margin-top:-.5rem">
+                    <?php $obMon = ob_day_starts($obS, 1); ?>
+                    <?php if ($obStyle === 'times' && $obMon): ?>Start times on Monday: <?= e(implode(', ', array_map('ob_time_label', $obMon))) ?>.<?php endif; ?>
+                    Up to <strong><?= max(1, $obSales) ?></strong> visit<?= max(1, $obSales) === 1 ? '' : 's' ?> can happen at the same time
+                    &mdash; one for each person with the Sales role<?= $obSales === 0 ? " (you have none, so it's one at a time)" : '' ?>.
+                    A time someone is already booked for isn't offered.
+                </p>
+            </div>
+
             <div style="display:flex;flex-wrap:wrap;gap:1rem 1.5rem">
                 <div class="form-group" style="max-width:14rem">
                     <label for="ob_notice">Earliest booking</label>
@@ -137,13 +176,32 @@ $obHint     = 'color:#6b7280;font-size:0.875rem;margin:0 0 1rem;max-width:44rem'
 
             <fieldset class="form-group" style="border:0;padding:0;margin:0 0 1rem">
                 <legend style="font-weight:600;margin-bottom:.25rem">Days customers can book</legend>
-                <div style="display:flex;flex-wrap:wrap;gap:.25rem 1rem">
+                <div id="ob-days" style="display:flex;flex-wrap:wrap;gap:.25rem 1rem">
                 <?php foreach (OB_WEEKDAY_NAMES as $n => $lab): ?>
-                    <label style="display:flex;gap:.35rem;align-items:center;font-weight:400">
-                        <input type="checkbox" name="weekdays[]" value="<?= $n ?>" <?= in_array($n, $obDays, true) ? 'checked' : '' ?>> <?= e($lab) ?>
-                    </label>
+                    <div style="display:flex;gap:.5rem;align-items:center">
+                        <label style="display:flex;gap:.35rem;align-items:center;font-weight:400;min-width:3.5rem;margin:0">
+                            <input type="checkbox" name="weekdays[]" value="<?= $n ?>" <?= in_array($n, $obDays, true) ? 'checked' : '' ?>> <?= e($lab) ?>
+                        </label>
+                        <span class="ob-times-only" style="display:flex;gap:.35rem;align-items:center">
+                            <input type="time" name="hours_from[<?= $n ?>]" value="<?= e($obHours[$n]['from']) ?>" aria-label="<?= e($lab) ?> from" style="width:8rem">
+                            to
+                            <input type="time" name="hours_to[<?= $n ?>]" value="<?= e($obHours[$n]['to']) ?>" aria-label="<?= e($lab) ?> to" style="width:8rem">
+                        </span>
+                    </div>
                 <?php endforeach; ?>
                 </div>
+                <script>
+                (function () {
+                    var form = document.getElementById('ob-days').closest('form');
+                    function sync() {
+                        var times = (form.querySelector('input[name=booking_style]:checked') || {}).value === 'times';
+                        form.querySelectorAll('.ob-times-only').forEach(function (el) { el.style.display = times ? 'flex' : 'none'; });
+                        document.getElementById('ob-days').style.flexDirection = times ? 'column' : 'row';
+                    }
+                    form.querySelectorAll('input[name=booking_style]').forEach(function (r) { r.addEventListener('change', sync); });
+                    sync();
+                })();
+                </script>
             </fieldset>
 
             <div class="form-group" style="max-width:28rem">

@@ -99,7 +99,7 @@ if ($company === null) {
                     $bag = ['done' => [
                         'requested' => $res['requested'],
                         'date'      => $in['date'],
-                        'slot'      => ob_window_label($clientId, $in['slot']),
+                        'slot'      => ob_slot_label($clientId, $settings, $in['slot']),
                         'email'     => $in['email'],
                     ]];
                     header('Location: ' . $self . '&step=done');
@@ -236,7 +236,9 @@ $co = $company !== null ? ob_company_contact((int) $company['id']) : null;
             <?= csrf_field() ?>
             <input type="hidden" name="_action" value="book">
             <fieldset style="border:0;padding:0;margin:0">
-                <legend class="muted">We'll arrive at some point within the time you choose.</legend>
+                <legend class="muted"><?= ob_style($settings) === 'times'
+                    ? 'Choose a start time. A visit takes about ' . e(ob_duration_words((int) $settings['visit_minutes'])) . '.'
+                    : "We'll arrive at some point within the time you choose." ?></legend>
                 <div class="days">
                 <?php $picked = ($form['date'] ?? '') . '|' . ($form['slot'] ?? ''); ?>
                 <?php foreach ($days as $d): ?>
