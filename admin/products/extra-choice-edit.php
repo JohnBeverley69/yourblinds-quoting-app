@@ -899,16 +899,21 @@ $activeNav = 'products';
                 </div>
                 <?php endif; ?>
 
-                <?php if ($hasFabricScopingTbl): ?>
+                <?php
+                // Folded away (John, 2026-10-16: "doesn't look very tidy"). It's for
+                // the rare choice only some fabrics within a band have (e.g. Forest Wood
+                // painted ends), so it stays shut unless this choice already uses it.
+                $fabTicked = $knownFabrics ? count(array_filter($knownFabrics,
+                    static fn ($fb) => in_array((int) $fb['id'], $f['fabrics'], true))) : 0;
+                ?>
+                <?php if ($hasFabricScopingTbl && $knownFabrics): ?>
                 <div class="form-row full">
-                    <div class="form-group">
-                        <label>Available for specific fabrics</label>
-                        <?php if (!$knownFabrics): ?>
-                            <p style="color:var(--text-faint);font-size:0.8125rem;margin:0">
-                                No fabrics on this product yet.
-                            </p>
-                        <?php else: ?>
-                            <small style="color:var(--text-faint);font-size:0.8125rem;display:block;margin-bottom:0.5rem">
+                    <details class="form-group"<?= $fabTicked > 0 ? ' open' : '' ?>>
+                        <summary style="cursor:pointer;font-weight:600">
+                            Only for certain fabrics <span style="font-weight:400;color:var(--text-faint)">
+                            &mdash; <?= $fabTicked > 0 ? $fabTicked . ' ticked' : 'rarely needed; every fabric at the moment' ?></span>
+                        </summary>
+                            <small style="color:var(--text-faint);font-size:0.8125rem;display:block;margin:0.5rem 0">
                                 Only needed when a band can't say it. Leave everything unticked =
                                 <strong>appears for every fabric</strong> — that's the normal case, and
                                 what bands above are for. Tick fabrics only when the restriction applies
@@ -935,8 +940,7 @@ $activeNav = 'products';
                                     </label>
                                 <?php endforeach; ?>
                             </div>
-                        <?php endif; ?>
-                    </div>
+                    </details>
                 </div>
                 <?php endif; ?>
 
