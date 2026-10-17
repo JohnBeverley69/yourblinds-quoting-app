@@ -16,7 +16,10 @@ declare(strict_types=1);
  *     (_partials/maps.php — the embedded run map stays Google);
  *   - ampm_slots: "🕘 Booking time slots" + a LIST of time slots (Name / From /
  *     To / Bookings / day, "✕ Remove", "+ Add a time slot", max AMPM_MAX_WINDOWS
- *     = 6, new rows default to 2 a day, defaults Morning 09:00–13:00 and
+ *     = 6 (Add greys out at 6, Remove greys out on the last row), new rows
+ *     default to 2 a day; a removed slot stays stored as "off" so its old
+ *     bookings keep their name (ampm_label_windows) but it can't be booked
+ *     (ampm_window_bookable); defaults Morning 09:00–13:00 and
  *     Afternoon 13:00–17:00 at 4 a day), with the handler's exact messages.
  * The booking side is calendar/new.php ("+ Book Appointment" → "Book
  * appointment"): exact Time + Duration (mins) when slots are off; "Time slot"
@@ -36,9 +39,10 @@ $script = [
     ['6',  'An exact time, or a time slot',  'Third, and the biggest: Booking time slots. This changes how you book a quote visit, to measure up. Left unticked, you book an exact time, with a duration, like ten past eleven for an hour. Tick it, and you offer a time slot instead, such as Morning or Afternoon. The customer is given the time slot, never an exact hour. Fittings are not affected.', 6],
     ['7',  'Your time slots',                'Underneath the tick is one row for each time slot. Out of the box there are two: Morning, nine till one, and Afternoon, one till five, each holding four bookings a day. Every row has a Name, which is what the customer sees, a From time, a To time, and Bookings per day. Change them to suit your own hours.', 7],
     ['8',  'Bookings per day',            'Bookings per day is your limit for that time slot, anything from one to ninety nine. Each time slot has its own limit, so six mornings and three afternoons is perfectly fine. Once a time slot is full on a given day, it cannot be booked any more. So you never promise more visits than you can do.', 8],
-    ['9',  'Add or remove a time slot',      'Need an evening? Click Add a time slot. A new empty row appears, ready for a name and times. Say, Evening, six till eight. You can have up to six time slots. To take one away, click Remove on its row. Bookings already in it keep their label. You must keep at least one. Then press Save.', 9],
-    ['10', 'Saving, and what it checks',  'When you save, the time slots are put in time order, and a green bar says, Booking time slots saved. If something does not add up, you get a red bar starting, Time slots not saved, and it tells you why. Every slot needs a name, and each one needs a From time before its To time.', 10],
-    ['11', 'Booking with time slots',        'Now book a quote visit, from Book Appointment on the calendar. Instead of a time, you get Time slot, with one choice for each time slot, its hours, and how many are left that day. A full time slot says Full, and cannot be picked. Below is a tick to email the customer their appointment time slot. Pick one, and press Book appointment.', 11],
+    ['9',  'Add a time slot',             'Need an evening? Click Add a time slot. A new row appears at the bottom. It starts empty, apart from Bookings per day, which starts at two. Type a name, say Evening, then its times, six till eight. You can have up to six time slots. Once you have six, the Add button greys out, so there is no seventh.', 9],
+    ['10', 'Remove a time slot',          'To take a time slot away, click Remove on its row, then press Save. It goes from the booking screen, so nobody can book it again. But visits already booked in it are not lost. They stay on the calendar, still showing its name. You cannot remove the last row, because you must keep at least one time slot.', 10],
+    ['11', 'Saving, and what it checks',  'When you save, the time slots are put in time order, and a green bar says, Booking time slots saved. If something does not add up, you get a red bar starting, Time slots not saved, and it tells you why. Every slot needs a name, and each one needs a From time before its To time.', 11],
+    ['12', 'Booking with time slots',        'Now book a quote visit, from Book Appointment on the calendar. Instead of a time, you get Time slot, with one choice for each time slot, its hours, and how many are left that day. A full time slot says Full, and cannot be picked. Below is a tick to email the customer their appointment time slot. Pick one, and press Book appointment.', 12],
 ];
 $L = static fn (int $n): string => (string) round(mb_strlen($script[$n - 1][2]) / 13.6);
 
@@ -50,14 +54,20 @@ $tk0  = '<span class="tick"></span>';
 $save = static fn (string $cls = '', string $st = '', string $more = '') => '<div class="fact"><span class="btnp ' . $cls . '" style="' . $st . '">Save</span>' . $more . '</div>';
 
 // One time slot row. Each value may be HTML (for animations).
-$row = static function (string $name, string $from, string $to, string $cap, string $cls = '', string $st = '', string $rm = '') {
+// Same controls as the real row: a text box, two time boxes, a number box and
+// a "✕ Remove" button ($rmCls 'off' = greyed, as when only one row is left).
+$row = static function (string $name, string $from, string $to, string $cap, string $cls = '', string $st = '', string $rmCls = '', string $rmSt = '') {
     return '<div class="wrow ' . $cls . '" style="' . $st . '">'
          . '<div class="wf w-n"><span class="lab">Name</span><div class="inp">' . $name . '</div></div>'
          . '<div class="wf w-t"><span class="lab">From</span><div class="inp tm">' . $from . '</div></div>'
          . '<div class="wf w-t"><span class="lab">To</span><div class="inp tm">' . $to . '</div></div>'
-         . '<div class="wf w-c"><span class="lab">Bookings / day</span><div class="inp">' . $cap . '</div></div>'
-         . '<span class="btns sm rm ' . $rm . '">&#10005; Remove</span></div>';
+         . '<div class="wf w-c"><span class="lab">Bookings / day</span><div class="inp nm">' . $cap . '</div></div>'
+         . '<span class="btns sm rm ' . $rmCls . '" style="' . $rmSt . '">&#10005; Remove</span></div>';
 };
+// An empty box's grey placeholder that gives way to typed text.
+$ph = static fn (string $placeholder, string $typed, float $d, int $steps = 6, float $tt = .5): string =>
+    '<span class="ph a-out" style="--d:' . $d . 's">' . $placeholder . '</span>'
+    . '<span class="a-type" style="--d:' . $d . 's;--ts:' . $steps . ';--tt:' . $tt . 's">' . $typed . '</span>';
 $slotHint = '<p class="hintg">When booking a <b>quote (measure) visit</b>, offer a time slot such as <b>Morning</b>, <b>Afternoon</b> or <b>Evening</b>
     instead of an exact time &mdash; so the customer is given a time slot, never an exact hour. Name each slot, set its <b>times</b> and how many
     bookings it holds <b>per day</b>; once a slot is full it can&rsquo;t be booked. Add or remove slots to suit you (up to 6). Fittings are unaffected.</p>';
@@ -131,6 +141,20 @@ return [
           .gd .wrow{ display:flex; flex-wrap:wrap; align-items:flex-end; gap:.35rem .55rem; margin-top:.45rem; }
           .gd .wf{ min-width:0; } .gd .w-n{ width:6.2rem; } .gd .w-t{ width:4.6rem; } .gd .w-c{ width:5.4rem; }
           .gd .rm{ margin-bottom:.1rem; }
+          .gd .btns.off{ opacity:.45; }
+          .gd .inp.nm::after{ content:"\25B4\A\25BE"; white-space:pre; position:absolute; right:.3rem; top:2px; font-size:.5rem; line-height:.55rem; color:var(--faint); }
+          .gd .ph{ color:var(--faint); }
+          .gd .tri{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:.6rem; margin-top:.6rem; max-width:40rem; align-items:start; }
+          /* a row that is removed: fades and closes up */
+          .gd .gone{ overflow:hidden; max-height:3.4rem; }
+          .gd .gd-play .gone{ animation:scGone .5s ease calc(var(--d,0s) * var(--k,1)) forwards; }
+          .gd .gd-done .gone{ max-height:0; opacity:0; }
+          @keyframes scGone{ to{ max-height:0; opacity:0; } }
+          .gd .tri > *{ max-width:none; }
+          .gd .mini{ border:1px dashed var(--line); border-radius:10px; padding:.45rem .55rem; background:var(--panel); }
+          .gd .mini .lab{ margin-bottom:.3rem; }
+          .gd .wrap{ position:relative; }
+          .gd .ptrbox{ position:absolute; inset:0; pointer-events:none; }
 
           /* calendar job card */
           .gd .cal{ border:1px solid var(--line); border-radius:10px; overflow:hidden; max-width:17rem; background:var(--surface); }
@@ -174,6 +198,7 @@ return [
             .gd .split, .gd .two{ grid-template-columns:1fr; }
             .gd .sc{ min-height:440px; }
             .gd .bkrow4{ grid-template-columns:1fr 1fr; }
+            .gd .tri{ grid-template-columns:1fr; }
             .gd .w-n{ width:5.4rem; } .gd .w-t{ width:4.3rem; }
           }',
         'demo'    => '
@@ -200,7 +225,7 @@ return [
                       ' . $row('Morning', '09:00', '13:00', '4') . $row('Afternoon', '13:00', '17:00', '4') . '
                       <div class="fact"><span class="btns sm">+ Add a time slot</span></div>' . $save() . '</div>
                   </div>
-                  <p class="scs" style="margin-top:.6rem">Press <b>&#9654; Play</b> below &mdash; eleven short chapters.</p>
+                  <p class="scs" style="margin-top:.6rem">Press <b>&#9654; Play</b> below &mdash; twelve short chapters.</p>
                 </div>
 
                 <!-- 1 — three settings -->
@@ -326,21 +351,53 @@ return [
                   <div class="chips"><span class="chip a-pop" style="--d:3s">1 to 99</span><span class="chip good a-pop" style="--d:19s">Never promise more visits than you can do</span></div>
                 </div>
 
-                <!-- 9 — add / remove -->
+                <!-- 9 — add a time slot -->
                 <div class="sc" data-scene="9" data-len="' . $L(9) . '">
                   <div class="secbox"><label class="ckl">' . $tk . ' &#128344; Booking time slots</label>
-                    ' . $row('Morning', '08:00', '12:30', '6') . $row('Afternoon', '13:00', '17:00', '3', '', '', 'a-ring" style="--d:12.5s') . '
-                    <div class="a-drop" style="--d:3.5s">' . $row($type('Evening', 5.5, 7, .5), $type('18:00', 7, 5, .4), $type('20:00', 8, 5, .4), '2') . '</div>
-                    <div class="fact"><span class="btns sm a-press a-ring" style="--d:2s">+ Add a time slot</span></div>' . $save('a-press', '--d:20s') . '</div>
-                  <div class="chips">
-                    <span class="chip a-pop" style="--d:10s">Up to 6 time slots</span>
-                    <span class="chip a-pop" style="--d:15s">Removed? Its bookings keep their label</span>
-                    <span class="chip bad a-pop" style="--d:18s">Keep at least one</span>
+                    ' . $row('Morning', '08:00', '12:30', '6') . $row('Afternoon', '13:00', '17:00', '3') . '
+                    <div class="a-drop" style="--d:3s">' . $row(
+                        $ph('e.g. Evening', 'Evening', 10.8, 7, .6),
+                        $ph('--:--', '18:00', 13.4, 5, .4),
+                        $ph('--:--', '20:00', 14.4, 5, .4),
+                        '<span class="a-ring" style="--d:7.6s;border-radius:4px">2</span>') . '</div>
+                    <div class="fact"><span class="btns sm a-press" style="--d:2s">+ Add a time slot</span></div>' . $save() . '</div>
+                  <div class="tri">
+                    <span class="chip a-pop" style="--d:4.2s;justify-self:start">New row: empty, 2 a day</span>
+                    <span class="chip a-pop" style="--d:15.6s;justify-self:start">Up to 6 time slots</span>
+                    <div class="mini a-rise" style="--d:17.4s"><span class="lab">With six time slots</span>
+                      <span class="btns sm off">+ Add a time slot</span> <span class="chip bad a-pop" style="--d:19.8s;padding:.1rem .45rem;font-size:.6rem">greyed out</span></div>
                   </div>
+                  <div class="a-move" style="--fx:60%;--fy:95%;--tx:3.6rem;--ty:11.7rem;--d:.3s;--md:1.5s">' . $ptr . '</div>
                 </div>
 
-                <!-- 10 — saving -->
+                <!-- 10 — remove a time slot -->
                 <div class="sc" data-scene="10" data-len="' . $L(10) . '">
+                  <div class="secbox"><label class="ckl">' . $tk . ' &#128344; Booking time slots</label>
+                    ' . $row('Morning', '08:00', '12:30', '6') . $row('Afternoon', '13:00', '17:00', '3') . $row('Evening', '18:00', '20:00', '2') . '
+                    <div class="gone" style="--d:3.4s">' . $row('Late evening', '20:00', '21:00', '2', '', '', 'a-press', '--d:3s') . '</div>
+                    <div class="fact"><span class="btns sm">+ Add a time slot</span></div>' . $save('a-press a-ring', '--d:4.2s') . '</div>
+                  <div class="tri">
+                    <div class="bk a-rise" style="--d:5.2s"><div class="lg">Book appointment</div><span class="lab">Time slot <span class="req">*</span></span>
+                      <div class="opts">
+                        <div class="opt"><span class="rd"></span>Morning</div>
+                        <div class="opt"><span class="rd"></span>Afternoon</div>
+                        <div class="opt"><span class="rd"></span>Evening</div>
+                        <div class="gone" style="--d:6.8s"><div class="opt"><span class="rd"></span>Late evening</div></div>
+                      </div></div>
+                    <div class="side2">
+                      <div class="cal a-rise" style="--d:9.8s;max-width:none;width:100%"><div class="ch">Thu 1 Oct &mdash; booked last week</div>
+                        <div class="job"><b><span class="a-ring" style="--d:15s;border-radius:4px">Late evening</span> &middot; Dan Okafor</b><span>Quote visit &middot; LA9 7PX</span></div></div>
+                      <span class="chip good a-pop" style="--d:13s">Old bookings keep the name</span>
+                    </div>
+                    <div class="mini a-rise" style="--d:16.8s"><span class="lab">Only one row left</span>
+                      <span class="btns sm off">&#10005; Remove</span> <span class="chip bad a-pop" style="--d:18.6s;padding:.1rem .45rem;font-size:.6rem">greyed out</span>
+                      <div class="chips" style="margin-top:.4rem"><span class="chip a-pop" style="--d:20.3s;font-size:.62rem">Keep at least one</span></div></div>
+                  </div>
+                  <div class="a-move" style="--fx:30%;--fy:95%;--tx:25.7rem;--ty:12.7rem;--d:.4s;--md:1.8s"><span class="a-out" style="--d:4.4s;display:block">' . $ptr . '</span></div>
+                </div>
+
+                <!-- 11 — saving -->
+                <div class="sc" data-scene="11" data-len="' . $L(11) . '">
                   <div class="flash a-pop" style="--d:5s">Booking time slots saved.</div>
                   <div class="secbox a-rise" style="--d:.5s;max-width:22rem"><span class="lab" style="margin-bottom:.3rem">In time order:</span>
                     <div class="lane a-fly" style="--d:2s"><b>Morning</b>8am&ndash;12:30pm</div>
@@ -351,8 +408,8 @@ return [
                   <div class="flash err a-fly" style="--d:17s">Time slots not saved: &ldquo;Evening&rdquo; needs a From time before its To time.</div>
                 </div>
 
-                <!-- 11 — booking with time slots -->
-                <div class="sc" data-scene="11" data-len="' . $L(11) . '">
+                <!-- 12 — booking with time slots -->
+                <div class="sc" data-scene="12" data-len="' . $L(12) . '">
                   <div class="flash a-pop" style="--d:24.5s">Appointment booked for Mrs Patel on 24 Sep 2026, Morning (8am&ndash;12:30pm).</div>
                   <div class="bk a-rise" style="--d:1s"><div class="lg">Appointment</div>
                     <div class="bkrow"><div><span class="lab">Date <span class="req">*</span></span><div class="inp">24/09/2026</div></div>
@@ -405,9 +462,13 @@ return [
                 <b>Morning 09:00&ndash;13:00</b> and <b>Afternoon 13:00&ndash;17:00</b>, <b>4 a day</b> each.</li>
             <li><b>Every limit is separate</b> &mdash; six mornings and three afternoons is fine. Once a time slot is full for a day it
                 can&rsquo;t be booked.</li>
-            <li><b>+ Add a time slot</b> adds an empty row (its Bookings / day starts at 2) &mdash; e.g. <i>Evening</i>, 18:00 to 20:00.
-                Up to <b>six</b>; the button stops working at six. <b>&#10005; Remove</b> takes a row away (not the last one); bookings
-                already in a removed time slot keep their label.</li>
+            <li><b>+ Add a time slot</b> adds an empty row at the bottom (its Bookings / day starts at 2) &mdash; e.g. <i>Evening</i>,
+                18:00 to 20:00. Up to <b>six</b>; with six rows the button greys out. A new row left completely blank is simply
+                ignored when you save.</li>
+            <li><b>&#10005; Remove</b> takes a row away &mdash; it&rsquo;s gone once you press <b>Save</b>. The time slot disappears from
+                <b>Book appointment</b>, so nobody can book it again, but <b>visits already booked in it are kept</b> and still show its
+                name on the calendar. If you open one of those to change it, its Time slot choice starts on the nearest of your current
+                time slots, because the removed one can&rsquo;t be picked any more. The last row&rsquo;s Remove is greyed out &mdash; you must keep at least one.</li>
             <li><b>Save</b> puts the time slots in time order and says <b>&ldquo;Booking time slots saved.&rdquo;</b> (or <b>&ldquo;Booking
                 time slots are off.&rdquo;</b> when unticked).</li>
           </ul>
