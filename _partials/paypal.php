@@ -114,7 +114,7 @@ function paypal_access_token(): string
  *
  * Returns ['status' => int, 'data' => array].
  */
-function paypal_request(string $method, string $path, ?array $body = null, array $extraHeaders = []): array
+function paypal_request(string $method, string $path, ?array $body = null, array $extraHeaders = [], ?string $rawJson = null): array
 {
     $cfg   = paypal_config();
     $url   = $cfg['api_base_url'] . $path;
@@ -134,7 +134,9 @@ function paypal_request(string $method, string $path, ?array $body = null, array
         CURLOPT_CONNECTTIMEOUT => 10,
         CURLOPT_TIMEOUT        => 30,
     ]);
-    if ($body !== null) {
+    if ($rawJson !== null) {
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $rawJson);   // already-encoded JSON, sent byte for byte
+    } elseif ($body !== null) {
         curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body));
     }
     $resp = curl_exec($ch);
@@ -200,16 +202,23 @@ function paypal_verify_webhook(string $rawPayload, array $headers, string $webho
     $event = json_decode($rawPayload, true);
     if (!is_array($event)) return false;
 
+    // The event must go back to PayPal EXACTLY as it arrived: decoding and
+    // re-encoding changes it (an empty {} becomes [], slashes get escaped) and
+    // the check then fails. That is what made every CHECKOUT.ORDER.APPROVED
+    // fail (17 Oct 2026) while capture/refund events passed. So the request
+    // is built round the raw text.
+    $head = json_encode([
+        'auth_algo'         => $h['paypal-auth-algo']        ?? '',
+        'cert_url'          => $h['paypal-cert-url']         ?? '',
+        'transmission_id'   => $h['paypal-transmission-id']  ?? '',
+        'transmission_sig'  => $h['paypal-transmission-sig'] ?? '',
+        'transmission_time' => $h['paypal-transmission-time']?? '',
+        'webhook_id'        => $webhookId,
+    ]);
+    $raw = substr((string) $head, 0, -1) . ',"webhook_event":' . trim($rawPayload) . '}';
+
     try {
-        $r = paypal_request('POST', '/v1/notifications/verify-webhook-signature', [
-            'auth_algo'         => $h['paypal-auth-algo']        ?? '',
-            'cert_url'          => $h['paypal-cert-url']         ?? '',
-            'transmission_id'   => $h['paypal-transmission-id']  ?? '',
-            'transmission_sig'  => $h['paypal-transmission-sig'] ?? '',
-            'transmission_time' => $h['paypal-transmission-time']?? '',
-            'webhook_id'        => $webhookId,
-            'webhook_event'     => $event,
-        ]);
+        $r = paypal_request('POST', '/v1/notifications/verify-webhook-signature', null, [], $raw);
         return strtoupper((string) ($r['data']['verification_status'] ?? '')) === 'SUCCESS';
     } catch (Throwable $e) {
         error_log('PayPal webhook verify error: ' . $e->getMessage());
