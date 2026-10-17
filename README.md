@@ -91,22 +91,69 @@ the schema and the settings together.
   and keeps 14 days. **These live on the same server**, so they don't survive
   losing the server.
 - **Off-site copies:**
+  - The owner's office NAS pulls every nightly dump over SFTP at 04:00 and keeps
+    30 days. It uses a key-only, file-transfer-only application user, with no shell.
   - Cloudways' own scheduled server backups (Cloudways panel → Backups).
-  - Manual full downloads from **Master Admin → Backup & Restore**. Keep a recent
-    one off the server.
+  - Manual full downloads from **Master Admin → Backup & Restore**.
 - **To restore:**
   1. Set up the server, the code and `.env` as in steps 1 and 3 of Fresh install.
-  2. Load the dump: `mysql -u <user> -p <db> < backup.sql`. Or, on a running site,
-     use **Master Admin → Backup & Restore → Restore**, which takes its own
-     snapshot first.
-  3. Run the migrations, because the backup may predate the code.
-  4. Run `/system_check.php`.
-- **Last drill (2026-10-17):** a real live backup (110 tables, 100 MB) restored in
-  77 seconds onto a scratch database; every migration then ran clean; all 56
-  companies and 1,020 products were there; every saved quote line re-priced to the
-  penny with the current engine.
+     The database must be **MySQL 8**.
+  2. Load the newest dump: `mysql -u <user> -p <db> < auto-daily-….sql`. Or, on a
+     running site, use **Master Admin → Backup & Restore → Restore**, which takes
+     its own snapshot first.
+  3. Run the migrations, because the backup may predate the code:
+     `for f in setup/migrations/*.php; do php "$f"; done`
+  4. Sign in and run `/system_check.php`.
 - **Not in the database:** uploaded files (logos, choice images) in `uploads/`.
   Back these up separately.
+
+### Restore drill (proving a backup works, without touching live)
+
+Requirements:
+- PHP 8.2 CLI with `mysqli`.
+- A local MySQL 8 or MariaDB server, using root with no password, or with
+  `DB_HOST`, `DB_USER` and `DB_PASS` set.
+- The `mysql` client on the PATH, or `MYSQL=…`.
+
+It reads no `.env` and refuses any database host that isn't local.
+
+```sh
+php tests/tools/restore_drill.php /path/to/auto-daily-2026-10-17-030002.sql
+```
+
+What it does:
+1. Loads the dump into a scratch `yb_restore_drill` database.
+2. Runs every migration.
+3. Compares every table and column with `tests/schema.sql`.
+4. Counts the key rows and checks that the factory company exists.
+5. Re-prices every saved quote line's base price with the current engine.
+6. Drops the scratch databases, because the dump holds real data. Pass `--keep` to
+   look around first.
+
+Exit code 0 means the drill passed. Expected output, from the drill run on 2026-10-17
+(the 13:15 live download, on XAMPP MariaDB 10.4):
+
+```
+PASS 1. Loaded: 110 tables in 85s (MariaDB: collation swapped for the drill)
+PASS 2. Migrations: 123 of 123 ran clean
+PASS 3. Schema: every table and column the code expects is present
+     (info) only in the backup: tour_events.…   ← creates itself on first use; harmless
+PASS 4. Data: 56 companies, 55 users, 1020 products, 15 quotes, 16 quote lines, 17 customers, 10 invoices; factory company #3 present
+PASS 5. Re-price: 16 saved quote line(s); 16 match to the penny
+6. Scratch databases dropped (the backup holds real data).
+RESULT: PASS
+```
+
+How to read the result:
+- **Step 1:** live dumps use MySQL 8's `utf8mb4_0900_ai_ci` collation. On MariaDB
+  the drill swaps it while loading, and says so. A real restore must go onto
+  MySQL 8.
+- **Step 5:** if price lists have changed since the backup was taken, some lines
+  will differ. They're listed for information, not counted as failures.
+- **If any line says FAIL:** don't trust that backup until you know why. Try the
+  previous night's dump.
+
+Run the drill after any big schema change, and at least once a quarter.
 
 ## Tests
 
