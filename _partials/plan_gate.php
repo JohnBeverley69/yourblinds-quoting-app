@@ -36,7 +36,12 @@ function plan_enforcing(): bool
         $st->execute([PLAN_ENFORCE_KEY]);
         return (string) $st->fetchColumn() === '1';
     } catch (Throwable $e) {
-        return false;   // no settings table — nothing enforced
+        // Fails OPEN, deliberately: a settings read only fails when the database
+        // itself is failing, and locking paying customers out of features they own
+        // during an outage is worse than briefly not enforcing. Logged so it's never
+        // silent (outside review 2026-10-17).
+        error_log('[YourBlinds] plan_enforcing: could not read the switch — not enforcing: ' . $e->getMessage());
+        return false;
     }
 }
 
