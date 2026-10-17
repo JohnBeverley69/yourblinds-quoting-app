@@ -1723,6 +1723,7 @@ CREATE TABLE `quote_item_extras` (
   `promo_discount_percent` decimal(6,2) DEFAULT NULL,
   `promo_discount_amount` decimal(10,2) DEFAULT NULL,
   `user_value` decimal(10,2) DEFAULT NULL,
+  `is_auto` tinyint(1) NOT NULL DEFAULT 0,
   `cost_snapshot` decimal(10,2) DEFAULT NULL,
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   PRIMARY KEY (`id`),

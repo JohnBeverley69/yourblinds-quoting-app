@@ -398,6 +398,11 @@ try {
             $oldVal = $extraBefore[$exId][1] ?? null;
             if ($oldVal !== $newVal && !($oldVal !== null && $newVal !== null && abs($oldVal - $newVal) < 0.0001)) {
                 $dirty[$extraItem[$exId]] = true;
+                // A changed number is now typed by the factory, so a shared-fascia
+                // width the system had worked out stops being recalculated.
+                if (qb_fascia_auto_ready($pdo)) {
+                    $pdo->prepare('UPDATE quote_item_extras SET is_auto = 0 WHERE id = ?')->execute([$exId]);
+                }
             }
         }
     }

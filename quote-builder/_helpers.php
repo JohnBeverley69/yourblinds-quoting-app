@@ -364,9 +364,36 @@ require_once __DIR__ . '/../_partials/multi_fascia_pricer.php';   // qb_fascia_j
  * width = the carrier's typed fascia width if given, else SUM(member widths) +
  * one editable roller_fascia_join "gap" per join. Nothing hardcoded.
  *
+ * The width it works out itself is flagged is_auto on the carrier's Fascia width
+ * row, so the next pass recalculates it (a blind edited / deleted) instead of
+ * reading it back as typed. A group left with one blind loses that auto width.
+ *
  * Called from add/update/delete/duplicate handlers before qb_recompute_totals,
  * inside their transaction. No-op unless a group has 2+ members with a real fascia.
  */
+/**
+ * Is quote_item_extras.is_auto there yet (migrate_fascia_width_auto.php)? It marks
+ * the shared-fascia "Fascia width" row that qb_reconcile_fascia_groups worked out
+ * itself (sum of the group's widths + joins), as opposed to a width somebody typed.
+ * Before the migration every row reads as typed — the old behaviour.
+ */
+function qb_fascia_auto_ready(PDO $pdo): bool
+{
+    static $ready = null;
+    if ($ready !== null) return $ready;
+    try {
+        $s = $pdo->prepare(
+            "SELECT 1 FROM information_schema.COLUMNS
+              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'quote_item_extras'
+                AND COLUMN_NAME = 'is_auto' LIMIT 1"
+        );
+        $s->execute();
+        return $ready = ($s->fetchColumn() !== false);
+    } catch (Throwable $e) {
+        return $ready = false;
+    }
+}
+
 function qb_reconcile_fascia_groups(PDO $pdo, int $quoteId, int $clientId, int $accountClientId): void
 {
     $ls = $pdo->prepare(
@@ -390,18 +417,31 @@ function qb_reconcile_fascia_groups(PDO $pdo, int $quoteId, int $clientId, int $
     $gap = qb_fascia_join_gap($pdo);
     $resolve = fn (int $productId): ?array => qb_resolve_fascia_meta($pdo, $productId);
 
-    $loadExtras = function (int $itemId) use ($pdo): array {
-        $e = $pdo->prepare("SELECT product_extra_id, product_extra_choice_id, user_value FROM quote_item_extras WHERE quote_item_id = ? ORDER BY id");
+    // is_auto: the row holds a width this function worked out (not typed) — see
+    // qb_fascia_auto_ready(). Pre-migration every row reads as typed.
+    $autoReady = qb_fascia_auto_ready($pdo);
+    $loadExtras = function (int $itemId) use ($pdo, $autoReady): array {
+        $e = $pdo->prepare('SELECT product_extra_id, product_extra_choice_id, user_value'
+                         . ($autoReady ? ', is_auto' : '')
+                         . ' FROM quote_item_extras WHERE quote_item_id = ? ORDER BY id');
         $e->execute([$itemId]);
         $rows = [];
         foreach ($e->fetchAll(PDO::FETCH_ASSOC) as $r) {
-            $row = ['extra_id' => (int) $r['product_extra_id'], 'choice_id' => (int) $r['product_extra_choice_id']];
+            $row = ['extra_id' => (int) $r['product_extra_id'], 'choice_id' => (int) $r['product_extra_choice_id'],
+                    'auto' => !empty($r['is_auto'])];
             if ($r['user_value'] !== null && is_numeric($r['user_value']) && (float) $r['user_value'] > 0) {
                 $row['user_value'] = (float) $r['user_value'];
             }
             $rows[] = $row;
         }
         return $rows;
+    };
+    // Flag the carrier's worked-out "Fascia width" row so the next reconcile
+    // recalculates it instead of reading it back as a typed width.
+    $markAuto = function (int $itemId, int $extraId) use ($pdo, $autoReady): void {
+        if (!$autoReady || $extraId <= 0) return;
+        $pdo->prepare('UPDATE quote_item_extras SET is_auto = 1 WHERE quote_item_id = ? AND product_extra_id = ?')
+            ->execute([$itemId, $extraId]);
     };
 
     // Re-price one stored line with a modified extras set and rewrite it in place
@@ -451,7 +491,29 @@ function qb_reconcile_fascia_groups(PDO $pdo, int $quoteId, int $clientId, int $
     };
 
     foreach ($groups as $members) {
-        if (count($members) < 2) continue;
+        if (count($members) < 2) {
+            // Down to one blind (the others were deleted): if it still carries a
+            // worked-out group width, take that and the "Multiple" flag off so it
+            // is priced and cut as the single blind it now is. A width somebody
+            // typed (not is_auto) is left alone.
+            $lone = $members[0];
+            $R = $resolve((int) $lone['product_id']);
+            if ($R === null || $R['fascia_width_extra'] <= 0) continue;
+            $ex = $loadExtras((int) $lone['id']);
+            $hasAuto = false;
+            foreach ($ex as $row) {
+                if ($row['extra_id'] === $R['fascia_width_extra'] && $row['auto']) { $hasAuto = true; break; }
+            }
+            if (!$hasAuto) continue;
+            $kept = [];
+            foreach ($ex as $row) {
+                if ($row['extra_id'] === $R['fascia_width_extra']) continue;
+                if ($R['multiple_extra'] > 0 && $row['extra_id'] === $R['multiple_extra']) continue;
+                $kept[] = $row;
+            }
+            $reprice($lone, $kept);
+            continue;
+        }
         $R = $resolve((int) $members[0]['product_id']);
         if ($R === null || $R['no_fascia_choice'] === 0) continue;
 
@@ -474,7 +536,9 @@ function qb_reconcile_fascia_groups(PDO $pdo, int $quoteId, int $clientId, int $
         // Manual fascia width (if any) is on the carrier's "Fascia width" option.
         if ($R['fascia_width_extra'] > 0) {
             foreach ($memberExtras[$carrierIdx] as $row) {
-                if ($row['extra_id'] === $R['fascia_width_extra'] && (float) ($row['user_value'] ?? 0) > 0) {
+                // A width this function worked out last time (is_auto) is not
+                // typed — recalculate it from the blinds as they are now.
+                if ($row['extra_id'] === $R['fascia_width_extra'] && !$row['auto'] && (float) ($row['user_value'] ?? 0) > 0) {
                     $carrierTypedWidth = (float) $row['user_value'];
                     break;
                 }
@@ -510,6 +574,7 @@ function qb_reconcile_fascia_groups(PDO $pdo, int $quoteId, int $clientId, int $
                 $kept[] = ['extra_id' => $R['multiple_extra'], 'choice_id' => $R['multiple_yes']];
             }
             $reprice($m, $kept);
+            if ($isCarrier && $carrierTypedWidth <= 0) $markAuto((int) $m['id'], $R['fascia_width_extra']);
         }
     }
 }
