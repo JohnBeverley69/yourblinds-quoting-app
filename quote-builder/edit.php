@@ -4396,10 +4396,13 @@ if (is_factory_client($clientId) && function_exists('factory_console_user') && f
         if (size) bits.push(size + (measureUnit ? ' ' + measureUnit : ''));
         return bits.join(' — ') || 'Blind';
     }
+    // Set once a save has gone through: the page is reloading, so no more drafts.
+    var lineSaved = false;
     function scheduleDraftSave() {
-        if (!OFF || !draftReady) return;
+        if (!OFF || !draftReady || lineSaved || submitting) return;
         clearTimeout(draftTimer);
         draftTimer = setTimeout(function () {
+            if (lineSaved || submitting) return;
             var s = lineSnapshot();
             if (snapKey(s) === draftBaseline) OFF.draft.clear(draftKey);
             else OFF.draft.save(draftKey, s);
@@ -4475,6 +4478,12 @@ if (is_factory_client($clientId) && function_exists('factory_console_user') && f
         submitting = false;
 
         if (res.kind === 'saved') {
+            // Clicking Save blurs the last box, whose 'change' arms the 300ms
+            // draft timer. A quick save cleared the draft, then the timer wrote
+            // the just-saved blind back, and the reloaded page offered "You have
+            // an unsaved blind" for it (John, 2026-10-17). Stop it for good here.
+            lineSaved = true;
+            clearTimeout(draftTimer);
             OFF.draft.clear(draftKey);
             OFF.go(res.url, nextAction === 'more' && !itemIdIn ? '#add-line' : '');
             return;
