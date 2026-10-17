@@ -43,7 +43,7 @@ $back     = static function (string $kind, string $msg): void {
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') === 'buy') {
     csrf_check();
     if (!$ready) $back('err', 'Text bundles aren\'t switched on yet.');
-    if (!sms_feature_enabled($clientId)) $back('err', 'Texts are part of the Silver and Gold plans — choose one on Billing first.');
+    if (!sms_feature_enabled($clientId)) $back('err', 'Texts are part of ' . billing_feature_plans_phrase('feature_sms') . ' — choose one on Billing first.');
     $want = (int) ($_POST['texts'] ?? 0);
     $pack = null;
     foreach (sms_bundle_packs() as $p) if ($p['texts'] === $want) $pack = $p;   // price from OUR list, never the form
@@ -191,7 +191,7 @@ $activeNav = 'billing';
             <?php if (!$ready): ?>
                 <p>Text bundles aren&rsquo;t switched on yet.</p>
             <?php elseif (!$hasTexts): ?>
-                <p>Texts are part of the Silver and Gold plans. <a href="/billing/index.php">Choose a plan on Billing &rarr;</a></p>
+                <p>Texts are part of <?= e(billing_feature_plans_phrase('feature_sms')) ?>. <a href="/billing/index.php">Choose a plan on Billing &rarr;</a></p>
             <?php elseif (!$packs): ?>
                 <p>Bundles aren&rsquo;t on sale yet &mdash; please check back soon.</p>
             <?php else: ?>

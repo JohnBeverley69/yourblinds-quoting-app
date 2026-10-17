@@ -8,7 +8,7 @@ declare(strict_types=1);
  * from the signup gate (any attempt to save/send a quote or add a customer as
  * an anonymous visitor lands here, with ?from=... for a contextual headline).
  *
- * Shows the service story + the live tier ladder (Bronze/Silver/Gold, prices
+ * Shows the service story + the live tier ladder (Bronze/Silver/Gold/Platinum, prices
  * pulled live from plan_pricing) and points at the existing self-signup.
  * No login required. Purely read-only.
  */
@@ -94,7 +94,7 @@ function wl_price(array $plan): string
         .wl-section-title { text-align: center; font-size: 1.5rem; margin: 0 0 0.4rem; color: var(--text-primary); }
         .wl-section-sub { text-align: center; color: var(--text-faint); margin: 0 0 1.75rem; }
 
-        .wl-tiers { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; align-items: stretch; }
+        .wl-tiers { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; align-items: stretch; }
         @media (max-width: 760px) { .wl-tiers { grid-template-columns: 1fr; } }
         .wl-tier { background: var(--bg-card); border: 1px solid var(--border);
             border-radius: 14px; padding: 1.4rem 1.3rem; display: flex; flex-direction: column; }

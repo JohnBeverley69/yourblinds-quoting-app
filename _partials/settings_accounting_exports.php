@@ -29,7 +29,7 @@ $card    = 'border:1px solid var(--border-strong);border-radius:10px;padding:.87
 
     <?php if (!$expOn): ?>
         <div class="alert alert-info" role="status" style="max-width:44rem">
-            The export files come with the <strong>Accounts</strong> add-on (Gold plan), which also tracks
+            The export files come with the <strong>Accounts</strong> add-on (<?php require_once __DIR__ . '/billing_helpers.php'; ?><?= e(billing_feature_tier_names('feature_accounts') ?: 'every plan') ?>), which also tracks
             payments and balances. <a href="/billing/index.php">See plans</a>
         </div>
     <?php else: ?>

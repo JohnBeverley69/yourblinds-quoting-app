@@ -23,7 +23,8 @@ $clientId = (int) $user['client_id'];
 $back     = '/admin/settings.php#texts';
 
 if (!sms_feature_enabled($clientId)) {
-    $_SESSION['flash_error'] = 'Customer texts are part of the Silver and Gold plans.';
+    require_once __DIR__ . '/../_partials/billing_helpers.php';
+    $_SESSION['flash_error'] = 'Customer texts are part of ' . billing_feature_plans_phrase('feature_sms') . '.';
     header('Location: ' . $back);
     exit;
 }

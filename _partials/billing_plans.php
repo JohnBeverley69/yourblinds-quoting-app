@@ -4,7 +4,7 @@ declare(strict_types=1);
 /**
  * Single source of truth for billing plans — a TIER LADDER.
  *
- * Bronze (free) → Silver → Gold. Each tier is CUMULATIVE: it lists
+ * Bronze (free) → Silver → Gold → Platinum. Each tier is CUMULATIVE: it lists
  * every feature flag it includes, so a Gold subscriber automatically gets
  * Silver's features too (the grant engine in billing_helpers.php switches on a
  * flag if ANY active plan lists it — so listing them on each tier "just works").
@@ -67,6 +67,17 @@ return [
         'price_gbp_monthly' => 40,
         'features'          => ['feature_maps', 'feature_postcode_lookup', 'feature_sms', 'feature_online_booking', 'feature_accounts'],
         'tier'              => 2,
+        'term_months'       => null,
+    ],
+    // Re-introduced 2026-10-17 (the old Platinum, retired in July with the
+    // supplier-catalogue feature, is gone). Starts with Gold's features; John
+    // decides what's Platinum-only on /master-admin/plan-features.php.
+    'platinum' => [
+        'name'              => 'Platinum',
+        'description'       => 'Everything in Gold.',
+        'price_gbp_monthly' => 60,
+        'features'          => ['feature_maps', 'feature_postcode_lookup', 'feature_sms', 'feature_online_booking', 'feature_accounts'],
+        'tier'              => 3,
         'term_months'       => null,
     ],
 ];

@@ -74,7 +74,7 @@ test('Bronze can\'t switch it on; the settings tab offers the plans instead', fu
     $b = as_user('bravo.admin');
     $page = $b->get('/admin/settings.php');
     check_page_ok($page, 'Settings for Bravo');
-    check_contains('included in the <strong>Silver</strong>', $page->body, 'the upsell');
+    check_contains('Online booking is included in the Silver', $page->body, 'the upsell');
     t_submit($b, '/admin/online_booking_save.php', $settingsForm(['slug' => 'bravo-blinds']));
     check_same(null, t_row('SELECT * FROM online_booking_settings WHERE client_id = ?', [$bravo]), 'Bravo\'s settings row');
     check_same(404, (new YbHttp())->get('/book/?c=bravo-blinds')->status, 'Bravo\'s booking page');

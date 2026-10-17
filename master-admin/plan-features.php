@@ -4,7 +4,7 @@ declare(strict_types=1);
 /**
  * Super-admin: which extras are in which tier — drag and drop (John, 2026-10-17).
  *
- * One column per tier (Bronze → Silver → Gold) plus "Not in a plan". Drop an
+ * One column per tier (Bronze → Silver → Gold → Platinum) plus "Not in a plan". Drop an
  * extra on the LOWEST tier that should have it; every tier above includes it
  * automatically (the ladder stays cumulative). Bronze is everyone's.
  *

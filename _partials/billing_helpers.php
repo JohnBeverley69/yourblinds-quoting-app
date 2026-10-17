@@ -182,18 +182,39 @@ function billing_describe_plans(array $plans): array
 }
 
 /**
- * "Silver & Gold", "Gold", or '' when every tier (Bronze up) has the feature —
- * for marketing tags like the How-it-works tour.
+ * "Silver, Gold and Platinum", "Gold and Platinum", or '' when every tier
+ * (Bronze up) has the feature — for marketing tags like the How-it-works tour.
+ * Follows the live Plan features layout.
  */
 function billing_feature_tier_names(string $flag): string
 {
     $names = [];
     $all   = true;
-    foreach (billing_plans() as $p) {
+    $plans = billing_plans();
+    uasort($plans, static fn ($a, $b) => (int) ($a['tier'] ?? 0) <=> (int) ($b['tier'] ?? 0));
+    foreach ($plans as $p) {
         if (in_array($flag, $p['features'] ?? [], true)) $names[] = (string) ($p['name'] ?? '');
         else $all = false;
     }
-    return $all ? '' : implode(' & ', $names);
+    return $all ? '' : billing_join_words($names);
+}
+
+/**
+ * Which plans include a feature, for "… is part of X" upgrade messages:
+ * "the Silver, Gold and Platinum plans", "the Platinum plan", "every plan", or
+ * "a plan" when no tier has it (switched on by hand). Never hard-code tier
+ * names in a message — the Plan features board can move any extra.
+ */
+function billing_feature_plans_phrase(string $flag): string
+{
+    $names = billing_feature_tier_names($flag);
+    if ($names === '') {
+        foreach (billing_plans() as $p) {
+            if (!in_array($flag, $p['features'] ?? [], true)) return 'a plan';
+        }
+        return 'every plan';
+    }
+    return 'the ' . $names . (str_contains($names, ' and ') ? ' plans' : ' plan');
 }
 
 /**

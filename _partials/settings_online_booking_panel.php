@@ -32,7 +32,7 @@ $obHint     = 'color:#6b7280;font-size:0.875rem;margin:0 0 1rem;max-width:44rem'
             straight into your calendar.
         </p>
         <p style="<?= $obHint ?>">
-            Online booking is included in the <strong>Silver</strong> and <strong>Gold</strong> plans.
+            <?php require_once __DIR__ . '/billing_helpers.php'; ?>Online booking is included in <?= e(billing_feature_plans_phrase('feature_online_booking')) ?>.
             <a href="/billing/index.php">See plans</a>
         </p>
     </section>

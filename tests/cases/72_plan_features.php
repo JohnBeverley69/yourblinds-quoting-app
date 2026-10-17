@@ -28,11 +28,12 @@ test('a layout re-cuts the ladder: up the tiers, Bronze for all, or no plan', fu
         'feature_postcode_lookup' => 'free',
         'feature_accounts'        => '',
         'feature_nonsense'        => 'silver',   // unknown flag — ignored
-        'feature_sms'             => 'platinum', // unknown tier — ignored
+        'feature_sms'             => 'diamond',  // unknown tier — ignored
     ]);
     check(!in_array('feature_maps', $cut['silver']['features'], true), 'Maps still on Silver after moving it to Gold');
     check(in_array('feature_maps', $cut['gold']['features'], true), 'Maps missing from Gold');
-    foreach (['free', 'silver', 'gold'] as $t) {
+    check(in_array('feature_maps', $cut['platinum']['features'], true), 'Maps on Gold but missing from Platinum (the tier above)');
+    foreach (['free', 'silver', 'gold', 'platinum'] as $t) {
         check(in_array('feature_postcode_lookup', $cut[$t]['features'], true), "Postcode lookup on Bronze but missing from $t");
         check(!in_array('feature_accounts', $cut[$t]['features'], true), "Accounts in no plan but still on $t");
         check(!in_array('feature_nonsense', $cut[$t]['features'], true), "an unknown flag landed on $t");
@@ -41,6 +42,22 @@ test('a layout re-cuts the ladder: up the tiers, Bronze for all, or no plan', fu
     check_contains('Postcode lookup', $cut['free']['description'], 'Bronze description');
     check_contains('Everything in Silver, plus Maps', $cut['gold']['description'], 'Gold description');
     check_not_contains('Accounts', $cut['gold']['description'], 'Gold description (Accounts is in no plan)');
+});
+
+test('Platinum: top tier, can hold Platinum-only extras', function () {
+    $std = require APP_ROOT . '/_partials/billing_plans.php';
+    check(isset($std['platinum']), 'Platinum tier missing');
+    check((int) $std['platinum']['tier'] > (int) $std['gold']['tier'], 'Platinum is not above Gold');
+    foreach ($std['gold']['features'] as $f) {
+        check(in_array($f, $std['platinum']['features'], true), "Platinum is missing Gold's $f");
+    }
+    $cut = billing_apply_feature_layout($std, ['feature_accounts' => 'platinum']);
+    check(in_array('feature_accounts', $cut['platinum']['features'], true), 'Accounts missing from Platinum');
+    foreach (['free', 'silver', 'gold'] as $t) {
+        check(!in_array('feature_accounts', $cut[$t]['features'], true), "Platinum-only Accounts still on $t");
+    }
+    check_contains('Everything in Gold, plus Accounts', $cut['platinum']['description'], 'Platinum description');
+    check_same('the Silver, Gold and Platinum plans', billing_feature_plans_phrase('feature_sms'), 'texts upgrade wording');
 });
 
 test('saving switches companies on and off; reset puts it back', function () use ($flag) {

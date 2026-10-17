@@ -238,7 +238,7 @@ $activeNav  = 'texts';
                 Leave an allowance blank to use the default (<?= number_format($defaultLim) ?>). Once a client has used it,
                 texts come from their bundle balance; with none left, texts stop until next month or until they buy a bundle.
                 <strong>Add texts</strong> gives a client free bundle texts (goodwill, or a payment that didn't come through).
-                Texting is on for Silver and Gold clients only.
+                Texting is on for <?= e(billing_feature_tier_names('feature_sms') ?: 'every') ?> clients only.
             </p>
             <form method="post" action="/master-admin/texts.php" class="form" novalidate>
                 <?= csrf_field() ?>
