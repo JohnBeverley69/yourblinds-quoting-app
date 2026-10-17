@@ -11,7 +11,7 @@ declare(strict_types=1);
  * The CSV route — what companies use. (The live QuickBooks link is only for
  * the platform's own books, Factory Console → QuickBooks — see the
  * settings-accounting guide; a body note says so.) Sources:
- *   accounts/index.php     — the three export buttons, their tooltips, the note
+ *   accounts/index.php     — the four export buttons, their tooltips, the note
  *                            under them, the date filter + This/Last month
  *   accounts/export.php    — ?type=invoices / quickbooks / payments: columns,
  *                            AccountCode 200, "20% (VAT on Income)" / "No VAT",
@@ -69,8 +69,9 @@ return [
         'eyebrow' => 'Accounts · Exports',
         'v'       => 2,
         'blurb'   => 'Download your sales and payments as spreadsheet files from the Payments page and bring them into Xero, QuickBooks Online, Sage or FreeAgent — what is in each file, and the traps for each package.',
-        'lede'    => 'Your accounts package needs your sales. The <b>Payments</b> page gives you <b>three spreadsheet files</b> (CSV) for it:
-                      the <b>invoices</b>, the same invoices <b>shaped for QuickBooks Online</b>, and the <b>payments</b> received. Your
+        'lede'    => 'Your accounts package needs your sales. The <b>Payments</b> page gives you <b>four downloads</b> for it:
+                      the <b>invoices</b>, the same invoices <b>shaped for QuickBooks Online</b>, the same again <b>shaped for Sage</b>,
+                      and the <b>payments</b> received. Your
                       package imports the invoices, and the payments are <b>matched from your bank feed</b>. This guide goes through what is
                       in each file, slowly, one idea per chapter. Do it once a week or once a month &mdash; whatever suits your bookkeeping.',
         'open'    => '/accounts/index.php',
@@ -178,13 +179,14 @@ return [
                   <p class="scs" style="margin-top:.8rem">Press <b>&#9654; Play</b> below &mdash; nine short chapters, at an easy pace.</p>
                 </div>
 
-                <!-- 1 — three files -->
+                <!-- 1 — four downloads -->
                 <div class="sc" data-scene="1" data-len="24">
                   <div class="ph a-fade" style="--d:.3s"><div><div class="pt">Payments</div><div class="ps">Payments received against your orders.</div></div></div>
-                  <div class="pb"><span class="btns a-ring" style="--d:6.5s">Export invoices (CSV)</span><span class="btns a-ring" style="--d:8s">Export for QuickBooks (CSV)</span><span class="btns a-ring" style="--d:10s">Export payments (CSV)</span><span class="btnp">+ Record payment</span></div>
+                  <div class="pb"><span class="btns a-ring" style="--d:6.5s">Export invoices (CSV)</span><span class="btns a-ring" style="--d:8s">Export for QuickBooks (CSV)</span><span class="btns a-ring" style="--d:9s">Export for Sage (.zip)</span><span class="btns a-ring" style="--d:10s">Export payments (CSV)</span><span class="btnp">+ Record payment</span></div>
                   <div class="files">
                     ' . $file('Beverley-Blinds-invoices-2026-10-07.csv', 'a-drop', '--d:7s')
                       . $file('Beverley-Blinds-quickbooks-invoices-2026-10-07.csv', 'a-drop', '--d:8.8s')
+                      . $file('Beverley-Blinds-sage-invoices-2026-10-07.zip', 'a-drop', '--d:9.8s')
                       . $file('Beverley-Blinds-payments-2026-10-07.csv', 'a-drop', '--d:10.8s') . '
                   </div>
                   <div class="chips"><span class="chip a-pop" style="--d:13.5s">Admins only</span><span class="chip a-pop" style="--d:15s">&#11088; Accounts feature</span>
@@ -305,8 +307,8 @@ return [
              link that sends paid invoices straight into QuickBooks exists only for the platform&rsquo;s own books (Beverley Blinds)
              for now; it may be opened to other companies later.</div></div>
 
-          <p><b>The three files.</b> Open <b>Payments</b> in the left-hand menu (under <b>Retail</b>). If it isn&rsquo;t there, the
-             <b>Accounts</b> feature (part of the <b>Gold</b> plan) isn&rsquo;t on your account. The three export buttons, top right, are only
+          <p><b>The four downloads.</b> Open <b>Payments</b> in the left-hand menu (under <b>Retail</b>). If it isn&rsquo;t there, the
+             <b>Accounts</b> feature (part of the <b>Gold</b> plan) isn&rsquo;t on your account. The four export buttons, top right, are only
              shown to <b>admins</b>. The note under them says it too: <em>&ldquo;CSV for Xero / QuickBooks / Sage. Respects the date filter
              below.&rdquo;</em></p>
           <ul class="steps">
@@ -366,11 +368,22 @@ return [
              bookkeepers do.) Then don&rsquo;t import invoices &mdash; it would create invoices that look owed. Use the <b>payments file</b> as
              your list and record each paid sale in QuickBooks, or ask your bookkeeper.</div></div>
 
-          <p><b>Sage Accounting.</b> Sage&rsquo;s spreadsheet import now covers <b>purchase</b> invoices, and a sales import may not be offered.
-             Either enter paid sales by hand from the payments file (<b>Sales &rarr; Quick entries</b>: date, customer, reference = the quote
-             number, your sales ledger account, net, VAT <b>Standard</b>), then <b>Match</b> them to the bank feed &mdash; or hand both files to
-             your bookkeeper. If your Sage does show a sales import, it wants <b>one row per invoice</b> and the customer&rsquo;s Sage
-             <b>account reference</b>, so the file needs reshaping first.</p>
+          <p><b>Sage Accounting.</b> Use <b>Export for Sage (.zip)</b> (<em>&ldquo;Customers + one row per invoice, for Sage Accounting
+             &rarr; Quick entries &rarr; Import&rdquo;</em>). Sage wants <b>one row per invoice</b>, and every customer must already exist in
+             Sage, so the zip holds two files and a short <b>READ ME</b>, used in order:</p>
+          <ul class="steps">
+            <li><b>1-customers.csv</b> &mdash; every customer in the period, each with a fixed Sage reference (<code>YB000123</code> for a
+                saved customer, <code>YBQ00045</code> for a one-off). Import it first, under <b>Contacts &rarr; Import &rarr; Customers</b>,
+                because Sage refuses an invoice for a customer it doesn&rsquo;t know. If a customer is already in Sage under another
+                reference, change the reference in <b>2-invoices.csv</b> to match yours.</li>
+            <li><b>2-invoices.csv</b> &mdash; one row per invoice: date, customer reference, the quote number, sales ledger <code>4000</code>,
+                net, VAT and the VAT rate by name (<b>Standard</b>, <b>Lower Rate</b> or <b>Zero Rated</b>). Import it under
+                <b>Sales &rarr; Quick entries</b>, the arrow beside <b>New Quick Entry</b>, <b>Import Quick Entries</b>. Then
+                <b>Match</b> the money to them from your bank feed.</li>
+          </ul>
+          <div class="heads"><span class="hi">&#9432;</span><div>Sage no longer publishes its import layout; it asks you to download the template
+             from inside Sage. If Sage says a column doesn&rsquo;t match, download its template from that same Import screen and copy
+             the columns across, because Sage occasionally renames them. Or hand the zip to your bookkeeper.</div></div>
           <p><b>FreeAgent.</b> Only accountants and bookkeepers (on its Practice Partner scheme) can import invoices &mdash; send them both
              files. If you do your own FreeAgent, explain each bank receipt as an <b>Invoice Receipt</b>.</p>
 
@@ -383,7 +396,7 @@ return [
              totals: the invoices file plus VAT should match YourBlinds&rsquo; figures for the same month. Code <code>200</code> not right
              (Sage uses 4000-style codes)? Change it in Excel or remap it on import.</p>',
         'script'  => [
-            ['1', 'Three files from the Payments page', 'Your accounts package needs your sales. The Payments page gives you three spreadsheet files for it, at the top right. Export invoices. Export for QuickBooks. And Export payments. Only admins see these buttons, and they come with the Accounts feature. Each one downloads a file that your package, or your bookkeeper, can read.', 1],
+            ['1', 'Four downloads from the Payments page', 'Your accounts package needs your sales. The Payments page gives you four downloads for it, at the top right. Export invoices. Export for QuickBooks. Export for Sage. And Export payments. Only admins see these buttons, and they come with the Accounts feature. Each one downloads a file that your package, or your bookkeeper, can read.', 1],
             ['2', 'Pick the period first',              'First, choose the dates. In Filter the list, press Last month, or type your own From and To dates. The files follow those two dates, and nothing else, so the search box and the method make no difference. Do it the same way every time, say on the first of the month, so nothing is missed, and nothing is sent twice.', 2],
             ['3', 'The invoices file',                  'Export invoices gives you your sales. There is one row for each blind, and every row with the same quote number makes one invoice. The prices are before VAT, so your package adds the VAT itself. Each row goes to account code two hundred, sales, at twenty percent VAT, or no VAT if the order had none. And the due date is fourteen days after the order.', 3],
             ['4', 'You agreed a lower price',           'If you agreed a lower price than the blinds add up to, the file adds one more line to that invoice: Discount, agreed price, with a minus amount. That way, the invoice total matches exactly what the customer was charged. Xero is happy with a minus line. QuickBooks is not, which is why it has a button of its own.', 4],

@@ -152,3 +152,16 @@ test('the reconciliation check flags orders whose records disagree (#1113)', fun
     db()->prepare("UPDATE factory_jobs SET status = 'made' WHERE quote_id = ?")->execute([$a]);
     db()->exec("DELETE FROM factory_ar_delivery_notes WHERE dn_number = 'DN-CHECK-B'");
 });
+
+test('auto-invoice on dispatch is per factory: another factory never inherits the main factory\'s switch', function () {
+    // Made-up factory ids, so nothing else in the run has read (and cached) these keys.
+    app_setting_set('auto_invoice_on_dispatch', '1');   // the old installation-wide switch, ON
+    try {
+        check(os_auto_invoice_set(424242, true), 'saving one factory\'s switch');
+        check(os_auto_invoice_on(424242), 'that factory reads its own switch as ON');
+        check(!os_auto_invoice_on(424243), 'a different factory stays OFF, whatever the old global switch says');
+    } finally {
+        app_setting_set('auto_invoice_on_dispatch', '0');
+        db()->prepare("DELETE FROM app_settings WHERE setting_key IN ('auto_invoice_on_dispatch.424242', 'auto_invoice_on_dispatch.424243')")->execute();
+    }
+});
