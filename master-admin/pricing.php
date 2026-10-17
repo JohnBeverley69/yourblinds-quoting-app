@@ -146,9 +146,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     defined('BILLING_VAT_PERCENT') ? (float) BILLING_VAT_PERCENT : 0.0
                 );
 
+                // UPSERT, not UPDATE: a plan whose price was never saved here (e.g.
+                // the new Factory tier, still on its £135 default) has no row, so an
+                // UPDATE silently dropped the new PayPal id and the tier stayed
+                // "Not yet available" however often Create was pressed (John, 2026-10-17).
                 $pdo->prepare(
-                    'UPDATE plan_pricing SET paypal_plan_id = ? WHERE plan_code = ?'
-                )->execute([$newId, $code]);
+                    'INSERT INTO plan_pricing (plan_code, price_gbp_monthly, paypal_plan_id)
+                     VALUES (?, ?, ?)
+                     ON DUPLICATE KEY UPDATE paypal_plan_id = VALUES(paypal_plan_id)'
+                )->execute([$code, $price, $newId]);
 
                 $_SESSION['flash_success'] = 'Created PayPal Plan ' . $newId . ' for ' . $code . '. '
                     . 'Tenants can now subscribe.';
