@@ -61,6 +61,9 @@ if ($action === 'save') {
               . implode(', ', array_map(static fn ($c) => "$c = VALUES($c)", $cols));
         db()->prepare($sql)->execute(array_merge([$clientId], $vals));
         $_SESSION['flash_success'] = 'Text settings saved.';
+        if (($risk = sms_sender_risk($sender)) !== null) {
+            $_SESSION['flash_error'] = 'Saved, but check the sender name: ' . $risk;
+        }
     } catch (Throwable $e) {
         $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage() . ' — has migrate_messages.php been run?';
     }

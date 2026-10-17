@@ -72,6 +72,11 @@ $smsHint     = 'color:#6b7280;font-size:0.875rem;margin:0 0 1rem;max-width:44rem
                 <label for="sms_sender_name">Sender name <span style="color:#9ca3af;font-weight:400">(what the customer sees, up to 11 characters)</span></label>
                 <input id="sms_sender_name" name="sms_sender_name" type="text" maxlength="11"
                        value="<?= e($smsSender) ?>" placeholder="<?= e($smsSuggest !== '' ? $smsSuggest : 'e.g. BevBlinds') ?>">
+                <?php if (($smsRisk = sms_sender_risk($smsSender)) !== null): ?>
+                    <div class="alert alert-error" role="alert" style="margin-top:0.5rem;font-size:0.8125rem"><?= e($smsRisk) ?></div>
+                <?php else: ?>
+                    <div style="color:#6b7280;font-size:0.8125rem;margin-top:0.35rem">Use a recognisable name, e.g. &ldquo;BevBlinds&rdquo;. The networks block names that look like a bank or big brand (&ldquo;TSBlinds&rdquo; reads as TSB) and often initials with gaps.</div>
+                <?php endif; ?>
             </div>
 
             <p style="<?= $smsHint ?>">

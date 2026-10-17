@@ -178,6 +178,35 @@ function sms_clean_sender(?string $name): ?string
     return $s;
 }
 
+/**
+ * Why a sender name is likely to be dropped by the mobile networks, or null.
+ * Seen 17 Oct 2026: "T S Blinds" and "TSBlinds" were accepted by The SMS
+ * Works but never reached the phone, while "ABC Blinds" was delivered to the
+ * same phone. Most likely the networks' scam filter: squashed up, both read
+ * "TSB…", like the bank. Names that look like a bank, a government body or a
+ * big brand are dropped; so, often, are initials with gaps and very short names.
+ */
+function sms_sender_risk(?string $name): ?string
+{
+    $s = trim((string) $name);
+    if ($s === '') return null;
+    $flat = strtoupper((string) preg_replace('/[^A-Za-z0-9]/', '', $s));
+    foreach (['TSB', 'HSBC', 'NATWEST', 'BARCLAY', 'LLOYDS', 'HALIFAX', 'SANTANDER', 'NATIONWIDE', 'MONZO', 'REVOLUT',
+              'HMRC', 'DVLA', 'NHS', 'GOVUK', 'ROYALMAIL', 'POSTOFFICE', 'EVRI', 'DPD', 'PARCELFORCE',
+              'AMAZON', 'PAYPAL', 'APPLE', 'MICROSOFT', 'NETFLIX'] as $brand) {
+        if (str_starts_with($flat, $brand)) {
+            return 'This name starts like "' . $brand . '" (a bank, government body or big brand), so the mobile networks will probably block it as a possible scam. Use something like your full company name instead.';
+        }
+    }
+    if (preg_match('/(^|\s)[A-Za-z0-9](\s|$)/', $s)) {
+        return 'Names with single letters and gaps (like "T S Blinds") are often blocked by the mobile networks. Use a recognisable word or your company name, e.g. "SmythBlind".';
+    }
+    if (strlen(str_replace(' ', '', $s)) < 4) {
+        return 'Very short names are often blocked by the mobile networks. Use 4 or more letters.';
+    }
+    return null;
+}
+
 /** A suggested sender from the company name: "Beverley Blinds Ltd" → "BeverleyBli". */
 function sms_suggest_sender(string $companyName): string
 {
