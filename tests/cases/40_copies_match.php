@@ -407,3 +407,58 @@ test('a product deleted from the catalogue is HIDDEN on the account at the next 
     check_same(1, (int) $back[0]['active'], 'the copy is active again');
     check_same((int) $first[0]['id'], (int) $back[0]['id'], 'it is the same copy, re-linked');
 });
+
+test('when the master changes a grid\'s sizes, the next push leaves the copy with exactly the master\'s cells', function () {
+    // Audit 2026-10-17: the push only ever ADDED/updated cells. Rename the
+    // master's 600/700 widths to 610/710 and drop 800, and the account kept the
+    // old 600/700/800 cells at the old prices next to the new ones — and the
+    // round-up lookup priced a 590mm blind from the stale 600 cell. Same for a
+    // width-priced option choice.
+    $ins = static fn (string $sql, array $p) => (db()->prepare($sql)->execute($p) ? (int) db()->lastInsertId() : 0);
+    $pid = cp_insert('products', ['client_id' => 3, 'name' => 'Bev ZZ Prune Probe', 'active' => 1, 'price_source' => 'own',
+        'category_id' => null, 'requires_option' => 0, 'width_only' => 0, 'price_per_slat' => 0, 'price_per_sqm' => 0]);
+    $sys = $ins('INSERT INTO product_systems (client_id, product_id, name, active) VALUES (3, ?, ?, 1)', [$pid, 'Prune System']);
+    $tab = $ins("INSERT INTO price_tables (client_id, product_id, system_id, band_code, name, active) VALUES (3, ?, ?, 'A', 'Prune Grid', 1)", [$pid, $sys]);
+    $ex  = $ins('INSERT INTO product_extras (client_id, product_id, name, active) VALUES (3, ?, ?, 1)', [$pid, 'Prune Option']);
+    $ch  = $ins('INSERT INTO product_extra_choices (product_extra_id, label, active) VALUES (?, ?, 1)', [$ex, 'Prune Choice']);
+    foreach ([600 => 10, 700 => 20, 800 => 30] as $w => $p) {
+        foreach ([1000, 1500] as $d) {
+            $ins('INSERT INTO price_table_rows (price_table_id, width_mm, drop_mm, price) VALUES (?, ?, ?, ?)', [$tab, $w, $d, $p + $d / 100]);
+        }
+        $ins('INSERT INTO extra_choice_price_rows (product_extra_choice_id, width_mm, price) VALUES (?, ?, ?)', [$ch, $w, $p / 10]);
+    }
+
+    $grid    = static fn (int $t) => t_rows('SELECT width_mm, drop_mm, ROUND(price, 2) price FROM price_table_rows WHERE price_table_id = ? ORDER BY width_mm, drop_mm', [$t]);
+    $widths  = static fn (int $c) => t_rows('SELECT width_mm, ROUND(price, 2) price FROM extra_choice_price_rows WHERE product_extra_choice_id = ? ORDER BY width_mm', [$c]);
+    $copyTab = static fn () => (int) t_val('SELECT id FROM price_tables WHERE client_id = 101 AND source_table_id = ?', [$tab]);
+    $copyCh  = static fn () => (int) t_val('SELECT c.id FROM product_extra_choices c JOIN product_extras e ON e.id = c.product_extra_id
+                                             WHERE e.client_id = 101 AND c.source_choice_id = ?', [$ch]);
+
+    $sum = push_catalogue_to_client(db(), 3, 101, 'Bev ZZ Prune Probe');
+    check(empty($sum['errors']), 'first push errors: ' . t_show($sum['errors']));
+    check_same(t_show($grid($tab)), t_show($grid($copyTab())), 'the copy\'s grid after the first push');
+    check_same(t_show($widths($ch)), t_show($widths($copyCh())), 'the copy\'s width prices after the first push');
+
+    // On the master: 600→610 and 700→710 renamed in place at new prices, 800 dropped.
+    db()->prepare('UPDATE price_table_rows SET width_mm = width_mm + 10, price = price + 5 WHERE price_table_id = ? AND width_mm IN (600, 700)')->execute([$tab]);
+    db()->prepare('DELETE FROM price_table_rows WHERE price_table_id = ? AND width_mm = 800')->execute([$tab]);
+    db()->prepare('UPDATE extra_choice_price_rows SET width_mm = width_mm + 10, price = price + 1 WHERE product_extra_choice_id = ? AND width_mm IN (600, 700)')->execute([$ch]);
+    db()->prepare('DELETE FROM extra_choice_price_rows WHERE product_extra_choice_id = ? AND width_mm = 800')->execute([$ch]);
+
+    $sum = push_catalogue_to_client(db(), 3, 101, 'Bev ZZ Prune Probe');
+    check(empty($sum['errors']), 'second push errors: ' . t_show($sum['errors']));
+    check_same(t_show($grid($tab)), t_show($grid($copyTab())), 'the copy\'s grid after the master changed its sizes');
+    check_same(t_show($widths($ch)), t_show($widths($copyCh())), 'the copy\'s width prices after the master changed its sizes');
+    check_same(6, (int) ($sum['price_table_cells_removed'] ?? 0), 'price cells the push reports removing');
+    check_same(3, (int) ($sum['width_table_cells_removed'] ?? 0), 'width-table cells the push reports removing');
+    // Price undo: the push's change to the copy's grid is recorded (and undoable).
+    $copyPid = (int) t_val('SELECT product_id FROM price_tables WHERE id = ?', [$copyTab()]);
+    $undoRows = static fn () => (int) t_val("SELECT COUNT(*) FROM price_undo WHERE client_id = 101 AND scope = ? AND after_hash IS NOT NULL", ['product:' . $copyPid]);
+    check_same(1, $undoRows(), 'undo snapshots recorded for the copy by the size-changing push');
+
+    // And again: nothing left to remove, nothing changes, no new undo entry.
+    $sum = push_catalogue_to_client(db(), 3, 101, 'Bev ZZ Prune Probe');
+    check_same(1, $undoRows(), 'undo snapshots after a repeat push that changed nothing');
+    check_same(0, (int) ($sum['price_table_cells_removed'] ?? 0) + (int) ($sum['width_table_cells_removed'] ?? 0), 'cells removed by a repeat push');
+    check_same(t_show($grid($tab)), t_show($grid($copyTab())), 'the copy\'s grid after a repeat push');
+});
