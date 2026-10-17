@@ -85,6 +85,7 @@ CREATE TABLE `accounting_sync` (
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
   `fingerprint` varchar(64) DEFAULT NULL,
   `ref` varchar(40) DEFAULT NULL,
+  `checked_at` datetime DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uq_acsync` (`client_id`,`provider`,`realm_id`,`entity`,`local_id`),
   KEY `idx_acsync_status` (`client_id`,`provider`,`status`)

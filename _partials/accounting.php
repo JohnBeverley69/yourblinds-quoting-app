@@ -367,6 +367,11 @@ function ac_valid_access_token(int $clientId, string $provider, bool $forceRefre
  * ------------------------------------------------------------------ */
 function ac_http(string $method, string $url, array $opts = []): array
 {
+    // Automatic tests only: a stub answers instead of the network, so a test can
+    // never reach QuickBooks (or anyone else). Nothing sets it on the live site.
+    if (PHP_SAPI === 'cli' && isset($GLOBALS['ac_http_test_stub']) && is_callable($GLOBALS['ac_http_test_stub'])) {
+        return ($GLOBALS['ac_http_test_stub'])($method, $url, $opts);
+    }
     $ch = curl_init($url);
     $respHeaders = [];
     $curl = [
