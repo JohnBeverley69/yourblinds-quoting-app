@@ -4036,7 +4036,7 @@ if (is_factory_client($clientId) && function_exists('factory_console_user') && f
             // A joinable option (e.g. an over-size fascia) made in equal pieces.
             (data.extras_applied || []).forEach(function (ex) {
                 if (ex.joined_pieces > 1) {
-                    bits.push(ex.choice_label + ' joined: ' + ex.joined_pieces + ' × ' + ex.joined_piece_mm + ' mm');
+                    bits.push(escapeHtml(ex.choice_label) + ' joined: ' + Number(ex.joined_pieces) + ' × ' + Number(ex.joined_piece_mm) + ' mm');
                 }
             });
             if (perSqm && data.width_mm && data.drop_mm) {
