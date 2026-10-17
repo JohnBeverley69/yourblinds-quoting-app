@@ -494,7 +494,10 @@ function sms_provider_send(string $sender, string $to, string $body): array
     $json = json_decode((string) $raw, true);
     if ($status >= 200 && $status < 300) {
         $ref = is_array($json) ? (string) ($json['messageid'] ?? $json['messageId'] ?? '') : '';
-        return ['ok' => true, 'ref' => $ref !== '' ? $ref : null, 'error' => null];
+        // The reply carries the first status too (a text can be REJECTED straight away).
+        return ['ok' => true, 'ref' => $ref !== '' ? $ref : null, 'error' => null,
+                'pstatus' => is_array($json) ? (string) ($json['status'] ?? '') : '',
+                'failurereason' => is_array($json) ? ($json['failurereason'] ?? null) : null];
     }
     $why = [401 => sms_token_kind($token) === 'key'
                 ? 'the saved code is the API key or secret, not the JWT (Master Admin → Texts)'
@@ -503,6 +506,122 @@ function sms_provider_send(string $sender, string $to, string $body): array
             403 => 'the text provider refused the send'][$status] ?? ('the text provider said ' . $status);
     $msg = is_array($json) ? (string) ($json['message'] ?? $json['error'] ?? '') : '';
     return ['ok' => false, 'ref' => null, 'error' => 'Not sent: ' . $why . ($msg !== '' ? ' (' . $msg . ')' : '') . '.'];
+}
+
+/* ------------------------------------------------------------------ *
+ *  Delivery status: from the webhook, or by asking The SMS Works
+ * ------------------------------------------------------------------ */
+
+/** The SMS Works status → ours. Unknown / SCHEDULED → null (leave as is). */
+function sms_status_from_provider(string $status): ?string
+{
+    return [
+        'SENT'          => 'sent',
+        'DELIVERED'     => 'delivered',
+        'UNDELIVERABLE' => 'failed',
+        'EXPIRED'       => 'failed',
+        'REJECTED'      => 'failed',
+    ][strtoupper(trim($status))] ?? null;
+}
+
+/**
+ * Apply a provider status to the message with this provider ref. Never moves
+ * a delivered text back to 'sent' (reports can arrive out of order).
+ * Returns our status, or null when nothing changed.
+ */
+function sms_apply_provider_status(string $ref, string $providerStatus, $failureReason = null): ?string
+{
+    $new = sms_status_from_provider($providerStatus);
+    if ($ref === '' || $new === null) return null;
+    $detail = null;
+    if ($new === 'failed') {
+        $fr     = is_array($failureReason) ? $failureReason : [];
+        $detail = substr(ucfirst(strtolower(trim($providerStatus))) . (!empty($fr['details']) ? ': ' . (string) $fr['details'] : ''), 0, 255);
+    }
+    db()->prepare(
+        "UPDATE messages
+            SET status = ?,
+                status_detail = IF(? = 'delivered', NULL, COALESCE(?, status_detail)),
+                delivered_at = IF(? = 'delivered' AND delivered_at IS NULL, NOW(), delivered_at)
+          WHERE provider = 'smsworks' AND provider_ref = ?
+            AND NOT (status = 'delivered' AND ? = 'sent')"
+    )->execute([$new, $new, $detail, $new, $ref, $new]);
+    return $new;
+}
+
+/**
+ * Ask The SMS Works for one message's delivery report.
+ * @return array|null  their message record (status, failurereason, …), or null
+ */
+function sms_provider_get(string $ref): ?array
+{
+    $token = pc_get('SMSWORKS_TOKEN', '') ?? '';
+    if ($token === '' || $ref === '') return null;
+    $base  = env('SMSWORKS_API_URL', '') ?: 'https://api.thesmsworks.co.uk/v1';
+    $auths = sms_auth_candidates($token);
+    // Their docs show both /message/{id} and /messages/{id}; try each.
+    foreach (['/message/', '/messages/'] as $path) {
+        foreach ($auths as $auth) {
+            $ch = curl_init($base . $path . rawurlencode($ref));
+            curl_setopt_array($ch, [
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_CONNECTTIMEOUT => 5,
+                CURLOPT_TIMEOUT        => 10,
+                CURLOPT_HTTPHEADER     => ['Accept: application/json', 'Authorization: ' . $auth],
+            ]);
+            $raw    = curl_exec($ch);
+            $status = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+            if ($status === 401) continue;            // try the other header form
+            if ($status === 404 || $raw === false) break;   // try the other path
+            $json = json_decode((string) $raw, true);
+            if ($status >= 200 && $status < 300 && is_array($json)) {
+                // Some endpoints wrap the record in a list.
+                return isset($json['status']) ? $json : (is_array($json[0] ?? null) ? $json[0] : null);
+            }
+            return null;
+        }
+    }
+    return null;
+}
+
+/**
+ * Chase up texts still showing 'sent' with no delivery report: ask The SMS
+ * Works about each one sent between $minMinutes and 3 days ago. Run by the
+ * cron (so a missed webhook never leaves a text stuck) and by the button on
+ * Master Admin → Texts.
+ * @return array{checked:int, delivered:int, failed:int, waiting:int, unknown:int, notes:array}
+ */
+function sms_check_pending(int $minMinutes = 30, int $max = 50): array
+{
+    $out = ['checked' => 0, 'delivered' => 0, 'failed' => 0, 'waiting' => 0, 'unknown' => 0, 'notes' => []];
+    if (!sms_ready() || !sms_provider_configured()) return $out;
+    $st = db()->prepare(
+        "SELECT id, provider_ref FROM messages
+          WHERE channel = 'sms' AND direction = 'out' AND provider = 'smsworks'
+            AND status IN ('queued', 'sent') AND provider_ref IS NOT NULL AND provider_ref <> ''
+            AND sent_at <= DATE_SUB(NOW(), INTERVAL ? MINUTE)
+            AND sent_at >  DATE_SUB(NOW(), INTERVAL 3 DAY)
+       ORDER BY id DESC LIMIT " . max(1, $max)
+    );
+    $st->execute([max(0, $minMinutes)]);
+    foreach ($st->fetchAll() as $m) {
+        $out['checked']++;
+        $rec = sms_provider_get((string) $m['provider_ref']);
+        if ($rec === null) {
+            $out['unknown']++;
+            $out['notes'][] = '#' . $m['id'] . ': The SMS Works has no record of it.';
+            continue;
+        }
+        $ps  = strtoupper((string) ($rec['status'] ?? ''));
+        $new = sms_apply_provider_status((string) $m['provider_ref'], $ps, $rec['failurereason'] ?? null);
+        if ($new === 'delivered')   $out['delivered']++;
+        elseif ($new === 'failed')  $out['failed']++;
+        else                        $out['waiting']++;
+        $fr = is_array($rec['failurereason'] ?? null) ? (string) ($rec['failurereason']['details'] ?? '') : '';
+        $out['notes'][] = '#' . $m['id'] . ': ' . ($ps !== '' ? $ps : 'no status') . ($fr !== '' ? ' (' . $fr . ')' : '');
+    }
+    return $out;
 }
 
 /* ------------------------------------------------------------------ *
@@ -589,6 +708,9 @@ function sms_send(int $clientId, string $toRaw, string $body, array $ctx = []): 
     if ($res['ok']) {
         db()->prepare("UPDATE messages SET status = 'sent', provider_ref = ?, sent_at = NOW() WHERE id = ?")
             ->execute([$res['ref'], $id]);
+        if (!empty($res['ref']) && sms_apply_provider_status((string) $res['ref'], (string) ($res['pstatus'] ?? ''), $res['failurereason'] ?? null) === 'failed') {
+            return ['ok' => false, 'status' => 'failed', 'message' => 'The SMS Works refused this text (' . strtolower((string) $res['pstatus']) . ').', 'id' => $id];
+        }
         return ['ok' => true, 'status' => 'sent', 'message' => 'Text sent to ' . sms_display_number((string) $to) . '.', 'id' => $id];
     }
     db()->prepare("UPDATE messages SET status = 'failed', status_detail = ? WHERE id = ?")

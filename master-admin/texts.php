@@ -33,6 +33,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($def > 0) pc_set('SMS_DEFAULT_MONTHLY_LIMIT', (string) $def);
             sms_webhook_key();   // make sure the delivery-report key exists
             $_SESSION['flash_success'] = 'Text settings saved.';
+        } elseif ($action === 'check') {
+            // Ask The SMS Works about every text still showing "Sent".
+            $pc = sms_check_pending(0, 50);
+            $_SESSION['flash_success'] = $pc['checked'] === 0
+                ? 'No texts are waiting for a delivery report.'
+                : "Asked The SMS Works about {$pc['checked']} text" . ($pc['checked'] === 1 ? '' : 's')
+                  . ": {$pc['delivered']} delivered, {$pc['failed']} failed, {$pc['waiting']} still waiting"
+                  . ($pc['unknown'] ? ", {$pc['unknown']} they have no record of" : '') . '. '
+                  . implode(' · ', array_slice($pc['notes'], 0, 10));
         } elseif ($action === 'limits') {
             $limits = is_array($_POST['limit'] ?? null) ? $_POST['limit'] : [];
             $ensure = $pdo->prepare('INSERT IGNORE INTO client_settings (client_id) VALUES (?)');
@@ -206,6 +215,14 @@ $activeNav  = 'texts';
                     <button type="submit" class="btn btn-primary">Save</button>
                 </div>
             </form>
+            <?php if ($hasToken && $ready): ?>
+                <form method="post" action="/master-admin/texts.php" style="margin-top:0.75rem">
+                    <?= csrf_field() ?>
+                    <input type="hidden" name="_action" value="check">
+                    <button type="submit" class="btn btn-secondary">Check delivery with The SMS Works</button>
+                    <span style="color:#6b7280;font-size:0.8125rem;margin-left:0.5rem">Asks them what happened to texts still showing &ldquo;Sent&rdquo; (the 15-minute job also does this after half an hour).</span>
+                </form>
+            <?php endif; ?>
         </section>
 
         <?php if ($ready): $packsNow = sms_bundle_packs(); ?>
