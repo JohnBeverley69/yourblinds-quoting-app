@@ -61,3 +61,23 @@ test('plan gates: the board has the master switch, and only the super-admin can 
     check(plan_enforcing(), 'on after the super-admin switches it on');
     $enforce(false);
 });
+
+test('plan gates: online acceptance — with it off for the plan, the quote page asks the customer to get in touch', function () use ($enforce) {
+    // Move online acceptance up to Gold for this test, enforce, and check a Bronze company's quote page.
+    app_setting_set(BILLING_CATALOGUE_KEY, json_encode(['online_accept' => 'gold']));
+    $enforce(true);
+    try {
+        db()->exec("DELETE FROM client_plan_overrides WHERE client_id = 102");
+        check(!plan_feature_allowed(102, 'online_accept'), 'a Bronze company should not have online acceptance');
+        check(plan_feature_allowed(3, 'online_accept'), 'the main factory always has it');
+        $qid = flow_new_quote(as_user('bravo.admin'), fx('customer_bravo'), 'GATE-ACCEPT');
+        $tok = bin2hex(random_bytes(20));
+        db()->prepare("UPDATE quotes SET status = 'sent', sent_at = NOW(), public_token = ? WHERE id = ?")->execute([$tok, $qid]);
+        $page = (new YbHttp())->get('/quote-history/public.php?token=' . $tok)->body;
+        check_contains('To accept this quote, please contact', $page, 'the quote page for a Bronze company');
+        check_not_contains('name="signature_name"', $page, 'no accept form');
+    } finally {
+        app_setting_set(BILLING_CATALOGUE_KEY, null);
+        $enforce(false);
+    }
+});

@@ -67,6 +67,15 @@ if ($inPerson) {
     $publicUrl .= '&in_person=1';
 }
 
+// Online acceptance is a plan feature; the page shows "please contact us"
+// instead of the form, and a hand-made POST is refused the same way.
+require_once __DIR__ . '/../_partials/plan_gate.php';
+if (!$inPerson && !plan_feature_allowed((int) $quote['client_id'], 'online_accept')) {
+    $_SESSION['flash_error'] = 'Please contact us to accept this quote.';
+    header('Location: ' . $publicUrl);
+    exit;
+}
+
 if ((string) $quote['status'] !== 'sent') {
     // Already moved on — or never sent. Don't transition anything; just bounce
     // back to the public page where the appropriate state will render.
@@ -201,7 +210,7 @@ if ($action === 'accept') {
                     // Auto-placed straight to the factory on the customer's accept
                     // → email the factory that a new order has landed (once).
                     require_once __DIR__ . '/../_partials/factory_notify.php';
-                    factory_notify_new_order($pdo, $acQuote);
+                    factory_notify_new_order($pdo, $acQuote);
                     // (Re)placed: an order already on the floor gets its blind
                     // jobs brought in line with the current lines/units.
                     require_once __DIR__ . '/../_partials/blind_jobs.php';

@@ -204,6 +204,12 @@ $viewer   = current_user();
 $inPerson = !empty($_GET['in_person']) && $viewer
          && (int) ($viewer['client_id'] ?? 0) === (int) $quote['client_id'];
 
+// Online acceptance is a plan feature (Master Admin → Plan features). Without
+// it the customer still sees the quote, but is asked to get in touch instead
+// of accepting here. Signing in person is its own feature (sign_start.php).
+require_once __DIR__ . '/../_partials/plan_gate.php';
+$onlineAcceptOk = $inPerson || plan_feature_allowed((int) $quote['client_id'], 'online_accept');
+
 $tradeLines = array_values(array_filter([
     (string) ($quote['trade_addr1']    ?? ''),
     (string) ($quote['trade_addr2']    ?? ''),
@@ -619,6 +625,14 @@ if ($depositStored !== null) {
                ran out on <?= e(date('j F Y', (int) quote_accept_deadline($quote))) ?>.
                Prices may have changed since — please contact
                <?= e((string) ($quote['trade_company_name'] ?? 'your supplier')) ?> for an updated quote.</p>
+        </div>
+    <?php elseif ($canAccept && !$onlineAcceptOk): ?>
+        <div class="accept-card">
+            <h2>Happy to go ahead?</h2>
+            <p>To accept this quote, please contact
+               <strong><?= e((string) ($quote['trade_company_name'] ?? 'us')) ?></strong><?php if (trim((string) ($quote['trade_phone'] ?? '')) !== ''): ?>
+               on <a href="tel:<?= e(preg_replace('/[^0-9+]/', '', (string) $quote['trade_phone'])) ?>"><?= e((string) $quote['trade_phone']) ?></a><?php endif; ?>,
+               quoting <strong><?= e((string) ($quote['quote_number'] ?? '')) ?></strong>.</p>
         </div>
     <?php elseif ($canAccept): ?>
         <div class="accept-card">

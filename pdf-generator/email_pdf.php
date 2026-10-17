@@ -93,7 +93,11 @@ $body .= "Please find your quote ({$quote['quote_number']}) attached as a PDF.\n
 if ($customMessage !== '') {
     $body .= "\n" . $customMessage . "\n";
 }
-$body .= "\nYou can also view it online and accept it here:\n";
+// Online acceptance is a plan feature (Master Admin → Plan features): without it
+// the link only shows the quote, so the email doesn't promise acceptance.
+require_once __DIR__ . '/../_partials/plan_gate.php';
+$canAcceptOnline = plan_feature_allowed((int) $user['client_id'], 'online_accept');
+$body .= $canAcceptOnline ? "\nYou can also view it online and accept it here:\n" : "\nYou can also view it online here:\n";
 $body .= $publicUrl . "\n";
 $body .= "\nIf you have any questions please reply to this email.\n\n";
 $body .= "Kind regards,\n";
@@ -119,7 +123,7 @@ $ok = mailer_send(
     null,
     // HTML copy shows a short link instead of the long tokenised address.
     tenant_mail_opts(db(), (int) $user['client_id'])
-        + ['links' => [$publicUrl => 'View and accept your quote'],
+        + ['links' => [$publicUrl => $canAcceptOnline ? 'View and accept your quote' : 'View your quote'],
            'log'   => ['client_id' => (int) $user['client_id'], 'kind' => 'quote', 'quote_id' => (int) $quote['id'],
                        'customer_id' => $quote['customer_id'] ?? null, 'user_id' => (int) $user['user_id']]]
 );
@@ -150,4 +154,6 @@ if ((string) $quote['status'] === 'draft') {
         ->execute([$id]);
 }
 
-qb_flash_redirect($backUrl, 'success', 'Quote PDF emailed to ' . $to . '.');
+qb_flash_redirect($backUrl, 'success', 'Quote PDF emailed to ' . $to . '.'
+    . ($canAcceptOnline ? '' : ' Customers can\'t accept online on your plan — ' . lcfirst(plan_feature_message('online_accept'))
+                               . ' Upgrade on the Billing page.'));
