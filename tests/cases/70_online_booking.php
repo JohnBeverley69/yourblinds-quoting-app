@@ -464,3 +464,18 @@ test('who goes: each salesperson\'s own area, shared out, grouped by area, auto-
     db()->prepare('UPDATE online_booking_settings SET auto_assign = 1 WHERE client_id = ?')->execute([$alpha]);
     db()->prepare('UPDATE client_users SET active = 0 WHERE id = ?')->execute([$s2]);
 });
+
+test('booking emails show a short "click here" link, not the long address', function () {
+    require_once APP_ROOT . '/mailer.php';
+    $co   = ['name' => 'Alpha', 'phone' => '01482 000000', 'email' => '', 'from_name' => '', 'reply_to' => ''];
+    $long = ob_manage_link(str_repeat('ab', 32));
+    foreach (['requested', 'confirmed'] as $kind) {
+        $m = ob_compose_customer_email($kind, $co, 'Sam', '2026-11-02', 'Morning (9am–1pm)', '', 'https://example.test/book/?c=alpha', false, $long);
+        check_contains($long, $m['body'], "$kind: the full link kept in the plain-text copy");
+        $html = mailer_text_to_html($m['body'], $m['links']);
+        check_contains('>click here</a>', $html, "$kind: the short link");
+        check_not_contains('>' . htmlspecialchars($long), $html, "$kind: the long address shown as text");
+    }
+    $m = ob_compose_customer_email('declined', $co, 'Sam', '2026-11-02', 'Morning (9am–1pm)', '', 'https://example.test/book/?c=alpha');
+    check_contains('Or choose another time online: <a href="https://example.test/book/?c=alpha"', mailer_text_to_html($m['body'], $m['links']), 'declined: the booking link');
+});
