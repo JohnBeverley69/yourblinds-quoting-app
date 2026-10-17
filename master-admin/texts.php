@@ -280,7 +280,7 @@ $activeNav  = 'texts';
                         <tr>
                             <td><?= e((string) $r['company_name']) ?></td>
                             <td><?= $on ? 'On' : '<span class="texts-muted">Off (Bronze)</span>' ?></td>
-                            <td><?= $r['sms_sender_name'] ? e((string) $r['sms_sender_name']) : '<span class="texts-muted">—</span>' ?></td>
+                            <td><?= $r['sms_sender_name'] ? e((string) $r['sms_sender_name']) : '<span class="texts-muted">' . e(SMS_DEFAULT_SENDER) . ' (standard)</span>' ?></td>
                             <td><?= $which ? e(implode(', ', $which)) : '<span class="texts-muted">none</span>' ?></td>
                             <td style="text-align:right;<?= $pct >= 100 ? 'color:#991b1b;font-weight:700' : ($pct >= SMS_WARN_PERCENT ? 'color:#b45309;font-weight:700' : '') ?>">
                                 <?= number_format($used) ?><?= $used > 0 ? ' <span class="texts-muted">(' . $pct . '%)</span>' : '' ?>

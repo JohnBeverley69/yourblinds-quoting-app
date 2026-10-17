@@ -13,7 +13,6 @@ $smsUsed     = sms_used_this_month((int) $clientId);
 $smsLimit    = sms_monthly_limit((int) $clientId);
 $smsPct      = $smsLimit > 0 ? min(100, (int) round($smsUsed * 100 / $smsLimit)) : 100;
 $smsSender   = (string) ($smsSettings['sms_sender_name'] ?? '');
-$smsSuggest  = sms_suggest_sender((string) ($client['company_name'] ?? ''));
 $smsSample   = sms_sample_vars($client) + [
     'quote_number' => 'Q1042',
     'quote_link'   => qfu_quote_link(str_repeat('a', 64)),   // same length as a real link
@@ -63,19 +62,19 @@ $smsHint     = 'color:#6b7280;font-size:0.875rem;margin:0 0 1rem;max-width:44rem
             <input type="hidden" name="_action" value="save">
 
             <p style="<?= $smsHint ?>">
-                Texts go out under your company name. Customers can't reply to them, so always
+                Texts go out from <strong>&ldquo;<?= e(SMS_DEFAULT_SENDER) ?>&rdquo;</strong> unless you choose your own sender name below; your company name is in every text. Customers can't reply to them, so always
                 finish with your phone number. To stop texts to one customer, tick
                 &ldquo;Don't text this customer&rdquo; on their record.
             </p>
 
             <div class="form-group" style="max-width:20rem">
-                <label for="sms_sender_name">Sender name <span style="color:#9ca3af;font-weight:400">(what the customer sees, up to 11 characters)</span></label>
+                <label for="sms_sender_name">Sender name <span style="color:#9ca3af;font-weight:400">(what the customer sees, up to 11 characters; leave blank for &ldquo;<?= e(SMS_DEFAULT_SENDER) ?>&rdquo;)</span></label>
                 <input id="sms_sender_name" name="sms_sender_name" type="text" maxlength="11"
-                       value="<?= e($smsSender) ?>" placeholder="<?= e($smsSuggest !== '' ? $smsSuggest : 'e.g. BevBlinds') ?>">
+                       value="<?= e($smsSender) ?>" placeholder="<?= e(SMS_DEFAULT_SENDER) ?>">
                 <?php if (($smsRisk = sms_sender_risk($smsSender)) !== null): ?>
                     <div class="alert alert-error" role="alert" style="margin-top:0.5rem;font-size:0.8125rem"><?= e($smsRisk) ?></div>
                 <?php else: ?>
-                    <div style="color:#6b7280;font-size:0.8125rem;margin-top:0.35rem">Use a recognisable name, e.g. &ldquo;BevBlinds&rdquo;. The networks block names that look like a bank or big brand (&ldquo;TSBlinds&rdquo; reads as TSB) and often initials with gaps.</div>
+                    <div style="color:#6b7280;font-size:0.8125rem;margin-top:0.35rem"><strong>Change this at your own risk</strong>: your texts might not arrive. To stop scam texts, the mobile networks quietly block sender names that could be mistaken for someone else, such as anything that looks like a bank or big brand (&ldquo;TSBlinds&rdquo; reads as TSB bank), initials with gaps, or very short names. The text still shows as &ldquo;Sent&rdquo; but never reaches the phone. &ldquo;<?= e(SMS_DEFAULT_SENDER) ?>&rdquo; has been tested and gets through. If you do change it, send yourself a test text.</div>
                 <?php endif; ?>
             </div>
 
