@@ -60,8 +60,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $layout[$flag] = $code;
             }
             $value = json_encode($layout);
+
+            // The LISTED features (describe the plans only — nothing switches).
+            $postedCat = json_decode((string) ($_POST['catalogue'] ?? ''), true);
+            $catValue  = null;
+            if (is_array($postedCat)) {
+                $catLayout = [];
+                foreach (array_keys(require __DIR__ . '/../_partials/plan_feature_catalogue.php') as $key) {
+                    if (!array_key_exists($key, $postedCat)) continue;
+                    $code = (string) $postedCat[$key];
+                    if ($code !== '' && !isset($plans[$code])) throw new RuntimeException('Unknown tier: ' . $code);
+                    $catLayout[$key] = $code;
+                }
+                $catValue = json_encode($catLayout);
+            }
         } elseif ($action === 'reset') {
-            $value = null;   // back to the placement in billing_plans.php
+            $value    = null;   // back to the placement in billing_plans.php
+            $catValue = null;   // and plan_feature_catalogue.php
         } else {
             throw new RuntimeException('Unknown action.');
         }
@@ -70,7 +85,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $cols   = array_values(array_intersect(array_keys($flags), $existingCols));
         $before = pf_flag_snapshot($cols);
 
-        if (!app_setting_set(BILLING_FEATURE_LAYOUT_KEY, $value)) {
+        if (!app_setting_set(BILLING_FEATURE_LAYOUT_KEY, $value)
+            || ($action === 'reset' || $catValue !== null) && !app_setting_set(BILLING_CATALOGUE_KEY, $catValue)) {
             throw new RuntimeException('Could not save — is the app_settings table there?');
         }
         billing_plans(true);   // re-read the new layout for the sync below
@@ -106,7 +122,8 @@ foreach ($flags as $flag => $_label) {
         if (in_array($flag, $p['features'] ?? [], true)) { $placed[$flag] = (string) $code; break; }
     }
 }
-$isCustom = billing_feature_layout() !== [];
+$catalogue = billing_catalogue();   // the LISTED features, with where each sits now
+$isCustom  = billing_feature_layout() !== [] || (string) (app_setting_get(BILLING_CATALOGUE_KEY, '') ?? '') !== '';
 
 $columns = [];
 foreach ($plans as $code => $p) {
@@ -116,7 +133,7 @@ foreach ($plans as $code => $p) {
         'sub'  => $price > 0 ? '£' . rtrim(rtrim(number_format($price, 2), '0'), '.') . '/month + VAT' : 'Free — every company',
     ];
 }
-$columns[''] = ['name' => 'Not in a plan', 'sub' => 'Switched on by hand per company'];
+$columns[''] = ['name' => 'Not in a plan', 'sub' => 'Switches: on by hand per company · Listed: not shown'];
 $tierNames = array_values(array_map(static fn ($c) => $c['name'], array_slice($columns, 0, -1, true)));
 
 $activeNav = 'plan-features';
@@ -161,6 +178,12 @@ $activeNav = 'plan-features';
             color: var(--text-muted); cursor: pointer;
         }
         .pf-empty { font-size: 0.8125rem; color: var(--text-faint); text-align: center; padding: 1rem 0.25rem; }
+        .pf-tag { font-size: 0.6875rem; font-weight: 700; border-radius: 4px; padding: 0.05rem 0.35rem; }
+        .pf-chip.is-switch .pf-tag { background: #fef3c7; color: #92400e; }
+        .pf-chip.is-listed { font-weight: 500; font-size: 0.875rem; padding: 0.375rem 0.5rem; border-style: dashed; }
+        .pf-chip.is-listed .pf-tag { background: var(--bg-subtle-2, #eef1f6); color: var(--text-muted); }
+        .pf-group { font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+                    color: var(--text-faint); margin: 0.25rem 0 0; }
         .pf-actions { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; margin-top: 1rem; }
         .pf-dirty { font-size: 0.875rem; color: #92400e; display: none; }
         .pf-dirty.is-on { display: inline; }
@@ -191,12 +214,14 @@ $activeNav = 'plan-features';
 
         <section class="section">
             <p style="color:var(--text-muted);font-size:0.875rem;margin:0 0 1rem;line-height:1.55">
-                Drag each extra onto the <strong>lowest tier</strong> that should have it — every tier above
+                Drag each feature onto the <strong>lowest tier</strong> that should have it — every tier above
                 includes it too (<?= e(implode(' → ', $tierNames)) ?>). Anything on <strong>Bronze</strong> is free
-                for every company. On a phone, use the little <em>Move to</em> box on each extra.
-                <br>When you save, every company's features switch on or off to match straight away — moving an
-                extra up a tier takes it away from anyone on the tier below (comps and trials count as being on that
-                tier). The Billing page and the welcome page describe each tier from this, so they always match.
+                for every company. On a phone, use the little <em>Move to</em> box on each one.
+                <br>There are two kinds of box. <strong>⚡ Switch</strong> boxes really turn on and off: when you
+                save, every company's switches change to match straight away, so moving one up a tier takes it away
+                from anyone on the tier below (comps and trials count as being on that tier).
+                <strong>Listed</strong> boxes (dashed) only change what each plan <em>says</em> it includes on the
+                Billing and welcome pages; nothing is switched on or off by them. Hover over one to see its description.
             </p>
 
             <form method="post" id="pf-form"
@@ -204,6 +229,7 @@ $activeNav = 'plan-features';
                 <?= csrf_field() ?>
                 <input type="hidden" name="action" value="save">
                 <input type="hidden" name="layout" id="pf-layout" value="">
+                <input type="hidden" name="catalogue" id="pf-catalogue" value="">
 
                 <div class="pf-board">
                     <?php $prevName = null; foreach ($columns as $code => $col): ?>
@@ -212,9 +238,11 @@ $activeNav = 'plan-features';
                             <div class="pf-sub"><?= e($col['sub']) ?></div>
                             <div class="pf-drop">
                                 <?php foreach ($placed as $flag => $at): if ($at !== (string) $code) continue; ?>
-                                    <div class="pf-chip" draggable="true" data-flag="<?= e($flag) ?>" data-start="<?= e($at) ?>">
+                                    <div class="pf-chip is-switch" draggable="true" data-flag="<?= e($flag) ?>" data-start="<?= e($at) ?>"
+                                         title="A real switch: it turns on and off with the plan">
                                         <span class="pf-grip" aria-hidden="true">⠿</span>
                                         <span class="pf-label"><?= e((string) $flags[$flag]) ?></span>
+                                        <span class="pf-tag">⚡ Switch</span>
                                         <select aria-label="Move <?= e((string) $flags[$flag]) ?> to">
                                             <?php foreach ($columns as $c2 => $col2): ?>
                                                 <option value="<?= e((string) $c2) ?>"<?= (string) $c2 === $at ? ' selected' : '' ?>><?= e($col2['name']) ?></option>
@@ -222,7 +250,20 @@ $activeNav = 'plan-features';
                                         </select>
                                     </div>
                                 <?php endforeach; ?>
-                                <div class="pf-empty">Drop an extra here</div>
+                                <?php foreach ($catalogue as $key => $f): if ($f['code'] !== (string) $code) continue; ?>
+                                    <div class="pf-chip is-listed" draggable="true" data-cat="<?= e($key) ?>" data-start="<?= e($f['code']) ?>"
+                                         title="<?= e($f['desc']) ?>">
+                                        <span class="pf-grip" aria-hidden="true">⠿</span>
+                                        <span class="pf-label"><?= e($f['label']) ?></span>
+                                        <span class="pf-tag">Listed</span>
+                                        <select aria-label="Move <?= e($f['label']) ?> to">
+                                            <?php foreach ($columns as $c2 => $col2): ?>
+                                                <option value="<?= e((string) $c2) ?>"<?= (string) $c2 === $f['code'] ? ' selected' : '' ?>><?= e($col2['name']) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                <?php endforeach; ?>
+                                <div class="pf-empty">Drop a feature here</div>
                             </div>
                             <?php if ($code !== '' && $prevName !== null): ?>
                                 <div class="pf-inherit">+ everything in <?= e($prevName) ?></div>
@@ -279,11 +320,14 @@ $activeNav = 'plan-features';
         dirty.classList.toggle('is-on', changed);
         // Kept current here, not on submit: the confirm box sends the form
         // with form.submit(), which fires no submit event.
-        var layout = {};
+        var layout = {}, catalogue = {};
         board.querySelectorAll('.pf-chip').forEach(function (chip) {
-            layout[chip.getAttribute('data-flag')] = chip.closest('.pf-col').getAttribute('data-tier');
+            var tier = chip.closest('.pf-col').getAttribute('data-tier');
+            if (chip.hasAttribute('data-flag')) layout[chip.getAttribute('data-flag')] = tier;   // ⚡ switches
+            else catalogue[chip.getAttribute('data-cat')] = tier;                                // listed only
         });
         document.getElementById('pf-layout').value = JSON.stringify(layout);
+        document.getElementById('pf-catalogue').value = JSON.stringify(catalogue);
     }
 
     function moveTo(chip, tier) {
@@ -297,7 +341,7 @@ $activeNav = 'plan-features';
         drag = chip;
         chip.classList.add('is-dragging');
         e.dataTransfer.effectAllowed = 'move';
-        try { e.dataTransfer.setData('text/plain', chip.getAttribute('data-flag')); } catch (err) {}
+        try { e.dataTransfer.setData('text/plain', chip.getAttribute('data-flag') || chip.getAttribute('data-cat')); } catch (err) {}
     });
     board.addEventListener('dragend', function () {
         if (drag) drag.classList.remove('is-dragging');

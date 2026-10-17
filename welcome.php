@@ -168,6 +168,7 @@ function wl_price(array $plan): string
         <h2 class="wl-section-title">Simple, honest pricing</h2>
         <p class="wl-section-sub">Start free. Add features as you grow. Cancel any time.</p>
 
+        <?= billing_listed_css() ?>
         <div class="wl-tiers">
             <?php foreach ($plans as $code => $plan):
                 $isFeatured = ($code === 'silver');   // the popular middle tier
@@ -184,6 +185,7 @@ function wl_price(array $plan): string
                     </div>
                     <div class="wl-tier-vat"><?= $isFree ? '' : '+ VAT' ?></div>
                     <p class="wl-tier-desc"><?= e((string) ($plan['description'] ?? '')) ?></p>
+                    <?= billing_listed_html((string) $code, !$isFree, $isFree ? "What's included" : 'What this plan adds') ?>
                     <?php if ($signupsClosed): ?>
                         <span class="wl-btn wl-btn-ghost">Sign-ups paused</span>
                     <?php elseif ($loggedIn): ?>

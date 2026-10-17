@@ -129,6 +129,87 @@ function billing_apply_feature_layout(array $plans, array $layout): array
     return $plans;
 }
 
+/** app_settings key holding where each LISTED feature sits (Master Admin → Plan features). */
+const BILLING_CATALOGUE_KEY = 'plan_feature_catalogue';
+
+/**
+ * Every listed feature (plan_feature_catalogue.php) with the tier it sits on now:
+ * key => ['label', 'desc', 'code'] — 'code' is the LOWEST plan that includes it,
+ * or '' for "not shown on any plan". The saved board layout overrides the
+ * standard tier; a saved code for a plan that no longer exists falls back.
+ * These only DESCRIBE the plans — nothing is switched on or off by them.
+ */
+function billing_catalogue(): array
+{
+    $cat   = require __DIR__ . '/plan_feature_catalogue.php';
+    $plans = billing_plans();
+    $saved = [];
+    try {
+        $st = db()->prepare('SELECT setting_value FROM app_settings WHERE setting_key = ? LIMIT 1');
+        $st->execute([BILLING_CATALOGUE_KEY]);
+        $saved = json_decode((string) ($st->fetchColumn() ?: ''), true) ?: [];
+    } catch (Throwable $e) { $saved = []; }
+    $out = [];
+    foreach ($cat as $key => [$label, $desc, $std]) {
+        $code = array_key_exists($key, $saved) && is_string($saved[$key]) ? $saved[$key] : $std;
+        if ($code !== '' && !isset($plans[$code])) $code = isset($plans[$std]) ? $std : '';
+        $out[$key] = ['label' => $label, 'desc' => $desc, 'code' => $code];
+    }
+    return $out;
+}
+
+/**
+ * The listed features a plan includes, in catalogue order: every one whose
+ * tier is at or below this plan's (the ladder is cumulative). With $newOnly,
+ * just the ones that START at this tier — for "Everything in Silver, plus…".
+ *
+ * @return list<array{label:string, desc:string}>
+ */
+function billing_plan_listed(string $planCode, bool $newOnly = false): array
+{
+    $plans = billing_plans();
+    if (!isset($plans[$planCode])) return [];
+    $tier = (int) ($plans[$planCode]['tier'] ?? 0);
+    $out  = [];
+    foreach (billing_catalogue() as $f) {
+        if ($f['code'] === '') continue;
+        $at = (int) ($plans[$f['code']]['tier'] ?? PHP_INT_MAX);
+        if ($newOnly ? $at === $tier : $at <= $tier) $out[] = ['label' => $f['label'], 'desc' => $f['desc']];
+    }
+    return $out;
+}
+
+/**
+ * A fold-out "What's included" list for a plan card (Billing and welcome pages):
+ * <details><summary>$summary (N)</summary><ul>…</ul></details>, or '' when there
+ * is nothing to list. Each feature shows its one-line description on hover.
+ */
+function billing_listed_html(string $planCode, bool $newOnly, string $summary = "What's included"): string
+{
+    $items = billing_plan_listed($planCode, $newOnly);
+    if (!$items) return '';
+    $h = static fn (string $s): string => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
+    $li = '';
+    foreach ($items as $i) {
+        $li .= '<li title="' . $h($i['desc']) . '"><strong>' . $h($i['label']) . '</strong>'
+             . '<span class="bl-desc"> — ' . $h($i['desc']) . '</span></li>';
+    }
+    return '<details class="billing-listed"><summary>' . $h($summary) . ' (' . count($items) . ')</summary>'
+         . '<ul>' . $li . '</ul></details>';
+}
+
+/** CSS for billing_listed_html(), once per page. */
+function billing_listed_css(): string
+{
+    return '<style>
+        .billing-listed { margin: 0.5rem 0 0.75rem; font-size: 0.875rem; }
+        .billing-listed summary { cursor: pointer; font-weight: 600; color: var(--link, #2563eb); }
+        .billing-listed ul { margin: 0.5rem 0 0; padding-left: 1.1rem; display: grid; gap: 0.3rem; }
+        .billing-listed li { color: var(--text-body); line-height: 1.4; }
+        .billing-listed .bl-desc { color: var(--text-muted); font-weight: 400; }
+    </style>';
+}
+
 /** Short phrases used when a tier's description is built from its features. */
 function billing_feature_blurbs(): array
 {
@@ -170,10 +251,11 @@ function billing_describe_plans(array $plans): array
                 . ($feats ? ' Also includes ' . billing_join_words(array_map($phrase, $feats)) . '.' : '')
                 . ' Free to start.';
         } else {
-            $adds     = array_values(array_diff($feats, $plans[$prev]['features'] ?? []));
+            $adds     = array_map($phrase, array_values(array_diff($feats, $plans[$prev]['features'] ?? [])));
+            if (!empty($plans[$code]['grants_factory']) && empty($plans[$prev]['grants_factory'])) $adds[] = 'the factory side';
             $prevName = (string) ($plans[$prev]['name'] ?? $prev);
             $plans[$code]['description'] = $adds
-                ? 'Everything in ' . $prevName . ', plus ' . billing_join_words(array_map($phrase, $adds)) . '.'
+                ? 'Everything in ' . $prevName . ', plus ' . billing_join_words($adds) . '.'
                 : 'Everything in ' . $prevName . '.';
         }
         $prev = $code;
@@ -631,10 +713,13 @@ function billing_sync_feature_flags(int $clientId): void
     // Build the set of feature flags this tenant is currently
     // entitled to, across all active subs + comps.
     $granted = [];
+    $factory = false;
     foreach (billing_plans() as $code => $plan) {
         if (!billing_plan_active_for($clientId, $code)) continue;
         foreach (($plan['features'] ?? []) as $f) $granted[$f] = true;
+        if (!empty($plan['grants_factory'])) $factory = true;
     }
+    if ($factory) billing_grant_factory_side($clientId);
 
     // Managed flags = every distinct feature listed in the registry.
     $managed = [];
@@ -654,6 +739,24 @@ function billing_sync_feature_flags(int $clientId): void
             // Column missing — skip silently.
         }
     }
+}
+
+/**
+ * The Factory plan switches the account's factory side ON (clients.is_factory).
+ * Only ever ON: leaving the plan does not switch it off, because that would hide
+ * a working factory's floor, jobs and orders mid-production — the super-admin
+ * does that deliberately on Master Admin → Factories. Logged when it happens.
+ */
+function billing_grant_factory_side(int $clientId): void
+{
+    if ($clientId <= 0) return;
+    try {
+        $st = db()->prepare('UPDATE clients SET is_factory = 1 WHERE id = ? AND is_factory = 0');
+        $st->execute([$clientId]);
+        if ($st->rowCount() > 0) {
+            error_log('[YourBlinds] Factory plan: switched the factory side ON for client ' . $clientId);
+        }
+    } catch (Throwable $e) { /* is_factory not migrated — nothing to switch */ }
 }
 
 /**
@@ -698,15 +801,19 @@ function billing_sync_feature_flags_force(int $clientId): void
     // Bronze (free) features are everyone's.
     $granted = [];
     foreach ((billing_plan('free')['features'] ?? []) as $f) $granted[$f] = true;
+    $factory = false;
     foreach ($compCodes as $code) {
         $p = billing_plan((string) $code);
         if ($p) foreach (($p['features'] ?? []) as $f) $granted[$f] = true;
+        if ($p && !empty($p['grants_factory'])) $factory = true;
     }
     foreach ($subs as $sub) {
         if (!billing_subscription_grants_access($sub)) continue;   // incl. paid-through grace
         $p = billing_plan((string) $sub['plan_code']);
         if ($p) foreach (($p['features'] ?? []) as $f) $granted[$f] = true;
+        if ($p && !empty($p['grants_factory'])) $factory = true;
     }
+    if ($factory) billing_grant_factory_side($clientId);
 
     $managed = [];
     foreach (billing_plans() as $plan) {

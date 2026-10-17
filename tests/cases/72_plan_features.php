@@ -44,7 +44,7 @@ test('a layout re-cuts the ladder: up the tiers, Bronze for all, or no plan', fu
     check_not_contains('Accounts', $cut['gold']['description'], 'Gold description (Accounts is in no plan)');
 });
 
-test('Platinum: top tier, can hold Platinum-only extras', function () {
+test('Platinum: above Gold, can hold Platinum-only extras', function () {
     $std = require APP_ROOT . '/_partials/billing_plans.php';
     check(isset($std['platinum']), 'Platinum tier missing');
     check((int) $std['platinum']['tier'] > (int) $std['gold']['tier'], 'Platinum is not above Gold');
@@ -57,7 +57,54 @@ test('Platinum: top tier, can hold Platinum-only extras', function () {
         check(!in_array('feature_accounts', $cut[$t]['features'], true), "Platinum-only Accounts still on $t");
     }
     check_contains('Everything in Gold, plus Accounts', $cut['platinum']['description'], 'Platinum description');
-    check_same('the Silver, Gold and Platinum plans', billing_feature_plans_phrase('feature_sms'), 'texts upgrade wording');
+    check_same('the Silver, Gold, Platinum and Factory plans', billing_feature_plans_phrase('feature_sms'), 'texts upgrade wording');
+});
+
+test('Factory: the top tier, everything in Platinum, and it switches the factory side ON (never off)', function () {
+    $std = require APP_ROOT . '/_partials/billing_plans.php';
+    check(isset($std['factory']), 'Factory tier missing');
+    check((int) $std['factory']['tier'] > (int) $std['platinum']['tier'], 'Factory is not above Platinum');
+    foreach ($std['platinum']['features'] as $f) {
+        check(in_array($f, $std['factory']['features'], true), "Factory is missing Platinum's $f");
+    }
+    check(!empty($std['factory']['grants_factory']), 'Factory does not grant the factory side');
+
+    // Bravo (102) is not a factory. A Factory comp switches its factory side on…
+    db()->exec('UPDATE clients SET is_factory = 0 WHERE id = 102');
+    db()->prepare("INSERT INTO client_plan_overrides (client_id, plan_code, override_type, notes) VALUES (102, 'factory', 'comp', 'test')")->execute();
+    try {
+        billing_sync_feature_flags_force(102);
+        check_same(1, (int) t_val('SELECT is_factory FROM clients WHERE id = 102'), 'factory side after the Factory comp');
+        // …and taking the comp away does NOT switch it off (a working floor must not vanish).
+        db()->exec("DELETE FROM client_plan_overrides WHERE client_id = 102 AND plan_code = 'factory'");
+        billing_sync_feature_flags_force(102);
+        check_same(1, (int) t_val('SELECT is_factory FROM clients WHERE id = 102'), 'factory side after leaving the Factory plan');
+    } finally {
+        db()->exec("DELETE FROM client_plan_overrides WHERE client_id = 102 AND plan_code = 'factory'");
+        db()->exec('UPDATE clients SET is_factory = 0 WHERE id = 102');
+    }
+});
+
+test('Listed features: every one is on a tier, and the board saves where they go (describes only)', function () {
+    $cat = billing_catalogue();
+    check(count($cat) >= 20, 'expected the full feature list, got ' . count($cat));
+    check_same('free', $cat['instaprice']['code'] ?? null, 'InstaPrice is a Bronze feature as standard');
+    check_same('factory', $cat['factory_pipeline']['code'] ?? null, 'Factory Pipeline is a Factory feature as standard');
+    $bronze = array_column(billing_plan_listed('free'), 'label');
+    check(in_array('InstaPrice', $bronze, true) && !in_array('Factory Pipeline', $bronze, true), 'Bronze list: ' . implode(', ', $bronze));
+
+    $super = as_user('super');
+    check_contains('Listed', $super->get('/master-admin/plan-features.php')->body, 'the board shows listed boxes');
+    $r = t_submit($super, '/master-admin/plan-features.php', ['action' => 'save',
+        'layout'    => json_encode([]),
+        'catalogue' => json_encode(['calendar' => 'silver'])]);
+    check($r->status < 400, 'saving the board failed (HTTP ' . $r->status . ')');
+    check_same('silver', billing_catalogue()['calendar']['code'], 'Calendar moved to Silver');
+    check(in_array('Calendar', array_column(billing_plan_listed('silver', true), 'label'), true), 'Silver now adds Calendar');
+    check_contains('What this plan adds', (new YbHttp())->get('/welcome.php')->body, 'welcome page shows the lists');
+
+    t_submit($super, '/master-admin/plan-features.php', ['action' => 'reset']);
+    check_same('free', billing_catalogue()['calendar']['code'], 'Calendar back on Bronze after Reset');
 });
 
 test('saving switches companies on and off; reset puts it back', function () use ($flag) {
