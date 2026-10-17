@@ -6,7 +6,7 @@ declare(strict_types=1);
  *
  * Tracks, per order, which bought-in suppliers have been ordered / received, and
  * sends the purchase orders: Process order (factory/process-order.php), its
- * retry, the Order bought-in page and the opt-in auto-send all go through
+ * retry and the Order bought-in page all go through
  * factory_po_send(), so the PO can't differ between them.
  * The "ordered"/"received" rollups on quotes.supplier_ordered_at /
  * supplier_received_at only flip once EVERY bought-in supplier on the order is
@@ -294,29 +294,7 @@ function factory_send_outstanding(PDO $pdo, int $quoteId, int $factoryId, int $u
     return $res;
 }
 
-/**
- * Auto-order the bought-in lines from their suppliers on placement — only when
- * the FACTORY has auto_send_suppliers ON (default off). Idempotent: only what's
- * outstanding is sent. Process order is the normal path; a failure here is left
- * on the order as "Couldn't order from …" for the office to see.
- */
-function factory_autosend_suppliers(PDO $pdo, int $quoteId): void
-{
-    if ($quoteId <= 0) return;
-    try {
-        // Every factory making part of the order, each by its OWN setting and
-        // only for its own bought-in lines (order_parts.php).
-        require_once __DIR__ . '/order_parts.php';
-        foreach (op_order_factories($pdo, $quoteId) as $factoryId) {
-            $on = 0;
-            try {
-                $s = $pdo->prepare('SELECT auto_send_suppliers FROM client_settings WHERE client_id = ? LIMIT 1');
-                $s->execute([$factoryId]);
-                $on = (int) ($s->fetchColumn() ?: 0);
-            } catch (Throwable $e) { return; }
-            if ($on === 1) factory_send_outstanding($pdo, $quoteId, $factoryId, 0);
-        }
-    } catch (Throwable $e) {
-        error_log('factory_autosend_suppliers skipped for quote ' . $quoteId . ': ' . $e->getMessage());
-    }
-}
+// (factory_autosend_suppliers — emailing POs the moment an order was placed,
+// behind the auto_send_suppliers switch — was retired 2026-10-17 at John's
+// request: Process order is the ONLY way supplier orders go out. The
+// client_settings.auto_send_suppliers column is left in place, unused.)

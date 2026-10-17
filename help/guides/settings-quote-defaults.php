@@ -16,7 +16,7 @@ declare(strict_types=1);
  * Default deposit, Prices / Sizes on the customer quote, the WT charge, New
  * order alerts, Auto-place in-house orders, Paid-in-full receipt, the email
  * from-name / reply-to and the quote footer. The factory-only blocks (Default
- * sale type, Factory — new order received, Auto-order bought-in items) are
+ * sale type, Factory — new order received) are
  * covered in the written steps only. Wording copied from those files plus
  * quote-builder/edit.php + save_wt.php (the WT row), quote-history/accept.php
  * (the alert email) and quote-builder/_helpers.php (numbering, receipt).
