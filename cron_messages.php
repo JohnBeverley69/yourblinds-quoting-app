@@ -89,6 +89,19 @@ if (!sms_ready()) {
     exit;
 }
 
+// Texts still showing "sent" after 30 minutes with no delivery report: ask
+// The SMS Works what happened, so a missed webhook never leaves one stuck.
+try {
+    $pc = sms_check_pending(30, 50);
+    if ($pc['checked'] > 0) {
+        echo "Delivery check: {$pc['checked']} asked about, {$pc['delivered']} delivered, {$pc['failed']} failed, {$pc['waiting']} still waiting, {$pc['unknown']} unknown.
+";
+    }
+} catch (Throwable $e) {
+    echo 'Delivery check: ' . $e->getMessage() . "
+";
+}
+
 $r = sms_run_day_before($now);
 echo "Day-before reminders: {$r['sent']} sent, {$r['blocked']} not sent (see Master Admin → Texts), {$r['skipped']} skipped (no mobile / switched off).\n";
 $f = qfu_run($now);

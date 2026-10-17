@@ -51,32 +51,6 @@ if ($ref === '' || !sms_ready()) {
     exit('OK');
 }
 
-$map = [
-    'SENT'          => 'sent',
-    'DELIVERED'     => 'delivered',
-    'UNDELIVERABLE' => 'failed',
-    'EXPIRED'       => 'failed',
-    'REJECTED'      => 'failed',
-];
-$new = $map[$status] ?? null;
-if ($new === null) {
-    exit('OK');
-}
-
-$detail = null;
-if ($new === 'failed') {
-    $fr     = is_array($data['failurereason'] ?? null) ? $data['failurereason'] : [];
-    $detail = substr(ucfirst(strtolower($status)) . (!empty($fr['details']) ? ': ' . (string) $fr['details'] : ''), 0, 255);
-}
-
-// Never move a delivered text back to 'sent' if reports arrive out of order.
-db()->prepare(
-    "UPDATE messages
-        SET status = ?,
-            status_detail = IF(? = 'delivered', NULL, COALESCE(?, status_detail)),
-            delivered_at = IF(? = 'delivered', NOW(), delivered_at)
-      WHERE provider = 'smsworks' AND provider_ref = ?
-        AND NOT (status = 'delivered' AND ? = 'sent')"
-)->execute([$new, $new, $detail, $new, $ref, $new]);
+sms_apply_provider_status($ref, $status, $data['failurereason'] ?? null);
 
 echo 'OK';
