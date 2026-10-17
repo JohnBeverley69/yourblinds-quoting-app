@@ -1862,7 +1862,7 @@ $activeNav = 'products';
                             <span class="pill pill-tables">Band <?= e((string) $band) ?></span>
                             <span style="color:var(--text-faint);font-size:0.875rem">
                                 <?= count($items) ?>
-                                <?= count($items) === 1 ? (strtolower((string) ($product['option_label'] ?? 'fabric'))) : (strtolower((string) ($product['option_label'] ?? 'fabric')) . 's') ?>
+                                <?= e(strtolower((string) ($product['option_label'] ?? 'fabric')) . (count($items) === 1 ? '' : 's')) ?>
                             </span>
                         </div>
                         <div style="margin-top:0.375rem;color:var(--text-secondary);font-size:0.875rem;line-height:1.5">
