@@ -87,6 +87,9 @@ function qbo_push_ensure_schema(PDO $pdo): void
     if (!$has) throw new RuntimeException('Run setup/migrations/migrate_accounting_sync.php first.');
     if (!in_array('fingerprint', $has, true)) $pdo->exec("ALTER TABLE accounting_sync ADD COLUMN fingerprint VARCHAR(64) NULL");
     if (!in_array('ref', $has, true))         $pdo->exec("ALTER TABLE accounting_sync ADD COLUMN ref VARCHAR(40) NULL");
+    // When the push last looked at it (even if nothing changed) — so already-sent
+    // payments are re-checked in turn instead of the same oldest ones every run.
+    if (!in_array('checked_at', $has, true))  $pdo->exec("ALTER TABLE accounting_sync ADD COLUMN checked_at DATETIME NULL");
     $done = true;
 }
 
@@ -403,7 +406,7 @@ function qbo_push_payment(PDO $pdo, int $factory, array $s, int $payId): string
  * Invoices sent to QuickBooks and since voided in YourBlinds: void them there
  * too (after the payments have been updated so nothing still points at them).
  */
-function qbo_push_voided_invoices(PDO $pdo, int $factory): int
+function qbo_push_voided_invoices(PDO $pdo, int $factory, int &$failed = 0): int
 {
     $st = $pdo->prepare(
         "SELECT s.local_id, s.external_id, i.inv_number
@@ -415,13 +418,61 @@ function qbo_push_voided_invoices(PDO $pdo, int $factory): int
     $n = 0;
     foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $v) {
         $id = (string) $v['external_id'];
-        $r = qbo_request($factory, 'POST', '/invoice', ['operation' => 'void'],
-                         ['Id' => $id, 'SyncToken' => qbo_sync_token($factory, 'Invoice', $id)], 'void invoice');
+        try {
+            $r = qbo_request($factory, 'POST', '/invoice', ['operation' => 'void'],
+                             ['Id' => $id, 'SyncToken' => qbo_sync_token($factory, 'Invoice', $id)], 'void invoice');
+        } catch (Throwable $e) {
+            // One refusal mustn't stop the rest. It stays 'sent', so the next run tries again.
+            $failed++;
+            qbo_sync_set($pdo, $factory, 'invoice', (int) $v['local_id'], (string) $v['inv_number'],
+                         ['last_error' => mb_substr('Void failed: ' . $e->getMessage(), 0, 2000)]);
+            if (ac_needs_reconnect(ac_get_connection($factory, 'quickbooks'))) break;
+            continue;
+        }
         qbo_sync_set($pdo, $factory, 'invoice', (int) $v['local_id'], (string) $v['inv_number'], ['status' => 'voided', 'last_error' => null, 'provider_tid' => $r['tid'] ?? null]);
         ac_log($factory, 'quickbooks', 'void invoice', 'ok', $v['inv_number'] . ' voided in QuickBooks (voided in YourBlinds).', (int) $r['status'], $r['tid'] ?? null, (string) $v['inv_number']);
         $n++;
     }
     return $n;
+}
+
+/**
+ * Which payments this run looks at (at most $limit), most-needed first:
+ *   1. never looked at yet (a new payment) — always first, so it is never
+ *      crowded out by ones already sent;
+ *   2. failed / held, or voided in YourBlinds but still in QuickBooks;
+ *   3. already sent or skipped — re-checked in turn, longest-since-checked
+ *      first, so a re-allocated payment is still noticed.
+ * It used to take the OLDEST $limit by date; once there were more than that,
+ * they were all already sent and new payments were never reached.
+ *
+ * @return int[]
+ */
+function qbo_push_work_list(PDO $pdo, int $factory, string $realm, string $from, int $limit): array
+{
+    $st = $pdo->prepare(
+        "SELECT p.id FROM factory_ar_payments p
+           LEFT JOIN accounting_sync s ON s.client_id = p.factory_client_id AND s.provider = 'quickbooks'
+                                      AND s.realm_id = ? AND s.entity = 'payment' AND s.local_id = p.id
+          WHERE p.factory_client_id = ?
+            AND ( (p.voided_at IS NULL AND p.payment_date >= ?)
+               OR (p.voided_at IS NOT NULL AND s.status IN ('sent','failed','held') AND s.external_id IS NOT NULL) )
+          ORDER BY (s.id IS NOT NULL) ASC,
+                   (p.voided_at IS NULL AND s.status IN ('sent','skipped','voided')) ASC,
+                   COALESCE(s.checked_at, '1970-01-01') ASC,
+                   p.payment_date, p.id
+          LIMIT " . max(1, $limit)
+    );
+    $st->execute([$realm, $factory, $from]);
+    return array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN));
+}
+
+/** Note that the push looked at this payment (updated_at left alone — the QuickBooks screen sorts by it). */
+function qbo_push_mark_checked(PDO $pdo, int $factory, string $realm, int $payId): void
+{
+    $pdo->prepare("UPDATE accounting_sync SET checked_at = NOW(), updated_at = updated_at
+                    WHERE client_id = ? AND provider = 'quickbooks' AND realm_id = ? AND entity = 'payment' AND local_id = ?")
+        ->execute([$factory, $realm, $payId]);
 }
 
 /**
@@ -433,7 +484,7 @@ function qbo_push_voided_invoices(PDO $pdo, int $factory): int
  */
 function qbo_push_run(int $factory, int $limit = 200): array
 {
-    $res = ['ran' => false, 'sent' => 0, 'held' => 0, 'failed' => 0, 'skipped' => 0, 'voided' => 0, 'message' => ''];
+    $res = ['ran' => false, 'sent' => 0, 'held' => 0, 'failed' => 0, 'skipped' => 0, 'voided' => 0, 'unchanged' => 0, 'message' => ''];
     $s = qbo_push_settings($factory);
     if (!$s['on']) { $res['message'] = 'Sending is switched off.'; return $res; }
     if (($b = qbo_push_blocker($s)) !== '') { $res['message'] = $b; return $res; }
@@ -447,20 +498,11 @@ function qbo_push_run(int $factory, int $limit = 200): array
     }
     try {
         $res['ran'] = true;
-        // Live payments since the send-from date, plus any voided one that did go across.
-        $st = $pdo->prepare(
-            "SELECT p.id FROM factory_ar_payments p
-               LEFT JOIN accounting_sync s ON s.client_id = p.factory_client_id AND s.provider = 'quickbooks'
-                                          AND s.realm_id = ? AND s.entity = 'payment' AND s.local_id = p.id
-              WHERE p.factory_client_id = ?
-                AND ( (p.voided_at IS NULL AND p.payment_date >= ?)
-                   OR (p.voided_at IS NOT NULL AND s.status IN ('sent','failed','held') AND s.external_id IS NOT NULL) )
-              ORDER BY p.payment_date, p.id
-              LIMIT " . (int) $limit
-        );
+        // Live payments since the send-from date, plus any voided one that did go across —
+        // new and unfinished ones first (see qbo_push_work_list).
         qbc_realm_schema($pdo, $factory);
-        $st->execute([qbc_realm($factory), $factory, $s['from']]);
-        foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $payId) {
+        $realm = qbc_realm($factory);
+        foreach (qbo_push_work_list($pdo, $factory, $realm, $s['from'], $limit) as $payId) {
             try {
                 $out = qbo_push_payment($pdo, $factory, $s, (int) $payId);
                 if (isset($res[$out])) $res[$out]++;
@@ -471,9 +513,11 @@ function qbo_push_run(int $factory, int $limit = 200): array
                 qbo_sync_set($pdo, $factory, 'payment', (int) $payId, (string) $p->fetchColumn(), ['status' => 'failed', 'last_error' => mb_substr($e->getMessage(), 0, 2000)]);
                 // Not connected / needs reconnecting: every other payment would fail the same way.
                 if (ac_needs_reconnect(ac_get_connection($factory, 'quickbooks'))) break;
+            } finally {
+                qbo_push_mark_checked($pdo, $factory, $realm, (int) $payId);
             }
         }
-        try { $res['voided'] += qbo_push_voided_invoices($pdo, $factory); }
+        try { $res['voided'] += qbo_push_voided_invoices($pdo, $factory, $res['failed']); }
         catch (Throwable $e) { $res['failed']++; }
         $res['message'] = sprintf('%d sent, %d held, %d failed.', $res['sent'], $res['held'], $res['failed']);
         return $res;
