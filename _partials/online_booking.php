@@ -1361,6 +1361,11 @@ function ob_compose_customer_email(string $kind, array $co, string $name, string
              . ($co['phone'] !== '' ? ' or ' : '') . 'reply to this email');
     $when    = "  {$dateStr}\n  {$slotLabel}\n" . ($address !== '' ? "  {$address}\n" : '') . "\n";
     $sign    = "Kind regards,\n" . ($co['name'] !== '' ? $co['name'] : 'The team');
+    // Each link sits at the end of its line, so the HTML copy (mailer_send's
+    // 'links') reads "…: click here" while the plain-text copy keeps the full
+    // address for email programs that can't show links.
+    $links   = [];
+    foreach ([$manageLink, $bookLink] as $u) if ($u !== '') $links[$u] = 'click here';
 
     if ($kind === 'requested') {
         return [
@@ -1368,6 +1373,7 @@ function ob_compose_customer_email(string $kind, array $co, string $name, string
             'body'    => $hello . "Thank you for booking with {$company}. You asked for:\n\n" . $when
                        . "We'll check our diary and confirm by email shortly. If you need to change anything, just {$contact}.\n\n"
                        . ($manageLink !== '' ? "To change the time or cancel: {$manageLink}\n\n" : '') . $sign,
+            'links'   => $links,
         ];
     }
     if ($kind === 'cancelled') {
@@ -1375,6 +1381,7 @@ function ob_compose_customer_email(string $kind, array $co, string $name, string
             'subject' => 'Your appointment is cancelled' . ($co['name'] !== '' ? ' — ' . $co['name'] : ''),
             'body'    => $hello . "As you asked, we've cancelled your appointment on {$dateStr}, {$slotLabel}.\n\n"
                        . ($bookLink !== '' ? "If you'd like to book again: {$bookLink}\n\n" : '') . $sign,
+            'links'   => $links,
         ];
     }
     if ($kind === 'declined') {
@@ -1382,8 +1389,10 @@ function ob_compose_customer_email(string $kind, array $co, string $name, string
             'subject' => 'About your booking request' . ($co['name'] !== '' ? ' — ' . $co['name'] : ''),
             'body'    => $hello . "Thank you for your booking request for {$dateStr}, {$slotLabel}.\n\n"
                        . "Unfortunately we can't make that time. "
-                       . ($bookLink !== '' ? "Please choose another time here: {$bookLink}\nor {$contact}" : 'Please ' . $contact)
-                       . " and we'll find a time that suits you.\n\n" . $sign,
+                       . ($bookLink !== '' ? "Please {$contact} and we'll find a time that suits you.\n\nOr choose another time online: {$bookLink}"
+                                           : "Please {$contact} and we'll find a time that suits you.")
+                       . "\n\n" . $sign,
+            'links'   => $links,
         ];
     }
     return [
@@ -1391,7 +1400,8 @@ function ob_compose_customer_email(string $kind, array $co, string $name, string
         'body'    => $hello . "This confirms your appointment:\n\n" . $when
                    . ($exactTime ? '' : "We'll aim to be with you within that time slot rather than at a fixed time. ")
                    . "If you need to change or cancel, just {$contact}.\n\n"
-                   . ($manageLink !== '' ? "Or change the time or cancel here: {$manageLink}\n\n" : '') . $sign,
+                   . ($manageLink !== '' ? "Or change the time or cancel online: {$manageLink}\n\n" : '') . $sign,
+        'links'   => $links,
     ];
 }
 
@@ -1430,7 +1440,7 @@ function ob_email_customer(int $clientId, int $apptId, string $kind): bool
             !in_array($kind, ['declined', 'cancelled'], true) && !empty($obRow['manage_token']) ? ob_manage_link((string) $obRow['manage_token']) : '');
 
         require_once __DIR__ . '/../mailer.php';
-        $opts = ['from_name' => $co['from_name'],
+        $opts = ['from_name' => $co['from_name'], 'links' => $mail['links'] ?? [],
                  'log' => ['client_id' => $clientId, 'kind' => 'online_booking', 'customer_id' => (int) $a['customer_id']]];
         if ($co['reply_to'] !== '') {
             $opts['reply_to_email'] = $co['reply_to'];
