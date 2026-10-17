@@ -24,10 +24,15 @@ declare(strict_types=1);
  *     reference them, and the snapshot fields on quote_items mean
  *     historic data is safe regardless.
  *
- *   - MERGE for price grids (by width × drop or width-only): master's
- *     cell wins where it overlaps; client's extra cells (e.g. sizes
- *     beyond master's range) are kept. Same rule for width-table
- *     pricing on extra choices.
+ *   - MIRROR for price grids (by width × drop or width-only) on a copy of
+ *     a FACTORY product: the copy ends up with exactly the master's cells.
+ *     The account can't edit a factory copy's grid (product_lock.php), so
+ *     any extra cell there is a stale master cell — a breakpoint the master
+ *     renamed or a size it dropped — and the round-up lookup would still
+ *     price from it. Those are removed (counted in *_cells_removed). Any
+ *     other copy (not locked) keeps the old MERGE: master's cell wins where
+ *     it overlaps, the client's extra cells are kept. Same rule for
+ *     width-table pricing on extra choices.
  *
  *   - client_markups and client_discounts are NEVER touched. Pricing
  *     strategy is each tenant's own concern.
@@ -71,6 +76,8 @@ function push_catalogue_to_client(
         'price_tables_added'     => 0,
         'price_table_cells'      => 0,
         'width_table_cells'      => 0,
+        'price_table_cells_removed' => 0,
+        'width_table_cells_removed' => 0,
         'products_hidden'        => 0,
         'errors'                 => [],
     ];
@@ -112,7 +119,26 @@ function push_catalogue_to_client(
     $sel->execute([$sourceClientId, $prefix . '%']);
     $sourceProducts = $sel->fetchAll(PDO::FETCH_ASSOC);
 
+    require_once __DIR__ . '/price_table_undo.php';
+    $hasProductSrc = pp_has_src_col($pdo, 'products', 'source_product_id');
+
     foreach ($sourceProducts as $sp) {
+        // Price undo (price_table_undo.php): snapshot the account's copy of this
+        // product's grids before the push rewrites (and now prunes) them. Must
+        // run OUTSIDE the transaction. A push that changes nothing leaves no
+        // snapshot behind (pu_finish_all throws unchanged ones away).
+        if ($hasProductSrc) {
+            try {
+                $cp = $pdo->prepare('SELECT id FROM products WHERE client_id = ? AND source_client_id = ? AND source_product_id = ? LIMIT 1');
+                $cp->execute([$targetClientId, $sourceClientId, (int) $sp['id']]);
+                $copyId = (int) $cp->fetchColumn();
+                if ($copyId > 0) {
+                    pu_begin($pdo, $targetClientId, 'product:' . $copyId,
+                        pu_product_table_ids($pdo, $targetClientId, $copyId), 'Factory catalogue push',
+                        static fn () => pu_product_table_ids($pdo, $targetClientId, $copyId));
+                }
+            } catch (Throwable $e) { /* best-effort: history never blocks the push */ }
+        }
         try {
             $pdo->beginTransaction();
             push_one_product($pdo, (int) $sp['id'], $sp, $sourceClientId, $targetClientId, $summary, $flagCols, $categoryName);
@@ -127,6 +153,8 @@ function push_catalogue_to_client(
     }
 
     $summary['products_hidden'] = pp_hide_deleted_copies($pdo, $sourceClientId, $targetClientId);
+
+    if (!$pdo->inTransaction()) pu_finish_all();   // finalise / discard this push's undo snapshots now
 
     return $summary;
 }
@@ -785,6 +813,9 @@ function pp_sync_extras_and_choices(
 ): array {
     $extraMap  = [];
     $choiceMap = [];
+    // Width-table cells on a factory copy mirror the master exactly (see the
+    // file header); anything else keeps the old merge.
+    $pruneCells = pp_target_is_factory_copy($pdo, $targetProductId, $sourceClientId);
 
     // What columns exist on product_extras? Older schemas may not have
     // length_input_label / allow_multi yet — drop them from the write
@@ -948,7 +979,7 @@ function pp_sync_extras_and_choices(
 
         // ---- Choices for this extra ----
         $choiceMapPart = pp_sync_choices(
-            $pdo, $sourceClientId, (int) $r['id'], $tgtId, $systemMap, $optionMap, $summary
+            $pdo, $sourceClientId, (int) $r['id'], $tgtId, $systemMap, $optionMap, $summary, $pruneCells
         );
         foreach ($choiceMapPart as $sCid => $tCid) {
             $choiceMap[$sCid] = $tCid;
@@ -970,7 +1001,8 @@ function pp_sync_choices(
     int   $targetExtraId,
     array $systemMap,
     array $optionMap,
-    array &$summary
+    array &$summary,
+    bool  $pruneCells = false
 ): array {
     $map = [];
 
@@ -1170,8 +1202,8 @@ function pp_sync_choices(
         // where those fabrics share a band with colours that don't offer it.
         pp_sync_choice_fabrics($pdo, (int) $r['id'], $tgtId, $optionMap);
 
-        // Width-table cells on this choice — merge by width_mm.
-        pp_sync_extra_choice_price_rows($pdo, (int) $r['id'], $tgtId, $summary);
+        // Width-table cells on this choice — by width_mm (mirrored on a factory copy).
+        pp_sync_extra_choice_price_rows($pdo, (int) $r['id'], $tgtId, $summary, $pruneCells);
     }
 
     // Retire the ones the master has deleted.
@@ -1291,20 +1323,24 @@ function pp_sync_extra_choice_price_rows(
     PDO   $pdo,
     int   $sourceChoiceId,
     int   $targetChoiceId,
-    array &$summary
+    array &$summary,
+    bool  $pruneCells = false
 ): void {
     $src = $pdo->prepare(
         'SELECT width_mm, price FROM extra_choice_price_rows
           WHERE product_extra_choice_id = ?'
     );
     $src->execute([$sourceChoiceId]);
+    $srcRows = $src->fetchAll(PDO::FETCH_ASSOC);
 
     $upsert = $pdo->prepare(
         "INSERT INTO extra_choice_price_rows (product_extra_choice_id, width_mm, price)
             VALUES (?, ?, ?)
          ON DUPLICATE KEY UPDATE price = VALUES(price)"
     );
-    foreach ($src->fetchAll(PDO::FETCH_ASSOC) as $r) {
+    $masterWidths = [];
+    foreach ($srcRows as $r) {
+        $masterWidths[(int) $r['width_mm'] . 'x'] = true;
         try {
             $upsert->execute([$targetChoiceId, (int) $r['width_mm'], (float) $r['price']]);
             $summary['width_table_cells']++;
@@ -1324,6 +1360,63 @@ function pp_sync_extra_choice_price_rows(
             $summary['width_table_cells']++;
         }
     }
+
+    // A width the master renamed or dropped — same stale-cell problem as the
+    // grids (pp_sync_price_tables). Factory copies only.
+    if ($pruneCells) {
+        $removed = pp_prune_missing_cells($pdo, 'extra_choice_price_rows', 'product_extra_choice_id', $targetChoiceId, false, $masterWidths);
+        $summary['width_table_cells_removed'] = ($summary['width_table_cells_removed'] ?? 0) + $removed;
+    }
+}
+
+/**
+ * True when the target product is the account's copy of a FACTORY product from
+ * this source — the case product_lock.php locks, so the account can't have
+ * added cells of its own to its grids. Read through $pdo (inside the push's
+ * transaction) so a copy made by this very push counts too.
+ */
+function pp_target_is_factory_copy(PDO $pdo, int $targetProductId, int $sourceClientId): bool
+{
+    if ($targetProductId <= 0 || !pp_has_src_col($pdo, 'products', 'source_client_id')) return false;
+    try {
+        $st = $pdo->prepare('SELECT client_id, source_client_id FROM products WHERE id = ? LIMIT 1');
+        $st->execute([$targetProductId]);
+        $p = $st->fetch(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        return false;
+    }
+    if (!$p) return false;
+    $src = (int) ($p['source_client_id'] ?? 0);
+    return $src > 0 && $src === $sourceClientId && $src !== (int) $p['client_id']
+        && (!function_exists('is_factory_client') || is_factory_client($src));
+}
+
+/**
+ * Delete a target table's cells whose size the master doesn't have.
+ * $keep holds the master's keys as "W x D" ("{w}x{d}", or "{w}x" when
+ * $hasDrop is false). Returns how many cells were removed.
+ */
+function pp_prune_missing_cells(PDO $pdo, string $table, string $fkCol, int $targetId, bool $hasDrop, array $keep): int
+{
+    $st = $pdo->prepare(
+        "SELECT id, width_mm" . ($hasDrop ? ', drop_mm' : '') . " FROM `$table` WHERE `$fkCol` = ?"
+    );
+    $st->execute([$targetId]);
+    $gone = [];
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $key = (int) $row['width_mm'] . 'x' . ($hasDrop ? (int) $row['drop_mm'] : '');
+        if (!isset($keep[$key])) $gone[] = (int) $row['id'];
+    }
+    if (!$gone) return 0;
+    $removed = 0;
+    foreach (array_chunk($gone, 500) as $chunk) {
+        $del = $pdo->prepare(
+            "DELETE FROM `$table` WHERE `$fkCol` = ? AND id IN (" . implode(',', array_fill(0, count($chunk), '?')) . ')'
+        );
+        $del->execute(array_merge([$targetId], $chunk));
+        $removed += $del->rowCount();
+    }
+    return $removed;
 }
 
 /**
@@ -1432,6 +1525,7 @@ function pp_sync_price_tables(
     require_once __DIR__ . '/price_source.php';
 
     $seenTableIds = [];
+    $pruneCells   = pp_target_is_factory_copy($pdo, $targetProductId, $sourceClientId);
     $hasTableSrc  = pp_has_src_col($pdo, 'price_tables', 'source_table_id');
     // The band order (drag-sorted on the Price tables page) is what the band
     // box lists in, so the tenant's tables need the master's order too.
@@ -1562,12 +1656,14 @@ function pp_sync_price_tables(
             )->execute($params);
         }
 
-        // Merge cells: master's price wins for matching (width, drop);
-        // client's extra cells (outside master's range) are kept.
+        // Cells: master's price wins for matching (width, drop). On a factory
+        // copy the cells the master no longer has are then removed (below).
         $cellSel->execute([(int) $pt['id']]);
+        $masterCells = [];
         foreach ($cellSel->fetchAll(PDO::FETCH_ASSOC) as $cell) {
             $w = (int) $cell['width_mm'];
             $d = (int) $cell['drop_mm'];
+            $masterCells[$w . 'x' . $d] = true;
             $p = round((float) $cell['price'] * $tradeFactor, 2);   // supplier list → trade price
             if ($cellUpsert !== null) {
                 try {
@@ -1587,6 +1683,15 @@ function pp_sync_price_tables(
                    (price_table_id, width_mm, drop_mm, price) VALUES (?, ?, ?, ?)'
             )->execute([$tgtPtId, $w, $d, $p]);
             $summary['price_table_cells']++;
+        }
+
+        // Stale cells: a breakpoint the master renamed (600 → 610) or a size it
+        // dropped. The lookup takes the smallest cell >= the size, so a leftover
+        // 600 cell would price a 590mm blind at the old price. Factory copies
+        // only — the account can't edit those grids, so every extra cell is ours.
+        if ($pruneCells) {
+            $removed = pp_prune_missing_cells($pdo, 'price_table_rows', 'price_table_id', $tgtPtId, true, $masterCells);
+            $summary['price_table_cells_removed'] = ($summary['price_table_cells_removed'] ?? 0) + $removed;
         }
     }
 

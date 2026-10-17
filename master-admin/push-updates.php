@@ -74,6 +74,7 @@ function pu_blank_summary(): array {
         'choices_removed' => 0, 'systems_removed' => 0, 'fabrics_removed' => 0,
         'extras_removed' => 0, 'price_tables_removed' => 0,
         'price_tables_added' => 0, 'price_table_cells' => 0, 'width_table_cells' => 0,
+        'price_table_cells_removed' => 0, 'width_table_cells_removed' => 0,
         'products_hidden' => 0,
         'errors' => [],
     ];
@@ -465,6 +466,8 @@ $activeNav = 'push-updates';
                                 <span><strong><?= (int) $s['price_tables_added'] ?></strong> price tables added</span>
                                 <span><strong><?= (int) $s['price_table_cells']  ?></strong> price cells synced</span>
                                 <span><strong><?= (int) $s['width_table_cells']  ?></strong> width-table cells synced</span>
+                                <span><strong><?= (int) ($s['price_table_cells_removed'] ?? 0) ?></strong> old price cells removed</span>
+                                <span><strong><?= (int) ($s['width_table_cells_removed'] ?? 0) ?></strong> old width-table cells removed</span>
                             </div>
                             <?php if (!empty($s['errors'])): ?>
                                 <div class="sb-errors">
@@ -646,7 +649,9 @@ $activeNav = 'push-updates';
                                 [s.price_tables_removed, 'price tables removed'],
                                 [s.price_tables_added, 'price tables added'],
                                 [s.price_table_cells,  'price cells synced'],
-                                [s.width_table_cells,  'width-table cells synced']
+                                [s.width_table_cells,  'width-table cells synced'],
+                                [s.price_table_cells_removed, 'old price cells removed'],
+                                [s.width_table_cells_removed, 'old width-table cells removed']
                             ];
                             stats = '<div style="display:flex;flex-wrap:wrap;gap:0.5rem 1rem;margin-top:0.5rem;font-size:0.875rem;color:var(--text-secondary)">';
                             bits.forEach(function (b) {
