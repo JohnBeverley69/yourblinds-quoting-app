@@ -44,29 +44,54 @@ function oc_chip(string $kind): string
     return '<span class="oc-chip" style="color:' . $k[1] . ';background:' . $k[2] . '">' . htmlspecialchars($k[0], ENT_QUOTES, 'UTF-8') . '</span>';
 }
 
-/** Account choices [id => name]. */
+/**
+ * Account choices [id => name].
+ *
+ * The main factory gets every business on the platform bar itself — the same
+ * list as Trade accounts, so an account with no orders yet can still be called
+ * back. A white-label factory gets only ITS accounts: those it pushes its
+ * catalogue to, or that have orders with it. Never the platform-wide list —
+ * that is the main factory's customer book (audit 2026-10-17; cf. #1057).
+ */
 function oc_accounts(PDO $pdo, int $factory): array
 {
     $out = [];
-    // Every business on the platform bar the factory itself — the same list as
-    // Trade accounts, so an account with no orders yet can still be called back.
     try {
-        $st = $pdo->prepare("SELECT id, company_name FROM clients WHERE id <> ? AND company_name <> '' ORDER BY company_name");
-        $st->execute([$factory]);
+        if ($factory === factory_client_id()) {
+            $st = $pdo->prepare("SELECT id, company_name FROM clients WHERE id <> ? AND company_name <> '' ORDER BY company_name");
+            $st->execute([$factory]);
+        } else {
+            $st = $pdo->prepare(
+                "SELECT c.id, c.company_name FROM clients c
+                  WHERE c.id <> ? AND c.company_name <> ''
+                    AND (EXISTS (SELECT 1 FROM products p WHERE p.client_id = c.id AND p.source_client_id = ?)
+                      OR EXISTS (SELECT 1 FROM quotes q WHERE q.client_id = ? AND q.account_client_id = c.id)
+                      OR EXISTS (SELECT 1 FROM quotes q JOIN factory_jobs fj ON fj.quote_id = q.id
+                                  WHERE q.client_id = c.id AND fj.factory_client_id = ?))
+                  ORDER BY c.company_name");
+            $st->execute([$factory, $factory, $factory, $factory]);
+        }
         foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $a) $out[(int) $a['id']] = (string) $a['company_name'];
     } catch (Throwable $e) { /* none */ }
     asort($out, SORT_NATURAL | SORT_FLAG_CASE);
     return $out;
 }
 
-/** Find an order by its number (scoped to the account when given). Returns quote id or 0. */
-function oc_find_order(PDO $pdo, string $ref, int $accountId): int
+/**
+ * Find an order by its number (scoped to the account when given). Returns quote id or 0.
+ * A white-label factory only finds orders it is part of (its own, or ones it makes).
+ */
+function oc_find_order(PDO $pdo, string $ref, int $accountId, int $factory = 0): int
 {
     $ref = trim($ref);
     if ($ref === '') return 0;
     $sql = 'SELECT id FROM quotes WHERE quote_number = ?';
     $args = [$ref];
     if ($accountId > 0) { $sql .= ' AND (client_id = ? OR account_client_id = ?)'; $args[] = $accountId; $args[] = $accountId; }
+    if ($factory > 0 && $factory !== factory_client_id()) {
+        $sql .= ' AND (client_id = ? OR EXISTS (SELECT 1 FROM factory_jobs fj WHERE fj.quote_id = quotes.id AND fj.factory_client_id = ?))';
+        $args[] = $factory; $args[] = $factory;
+    }
     $st = $pdo->prepare($sql . ' ORDER BY id DESC LIMIT 2');
     $st->execute($args);
     $ids = $st->fetchAll(PDO::FETCH_COLUMN);
@@ -93,7 +118,7 @@ function oc_save(PDO $pdo, int $factory, array $in, int $userId, int $id = 0): i
     if ($acct > 0 && !isset(oc_accounts($pdo, $factory)[$acct])) $acct = 0;
     if ($kind === 'callback' && $acct <= 0) throw new RuntimeException('Choose which account to call back.');
     $orderRef = mb_substr(trim((string) ($in['order_ref'] ?? '')), 0, 60);
-    $quoteId  = $orderRef !== '' ? oc_find_order($pdo, $orderRef, $acct) : 0;
+    $quoteId  = $orderRef !== '' ? oc_find_order($pdo, $orderRef, $acct, $factory) : 0;
 
     $vals = [$kind, $date, $time, $title, $detail !== '' ? mb_substr($detail, 0, 4000) : null,
              $acct ?: null, $orderRef !== '' ? $orderRef : null, $quoteId ?: null];

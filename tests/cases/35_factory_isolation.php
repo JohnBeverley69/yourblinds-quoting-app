@@ -183,3 +183,20 @@ test('each factory has its own workshop WiFi (audit 2026-10-17)', function () {
     db()->exec("DELETE FROM factory_kv WHERE k LIKE 'wifi\_%'");
     $_SESSION = [];
 });
+
+test('a white-label factory\'s office calendar lists only its own accounts, not the platform (audit 2026-10-17)', function () {
+    $bravo = (string) t_val('SELECT company_name FROM clients WHERE id = 102');
+    check($bravo !== '', 'fixture: Bravo has no name');
+    $main = as_user('factory.office')->get('/factory/calendar.php');
+    check_page_ok($main, 'office calendar as the main factory');
+    check_contains('>' . htmlspecialchars($bravo) . '<', $main->body, 'the main factory\'s account list');
+    $wl = as_user('charlie.office')->get('/factory/calendar.php');
+    check_page_ok($wl, 'office calendar as the white-label factory');
+    check_not_contains('>' . htmlspecialchars($bravo) . '<', $wl->body, 'the white-label factory\'s account list');
+    // Tagging an entry to someone else's account is refused too.
+    t_submit(as_user('charlie.office'), '/factory/calendar.php', ['_action' => 'add', 'kind' => 'note', 'account_client_id' => 102,
+        'title' => 'ZZ peek', 'entry_date' => date('Y-m-d')]);
+    check_same(0, (int) t_val("SELECT COUNT(*) FROM factory_office_entries WHERE title = 'ZZ peek' AND account_client_id = 102"), 'entries tagged to Bravo by the white-label factory');
+    db()->exec("DELETE FROM factory_office_entries WHERE title = 'ZZ peek'");
+    $_SESSION = [];
+});
