@@ -207,7 +207,7 @@ if ($action === 'accept') {
                     // (Re)placed: an order already on the floor gets its blind
                     // jobs brought in line with the current lines/units.
                     require_once __DIR__ . '/../_partials/blind_jobs.php';
-                    bj_resync_order($pdo, $acQuote, $factoryId);
+                    bj_resync_order_all($pdo, $acQuote);
                 }
             }
         }

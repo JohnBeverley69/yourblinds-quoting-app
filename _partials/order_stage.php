@@ -134,7 +134,7 @@ function os_derive_stage(PDO $pdo, int $quoteId, int $factory): string
     if (os_is_ready($pdo, $quoteId, $factory)) return 'ready';
 
     // In production once released to the floor, or the bought-in POs are out.
-    $floorTotal = (int) (bj_order_progress($pdo, [$quoteId])[$quoteId]['total'] ?? 0);
+    $floorTotal = (int) (bj_order_progress($pdo, [$quoteId], $factory)[$quoteId]['total'] ?? 0);
     $biOrdered  = !empty(factory_boughtin_ordered_names($pdo, $quoteId, $factory));
     if ($fj === 'in_production' || $floorTotal > 0 || $biOrdered) return 'in_production';
     return 'confirmed';
@@ -158,7 +158,7 @@ function os_is_ready(PDO $pdo, int $quoteId, ?int $factory = null): bool
             if ($v !== false && $v !== null && $v !== '') $fj = (string) $v;
         } catch (Throwable $e) { /* treat as new */ }
 
-        $prog         = bj_order_progress($pdo, [$quoteId])[$quoteId] ?? ['total' => 0, 'done' => 0];
+        $prog         = bj_order_progress($pdo, [$quoteId], $factory)[$quoteId] ?? ['total' => 0, 'done' => 0];
         $floorTotal   = (int) $prog['total'];
         $floorDone    = (int) $prog['done'];
         $inhouseLines = os_inhouse_line_count($pdo, $quoteId, $factory);
@@ -312,7 +312,7 @@ function os_auto_invoice_on_dispatch(PDO $pdo, int $quoteId, ?int $factory = nul
         if (!function_exists('ar_create_invoice')) return;
 
         // Already invoiced (non-void)? Don't double-invoice.
-        if (function_exists('ar_order_invoice_number') && ar_order_invoice_number($pdo, $quoteId) !== '') return;
+        if (function_exists('ar_factory_order_invoice_number') && ar_factory_order_invoice_number($pdo, $factory, $quoteId) !== '') return;
 
         $q = $pdo->prepare('SELECT account_client_id, client_id FROM quotes WHERE id = ? LIMIT 1');
         $q->execute([$quoteId]);

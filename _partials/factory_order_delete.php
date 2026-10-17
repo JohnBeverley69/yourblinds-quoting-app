@@ -28,9 +28,16 @@ require_once __DIR__ . '/blind_jobs.php';                  // bj_tables_ready / 
  *
  * Each lookup is guarded for installs where the AR tables were never migrated.
  */
-function fod_delete_block_reason(PDO $pdo, int $quoteId): string
+function fod_delete_block_reason(PDO $pdo, int $quoteId, ?int $factory = null): string
 {
     if ($quoteId <= 0) return 'that order no longer exists';
+    // A factory deleting an order deletes every line on it. When another factory
+    // makes part of it (a white-label factory's own blinds alongside ours), that
+    // would destroy the other factory's work and its customer's order.
+    if ($factory !== null) {
+        $other = fod_other_factory_reason($pdo, $quoteId, $factory);
+        if ($other !== '') return $other;
+    }
     $tests = [];
     foreach (qb_factory_paperwork_tests() as $t) { $tests[$t['sql']] = $t['short']; }
     // Retail deposits taken against the order. Not part of the shared tests: the
@@ -44,6 +51,33 @@ function fod_delete_block_reason(PDO $pdo, int $quoteId): string
             if ($chk->fetchColumn()) return $why;
         } catch (Throwable $e) { /* table not migrated on this install */ }
     }
+    return '';
+}
+
+/**
+ * Does a factory OTHER than $factory make a line on this order? Returns a short
+ * clause ("Tyler Smyth Blinds also makes part of it") or ''. Whole-order actions
+ * by one factory (delete, step back to new) refuse on it: the other factory's
+ * lines, floor jobs and status ride on the same order.
+ */
+function fod_other_factory_reason(PDO $pdo, int $quoteId, int $factory): string
+{
+    if ($quoteId <= 0) return '';
+    try {
+        $st = $pdo->prepare(
+            'SELECT DISTINCT COALESCE(NULLIF(p.source_client_id,0), p.client_id) AS owner
+               FROM quote_items qi JOIN products p ON p.id = qi.product_id
+              WHERE qi.quote_id = ?'
+        );
+        $st->execute([$quoteId]);
+        $factories = qb_factory_client_ids($pdo);
+        foreach (array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN)) as $owner) {
+            if ($owner === $factory || !in_array($owner, $factories, true)) continue;
+            $n = $pdo->prepare('SELECT company_name FROM clients WHERE id = ? LIMIT 1');
+            $n->execute([$owner]);
+            return ((string) ($n->fetchColumn() ?: 'another factory')) . ' also makes part of it';
+        }
+    } catch (Throwable $e) { /* pre-migration schema */ }
     return '';
 }
 
@@ -312,7 +346,7 @@ function fod_force_delete_order(PDO $pdo, int $quoteId, int $factory): array
 
         // Nothing blocks it now. Belt and braces: if something still does, the
         // throw rolls the whole lot back rather than half-unpicking the paperwork.
-        $why = fod_delete_block_reason($pdo, $quoteId);
+        $why = fod_delete_block_reason($pdo, $quoteId, $factory);
         if ($why !== '') throw new RuntimeException('Could not clear the paperwork — ' . $why . '.');
 
         // The remakes this order's destruction leaves meaningless go BEFORE the

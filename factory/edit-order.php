@@ -359,7 +359,7 @@ require __DIR__ . '/../_partials/factory_head.php';
             // refused. Super-admins also get the way through: clearing that
             // paperwork by hand (void the invoice, cancel the delivery note) is
             // the only other route, and it is laborious over a run of orders.
-            $delBlock = fod_delete_block_reason($pdo, $qid);
+            $delBlock = fod_delete_block_reason($pdo, $qid, $MASTER);
             if ($delBlock !== ''): ?>
                 <p class="fe-del-why">This order can’t be deleted — <?= e($delBlock) ?>.</p>
                 <?php if (is_super_admin()):

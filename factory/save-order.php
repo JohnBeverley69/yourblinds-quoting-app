@@ -120,7 +120,7 @@ if (isset($_POST['del_order'])) {
     // now, because cancelling a remake has to delete the same kind of order in
     // exactly the same way. Keeping a second copy here is how the tenant and
     // factory delete paths drifted twice already (#946, #958).
-    $why = fod_delete_block_reason($pdo, $qid);
+    $why = fod_delete_block_reason($pdo, $qid, $MASTER);
     if ($why !== '') {
         $fail('This order can\'t be deleted — ' . $why . '.'
             . (is_super_admin() ? ' Use "Force delete" in the Danger zone to clear the paperwork and delete it anyway.' : ''));
