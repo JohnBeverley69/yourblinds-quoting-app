@@ -65,10 +65,28 @@ if (strlen($password) < 8) {
 
 $factoryId = (int) (function_exists('env') ? (env('FACTORY_CLIENT_ID', '3') ?? 3) : 3);
 
+// The schema must be the current one (tests/schema.sql). Checked up front, so a
+// genuine database error below is never mistaken for an "older schema".
+$has = static function (string $table, ?string $col = null) use ($pdo): bool {
+    $sql = $col === null
+        ? 'SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = ?'
+        : 'SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = ? AND column_name = ?';
+    $st = $pdo->prepare($sql);
+    $st->execute($col === null ? [$table] : [$table, $col]);
+    return (int) $st->fetchColumn() > 0;
+};
+$needs = ['clients.is_factory' => $has('clients', 'is_factory'), 'client_settings' => $has('client_settings'),
+          'client_user_roles' => $has('client_user_roles'), 'client_users.is_super_admin' => $has('client_users', 'is_super_admin')];
+if (in_array(false, $needs, true)) {
+    fwrite(STDERR, 'REFUSED: this database is not the current schema (missing: '
+        . implode(', ', array_keys(array_filter($needs, static fn($ok) => !$ok)))
+        . "). Load tests/schema.sql from this checkout first.\n");
+    exit(1);
+}
+
 $pdo->beginTransaction();
 try {
-    $pdo->prepare('INSERT INTO clients (id, company_name, active) VALUES (?, ?, 1)')->execute([$factoryId, $company]);
-    try { $pdo->prepare('UPDATE clients SET is_factory = 1 WHERE id = ?')->execute([$factoryId]); } catch (Throwable $e) { /* older schema */ }
+    $pdo->prepare('INSERT INTO clients (id, company_name, active, is_factory) VALUES (?, ?, 1, 1)')->execute([$factoryId, $company]);
     $pdo->prepare('INSERT INTO client_settings (client_id) VALUES (?)')->execute([$factoryId]);
     $pdo->prepare(
         'INSERT INTO client_users (client_id, email, full_name, password_hash, role, active, is_super_admin,
@@ -78,8 +96,15 @@ try {
     )->execute([$factoryId, $email, $name, password_hash($password, PASSWORD_DEFAULT)]);
     $uid = (int) $pdo->lastInsertId();
     foreach (['admin', 'factory'] as $role) {
-        try { $pdo->prepare('INSERT INTO client_user_roles (user_id, role) VALUES (?, ?)')->execute([$uid, $role]); }
-        catch (Throwable $e) { /* roles table absent on an old schema */ }
+        $pdo->prepare('INSERT INTO client_user_roles (user_id, role) VALUES (?, ?)')->execute([$uid, $role]);
+    }
+    // Verify before committing: the company is a factory and the login has both roles.
+    $chk = $pdo->prepare('SELECT (SELECT is_factory FROM clients WHERE id = ?) AS f,
+                                 (SELECT COUNT(*) FROM client_user_roles WHERE user_id = ?) AS r');
+    $chk->execute([$factoryId, $uid]);
+    $v = $chk->fetch(PDO::FETCH_ASSOC);
+    if ((int) $v['f'] !== 1 || (int) $v['r'] !== 2) {
+        throw new RuntimeException('check failed after insert (is_factory=' . $v['f'] . ', roles=' . $v['r'] . ')');
     }
     $pdo->commit();
 } catch (Throwable $e) {
