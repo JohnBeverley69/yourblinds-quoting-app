@@ -285,6 +285,7 @@ function ot_order_tracks(PDO $pdo, array $quoteIds, int $factoryId): array
 function ot_back_url(?string $lane): string
 {
     if ($lane === 'pipeline') return '/factory/pipeline.php';   // Factory Pipeline cards
+    if ($lane === 'orders')   return '/factory/orders.php';     // Console Orders' Process order
     $lanes = ['new', 'make', 'problem', 'order', 'awaiting', 'ready', 'open', 'dispatched'];
     $lane  = (string) $lane;
     return '/factory/incoming-orders.php' . (in_array($lane, $lanes, true) && $lane !== 'open' ? '?lane=' . $lane : '');
