@@ -34,12 +34,13 @@ $action = (string) ($_POST['_action'] ?? '');
 if ($action === 'save') {
     $rawSender = trim((string) ($_POST['sms_sender_name'] ?? ''));
     $sender    = sms_clean_sender($rawSender);
-    if ($sender !== null && strcasecmp($sender, SMS_DEFAULT_SENDER) === 0) $sender = null;   // the standard one
     if ($rawSender !== '' && $sender === null) {
         $_SESSION['flash_error'] = 'The sender name must be 3 to 11 letters or numbers (spaces allowed), with at least one letter.';
         header('Location: ' . $back);
         exit;
     }
+    // Typing the standard name is the same as leaving the box blank.
+    if ($sender !== null && strcasecmp($sender, SMS_DEFAULT_SENDER) === 0) $sender = null;
 
     // Wording: store only what differs from the default, so improving a
     // default later reaches everyone who hasn't changed theirs. Other wording
