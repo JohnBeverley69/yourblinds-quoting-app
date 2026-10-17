@@ -69,6 +69,8 @@ $ORDER = [
     'products-options',
     'products-start-defaults',
     'products-combine',
+    // Roller fascias — their own group (eyebrow "Fascias"), at John's request.
+    'products-fascias',
     // The job itself.
     'customers-add',
     'instaprice-quick',
