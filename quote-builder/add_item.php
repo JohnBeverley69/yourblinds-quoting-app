@@ -166,6 +166,14 @@ if (qb_is_direct_order($quote)) {
     $input['discount_override'] = 0.0;
 }
 
+// Plan features: your manufacturer's products ("Trade catalogue") need the plan.
+require_once __DIR__ . '/../_partials/plan_gate.php';
+if (plan_is_trade_catalogue_product((int) $clientId, (int) $input['product_id'])
+    && !plan_feature_allowed((int) $clientId, 'trade_catalogue')) {
+    qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId . '#add-line', 'error',
+        plan_feature_message('trade_catalogue') . ' Upgrade on the Billing page to quote these products.');
+}
+
 $pdo = db();
 
 $room  = trim((string) ($_POST['room_name'] ?? ''));

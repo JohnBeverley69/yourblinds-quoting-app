@@ -18,7 +18,9 @@ $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
 $user     = current_user();
-$clientId = $user['client_id'];
+$clientId = $user['client_id'];
+require_once __DIR__ . '/../_partials/plan_gate.php';
+plan_require_feature((int) $clientId, 'calendar', '/orders/index.php?scope=quotes');   // plan features (Master Admin → Plan features)
 $isAdmin  = $user['role'] === 'admin';
 
 // Resolved traffic-light palette for this tenant (defaults + their overrides).

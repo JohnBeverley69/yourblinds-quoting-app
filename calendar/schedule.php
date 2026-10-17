@@ -25,7 +25,9 @@ require __DIR__ . '/../_partials/slot_window.php';
 requireLogin();
 
 $user     = current_user();
-$clientId = (int) $user['client_id'];
+$clientId = (int) $user['client_id'];
+require_once __DIR__ . '/../_partials/plan_gate.php';
+plan_require_feature((int) $clientId, 'calendar');   // plan features (Master Admin → Plan features)
 $userId   = (int) $user['user_id'];
 
 // AM/PM slot mode — gate the slot_window column; cards show the window label.

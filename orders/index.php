@@ -48,6 +48,10 @@ $_perms   = current_user_permissions();
 $canViewAll     = $isAdmin || $_perms['can_view_all_customer_jobs'];
 $restrictToMine = !$canViewAll;
 $canCreateQuotes = $isAdmin || $_perms['can_create_quotes'];
+// Plan features: starting a quote is a plan feature (Master Admin → Plan features).
+// Its own name: the sidebar include re-sets $canCreateQuotes before the buttons.
+require_once __DIR__ . '/../_partials/plan_gate.php';
+$planQuotesOk = plan_feature_allowed((int) $user['client_id'], 'quotes');
 // A restricted user who can place orders also sees the direct orders
 // (quote-builder/new_order.php) — those are theirs to place and track.
 // Guarded so the list still loads before migrate_direct_orders.php has run.
@@ -435,7 +439,7 @@ else                        $activeNav = $scope === 'quotes' ? 'quote-history' :
                        style="padding:0.3125rem 0.875rem;border-radius:6px;text-decoration:none;font-weight:600;font-size:0.875rem;color:var(--text-faint)">Pipeline</a>
                 </div>
             </div>
-            <?php if ($canCreateQuotes): ?>
+            <?php if ($canCreateQuotes && $planQuotesOk): ?>
                 <a href="/quote-builder/new.php" class="btn btn-primary">
                     + New quote
                 </a>
@@ -494,7 +498,7 @@ else                        $activeNav = $scope === 'quotes' ? 'quote-history' :
                 <div class="empty-state">
                     <?php if ($q !== '' || $status !== ''): ?>
                         Nothing matches your filter. <a href="/orders/index.php?scope=<?= e($scope) ?><?= $typeQS ?>">Clear filters</a>.
-                    <?php elseif ($canCreateQuotes): ?>
+                    <?php elseif ($canCreateQuotes && $planQuotesOk): ?>
                         No quotes yet.
                         <a href="/quote-builder/new.php">Start a new quote &rarr;</a>
                     <?php else: ?>

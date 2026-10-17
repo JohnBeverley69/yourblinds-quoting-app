@@ -21,7 +21,9 @@ require_once __DIR__ . '/../_partials/guide_clips.php';
 
 requireLogin();
 
-$user    = current_user();
+$user    = current_user();
+require_once __DIR__ . '/../_partials/plan_gate.php';
+plan_require_feature((int) ($user['client_id'] ?? 0), 'help');   // plan features (Master Admin → Plan features)
 $isAdmin = ($user['role'] ?? '') === 'admin';
 $isSuper = function_exists('is_super_admin') && is_super_admin();
 

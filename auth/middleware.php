@@ -893,6 +893,12 @@ function redirect_after_login(): void
     // (dash_view_revenue) — the other dash_view_* flags only pick panels.
     $hasDashAccess = $isAdmin || user_can_see_money();
 
-    header('Location: ' . ($hasDashAccess ? '/dashboard/index.php' : '/calendar/index.php'));
+    // Land on the first of Dashboard → Calendar → Quotes that the company's plan
+    // includes (Master Admin → Plan features), so signing in never opens on an
+    // "upgrade" notice.
+    require_once __DIR__ . '/../_partials/plan_gate.php';
+    $cid = (int) ($user['client_id'] ?? 0);
+    header('Location: ' . (($hasDashAccess && plan_feature_allowed($cid, 'dashboard')) ? '/dashboard/index.php'
+        : (plan_feature_allowed($cid, 'calendar') ? '/calendar/index.php' : '/orders/index.php?scope=quotes')));
     exit;
 }

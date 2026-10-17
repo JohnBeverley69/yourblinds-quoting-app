@@ -81,3 +81,41 @@ test('plan gates: online acceptance — with it off for the plan, the quote page
         $enforce(false);
     }
 });
+
+test('plan gates: EVERY box on the board has a real lock in the code (no describe-only boxes)', function () {
+    $cat = require APP_ROOT . '/_partials/plan_feature_catalogue.php';
+    $code = '';
+    $it = new RecursiveIteratorIterator(new RecursiveDirectoryIterator(APP_ROOT, FilesystemIterator::SKIP_DOTS));
+    foreach ($it as $f) {
+        $p = strtr($f->getPathname(), [chr(92) => '/']);
+        if ($f->getExtension() !== 'php' || preg_match('#/(vendor|tests|setup|\.git|\.claude)/#', $p)) continue;
+        $code .= file_get_contents($p);
+    }
+    $missing = [];
+    foreach ($cat as $key => [$label, , $tier]) {
+        if ($tier === 'factory') continue;   // the factory side is its own lock (is_factory)
+        if (!preg_match("/plan_(require_feature(_json)?|feature_allowed)\([^;]*'" . preg_quote($key, '/') . "'/", $code)
+            && !str_contains($code, "\$_ybPlan('$key')")) {
+            $missing[] = "$key ($label)";
+        }
+    }
+    check($missing === [], 'boxes with no lock: ' . implode(', ', $missing));
+});
+
+test('plan gates: the core boxes lock too when moved up a tier (calendar, customers, new quote)', function () use ($enforce) {
+    app_setting_set(BILLING_CATALOGUE_KEY, json_encode(['calendar' => 'silver', 'customers' => 'silver', 'quotes' => 'silver']));
+    $enforce(true);
+    try {
+        db()->exec("DELETE FROM client_plan_overrides WHERE client_id = 102");
+        $b = as_user('bravo.admin');
+        check_same(403, $b->get('/customer-manager/index.php')->status, 'Customers for Bronze');
+        check_same(403, $b->get('/calendar/week.php')->status, 'Calendar week for Bronze');
+        check_same(403, $b->get('/quote-builder/new.php')->status, 'New quote for Bronze');
+        $home = $b->get('/orders/index.php?scope=quotes')->body;
+        check(!str_contains($home, 'href="/calendar/index.php"'), 'Calendar menu item hidden');
+        check(!str_contains($home, 'href="/quote-builder/new.php"'), '+ New hidden');
+    } finally {
+        app_setting_set(BILLING_CATALOGUE_KEY, null);
+        $enforce(false);
+    }
+});

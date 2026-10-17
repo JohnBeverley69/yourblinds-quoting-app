@@ -98,6 +98,24 @@ function plan_require_feature(int $clientId, string $key, ?string $fallback = nu
     exit;
 }
 
+/**
+ * "Trade catalogue": is this product the company's copy of a FACTORY's product
+ * (pushed to them, source_client_id = that factory)? Their own products and
+ * duplicates have no factory source and are never caught by this.
+ */
+function plan_is_trade_catalogue_product(int $clientId, int $productId): bool
+{
+    if ($productId <= 0) return false;
+    try {
+        $st = db()->prepare('SELECT COALESCE(source_client_id, 0) FROM products WHERE id = ? AND client_id = ? LIMIT 1');
+        $st->execute([$productId, $clientId]);
+        $src = (int) $st->fetchColumn();
+        return $src > 0 && $src !== $clientId;
+    } catch (Throwable $e) {
+        return false;   // no source marker column — nothing to tell apart
+    }
+}
+
 /** For JSON / AJAX endpoints: answer with an error instead of a page. */
 function plan_require_feature_json(int $clientId, string $key): void
 {

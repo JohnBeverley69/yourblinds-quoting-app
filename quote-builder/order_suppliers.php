@@ -31,6 +31,11 @@ requireLogin();
 
 $user     = current_user();
 $clientId = (int) $user['client_id'];
+// Plan features (Master Admin → Plan features): placing an order at all, and
+// emailing suppliers their purchase orders (lines for the factory still place).
+require_once __DIR__ . '/../_partials/plan_gate.php';
+plan_require_feature($clientId, 'orders');
+$supplierOrdersOk = plan_feature_allowed($clientId, 'supplier_orders');
 $isAdmin  = ($user['role'] ?? '') === 'admin';
 $_perms   = current_user_permissions();
 
@@ -280,7 +285,7 @@ try {
 $emailFor   = static fn (string $name) => $name !== '' ? ($emailByName[$name] ?? '') : '';
 // Sendable = a named supplier with a VALID order email (a junk/placeholder
 // address would otherwise pass and then fail at send).
-$isSendable = static fn (string $name) => $name !== ''
+$isSendable = static fn (string $name) => $supplierOrdersOk && $name !== ''
     && filter_var($emailByName[$name] ?? '', FILTER_VALIDATE_EMAIL) !== false;
 
 // ── Send ──────────────────────────────────────────────────────────────────
@@ -437,7 +442,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 dd_stamp_order(db(), $quoteId);
                 // Placed → email the factory a new order has landed (once).
                 require_once __DIR__ . '/../_partials/factory_notify.php';
-                factory_notify_new_order(db(), $quoteId);
+                factory_notify_new_order(db(), $quoteId);
                 // (Re)placed: an order already on the floor gets its blind jobs
                 // brought in line with the current lines/units.
                 require_once __DIR__ . '/../_partials/order_stage.php';
@@ -665,6 +670,11 @@ foreach ($groups as $name => $g) { if ($isSendable((string) $name)) $sendableCou
                             <div class="sup-warn">
                                 These lines' products have no supplier set — assign one on the product
                                 (Products &rsaquo; edit) to order them.
+                            </div>
+                        <?php elseif (!$supplierOrdersOk): ?>
+                            <div class="sup-warn">
+                                <?= e(plan_feature_message('supplier_orders')) ?> Upgrade on the
+                                <a href="/billing/index.php">Billing</a> page to email <strong><?= e($name) ?></strong> this order.
                             </div>
                         <?php elseif (!$sendable): ?>
                             <div class="sup-warn">
