@@ -58,9 +58,8 @@ function dispatch_ready_orders(PDO $pdo, int $factory): array
     // per row. Falls back to asking outright if the column is not there yet.
     $stage = [];
     try {
-        $s = $pdo->prepare("SELECT id, fulfilment_stage FROM quotes WHERE id IN ($ph)");
-        $s->execute($ids);
-        foreach ($s->fetchAll(PDO::FETCH_ASSOC) as $r) $stage[(int) $r['id']] = (string) $r['fulfilment_stage'];
+        // This factory's own part's stage (a mixed order's other factory has its own).
+        foreach (op_stages_for($pdo, $ids, $factory) as $id => $fs) $stage[$id] = (string) $fs;
     } catch (Throwable $e) {
         foreach ($ids as $id) $stage[$id] = os_is_ready($pdo, $id, $factory) ? 'ready' : '';
     }
@@ -100,9 +99,10 @@ function dispatch_waiting_orders(PDO $pdo, int $factory): array
     $ph  = implode(',', array_fill(0, count($ids), '?'));
     $stage = [];
     try {
-        $s = $pdo->prepare("SELECT id, fulfilment_stage, customer_reference FROM quotes WHERE id IN ($ph)");
+        $s = $pdo->prepare("SELECT id, customer_reference FROM quotes WHERE id IN ($ph)");
         $s->execute($ids);
         foreach ($s->fetchAll(PDO::FETCH_ASSOC) as $r) $stage[(int) $r['id']] = $r;
+        foreach (op_stages_for($pdo, $ids, $factory) as $id => $fs) $stage[$id]['fulfilment_stage'] = $fs;
     } catch (Throwable $e) { return []; }
     $open = array_values(array_filter($ids, static fn ($id) =>
         in_array((string) ($stage[$id]['fulfilment_stage'] ?? ''), ['confirmed', 'in_production'], true)));

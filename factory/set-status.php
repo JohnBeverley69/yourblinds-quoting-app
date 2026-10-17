@@ -137,24 +137,17 @@ try {
         //
         // Same shared check as the tenant-side delete and reopen guards (#958,
         // #959), so all four paths agree on what the factory's paperwork means.
-        // The factory_jobs row is one per order. When another factory makes part
-        // of it, deleting that row would knock the other factory's order back to
-        // new as well — so a mixed order can't be stepped back to new here.
-        require_once __DIR__ . '/../_partials/factory_order_delete.php';
-        $other = fod_other_factory_reason($pdo, $quoteId, $MASTER);
-        if ($other !== '') {
-            $_SESSION['flash_error'] = 'This order can\'t be stepped back to new — ' . $other
-                . ', and stepping back would reset their side too.';
-            header('Location: ' . $backTo);
-            exit;
-        }
+        //
+        // Only THIS factory's part goes back to new: factory_jobs is one row per
+        // order AND factory, and bj_clear_order() is given the factory, so a
+        // mixed order's other factory keeps its status and its floor.
         $paper = qb_factory_paperwork_block($pdo, $quoteId, 'stepped back to new');
         if ($paper !== '') {
             $_SESSION['flash_error'] = $paper . ' Its floor record would be lost.';
             header('Location: ' . $backTo);
             exit;
         }
-        $pdo->prepare("DELETE FROM factory_jobs WHERE quote_id = ?")->execute([$quoteId]);
+        $pdo->prepare("DELETE FROM factory_jobs WHERE quote_id = ? AND factory_client_id = ?")->execute([$quoteId, $MASTER]);
         // Reset pulls the order's blinds back off the floor too.
         if (bj_tables_ready($pdo)) bj_clear_order($pdo, $quoteId, $MASTER);
         $_SESSION['flash_success'] = 'Order moved back to new.';
@@ -178,15 +171,15 @@ try {
         $recvAt = ($target === 'received' || $accept) ? date('Y-m-d H:i:s') : null;
         $recvBy = ($target === 'received' || $accept) ? ($userId ?: null)   : null;
         $pdo->prepare(
-            "INSERT INTO factory_jobs (quote_id, status, status_at, status_by, received_at, received_by)
-             VALUES (?, ?, NOW(), ?, ?, ?)
+            "INSERT INTO factory_jobs (quote_id, factory_client_id, status, status_at, status_by, received_at, received_by)
+             VALUES (?, ?, ?, NOW(), ?, ?, ?)
              ON DUPLICATE KEY UPDATE
                  status      = VALUES(status),
                  status_at   = NOW(),
                  status_by   = VALUES(status_by),
                  received_at = COALESCE(received_at, VALUES(received_at)),
                  received_by = COALESCE(received_by, VALUES(received_by))"
-        )->execute([$quoteId, $target, $userId ?: null, $recvAt, $recvBy]);
+        )->execute([$quoteId, $MASTER, $target, $userId ?: null, $recvAt, $recvBy]);
 
         // Moving into production releases the order's Beverley blinds onto the
         // floor (idempotent — re-entering production won't duplicate them).

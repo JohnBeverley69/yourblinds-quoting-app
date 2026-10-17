@@ -304,7 +304,7 @@ if (!empty($quote['remake_of_quote_id'])) {
 // Factory progress for an order placed with the factory ("With the factory:
 // In Production"). Not on the factory's own quotes — it has its own pages.
 require_once __DIR__ . '/../_partials/order_stage.php';
-$factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quote['fulfilment_stage'] ?? null);
+$factoryPill = is_factory_client($clientId) ? '' : os_factory_progress_pill($quote['fulfilment_stage'] ?? null, op_part_dispatched(db(), (int) ($quote['id'] ?? 0)));
 // The factory's OWN placed order, opened by the console office: show Making +
 // Money as Console → Orders does, so "invoiced" vs "paid" is clear here too.
 $fcStatus = null;

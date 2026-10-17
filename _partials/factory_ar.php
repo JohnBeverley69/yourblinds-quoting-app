@@ -233,9 +233,26 @@ function ar_account_expr(PDO $pdo, string $prefix = 'q.'): string
         try { $pdo->query('SELECT account_client_id FROM quotes LIMIT 0'); $has = true; }
         catch (Throwable $e) { $has = false; }
     }
-    return $has
-        ? "COALESCE(NULLIF({$prefix}account_client_id, 0), {$prefix}client_id)"
-        : "{$prefix}client_id";
+    if (!$has) return "{$prefix}client_id";
+    // A WHITE-LABEL FACTORY's order is always billed (and delivered) to that
+    // factory, even when it keyed the order in for one of its own trade
+    // customers (account_client_id = their customer): we have no account with
+    // its customer, and its customer must never see us (John, 2026-10-17).
+    $main = function_exists('factory_client_id') ? (int) factory_client_id() : 0;
+    return "CASE WHEN {$prefix}client_id <> {$main}
+                  AND {$prefix}client_id IN (SELECT wlf.id FROM clients wlf WHERE wlf.is_factory = 1)
+                 THEN {$prefix}client_id
+                 ELSE COALESCE(NULLIF({$prefix}account_client_id, 0), {$prefix}client_id) END";
+}
+
+/** ar_account_expr() for one order, in PHP: the account it's billed and delivered to (0 if unknown). */
+function ar_order_account_id(PDO $pdo, int $quoteId): int
+{
+    try {
+        $s = $pdo->prepare('SELECT ' . ar_account_expr($pdo, 'q.') . ' FROM quotes q WHERE q.id = ? LIMIT 1');
+        $s->execute([$quoteId]);
+        return (int) ($s->fetchColumn() ?: 0);
+    } catch (Throwable $e) { return 0; }
 }
 
 /**

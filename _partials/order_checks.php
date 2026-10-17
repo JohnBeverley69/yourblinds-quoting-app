@@ -69,21 +69,27 @@ function oc_findings(PDO $pdo, int $factory): array
     $invOn = $has('factory_ar_invoices') && $has('factory_ar_invoice_orders');
     $fjOn  = $has('factory_jobs');
     $f     = (int) $factory;
+    require_once __DIR__ . '/factory_ar.php';
+    $acctX = ar_account_expr($pdo, 'q.');   // who it is billed to (a white-label factory's order: that factory)
 
     $dnDisp = $dnOn  ? "(SELECT COUNT(*) FROM factory_ar_delivery_notes d WHERE d.source_quote_id = q.id AND d.factory_client_id = $f AND d.status = 'dispatched')" : '0';
     $invNum = $invOn ? "(SELECT i.inv_number FROM factory_ar_invoice_orders io JOIN factory_ar_invoices i ON i.id = io.invoice_id
                           WHERE io.quote_id = q.id AND i.factory_client_id = $f AND i.status <> 'void' LIMIT 1)" : 'NULL';
-    $fjSel  = $fjOn  ? '(SELECT fj.status FROM factory_jobs fj WHERE fj.quote_id = q.id LIMIT 1)' : 'NULL';
+    $fjSel  = $fjOn  ? "(SELECT fj.status FROM factory_jobs fj WHERE fj.quote_id = q.id AND fj.factory_client_id = $f LIMIT 1)" : 'NULL';
+    // This factory's own part's stage (a mixed order's other factory has its own).
+    $fsSel  = $has('order_factory_parts')
+        ? "COALESCE((SELECT o.fulfilment_stage FROM order_factory_parts o WHERE o.quote_id = q.id AND o.factory_client_id = $f), q.fulfilment_stage)"
+        : 'q.fulfilment_stage';
 
     try {
         $st = $pdo->prepare(
-            "SELECT q.id, q.quote_number, q.status, q.fulfilment_stage, q.client_id,
-                    COALESCE(NULLIF(q.account_client_id, 0), q.client_id) AS account_id,
+            "SELECT q.id, q.quote_number, q.status, $fsSel AS fulfilment_stage, q.client_id,
+                    $acctX AS account_id,
                     q.supplier_ordered_at, q.supplier_received_at,
                     c.company_name AS account,
                     $dnDisp AS dn_dispatched, $invNum AS inv_number, $fjSel AS fj
                FROM quotes q
-               LEFT JOIN clients c ON c.id = COALESCE(NULLIF(q.account_client_id, 0), q.client_id)
+               LEFT JOIN clients c ON c.id = $acctX
               WHERE q.status IN ($in)
                 AND q.created_at >= DATE_SUB(NOW(), INTERVAL " . OC_DAYS . " DAY)
                 AND EXISTS (SELECT 1 FROM quote_items qi JOIN products p ON p.id = qi.product_id

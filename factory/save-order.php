@@ -276,7 +276,7 @@ try {
     // Only touched when the field was actually rendered on the form.
     if (array_key_exists('due_date', $_POST)) {
         require_once __DIR__ . '/../_partials/due_dates.php';
-        if (dd_ready($pdo)) dd_set_due($pdo, $qid, (string) $_POST['due_date']);
+        if (dd_ready($pdo)) dd_set_due($pdo, $qid, (string) $_POST['due_date'], $MASTER);
     }
 
     // Dispatched / invoiced: keep the reference / due-date fix, refuse the lines.

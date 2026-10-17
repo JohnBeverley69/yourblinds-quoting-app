@@ -111,7 +111,7 @@ try {
     $dueMsg = '';
     if ($target === 'ordered') {
         try {
-            $due = dd_stamp_order($pdo, $quoteId, qb_order_factory_id($pdo, $quoteId));
+            $due = dd_stamp_order($pdo, $quoteId);
             if ($due !== null) {
                 $dueMsg = ' Due ' . (new DateTimeImmutable($due))->format('j M Y') . '.';
             }
@@ -285,7 +285,7 @@ try {
                         $target = 'ordered';   // reflect it in the flash below
                         require_once __DIR__ . '/../_partials/due_dates.php';
                         try {
-                            $due = dd_stamp_order($pdo, $quoteId, $factoryId);
+                            $due = dd_stamp_order($pdo, $quoteId);
                             if ($due !== null && $dueMsg === '') {
                                 $dueMsg = ' Due ' . (new DateTimeImmutable($due))->format('j M Y') . '.';
                             }

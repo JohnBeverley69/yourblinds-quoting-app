@@ -57,7 +57,8 @@ function fcost_lines(PDO $pdo, int $MASTER, ?string $since, ?string $until, bool
     $hasTableSrc = pe_col_exists($pdo, 'price_tables', 'source_table_id');
     $srcTableSel = $hasTableSrc ? 'tpt.source_table_id AS src_table_id,' : 'NULL AS src_table_id,';
     $hasAcct     = pe_col_exists($pdo, 'quotes', 'account_client_id');
-    $acctExpr    = $hasAcct ? 'COALESCE(NULLIF(q.account_client_id, 0), q.client_id)' : 'q.client_id';
+    $acctExpr    = function_exists('ar_account_expr') ? ar_account_expr($pdo, 'q.')   // a white-label factory's order is its own account
+                 : ($hasAcct ? 'COALESCE(NULLIF(q.account_client_id, 0), q.client_id)' : 'q.client_id');
     $hasRemake   = pe_col_exists($pdo, 'quotes', 'remake_of_quote_id');
     $hasSupplier = pe_col_exists($pdo, 'products', 'supplier_name');
     $sql =

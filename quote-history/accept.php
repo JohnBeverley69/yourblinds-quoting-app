@@ -197,7 +197,7 @@ if ($action === 'accept') {
                 $adv->execute([$acQuote]);
                 if ($adv->rowCount() > 0) {
                     require_once __DIR__ . '/../_partials/due_dates.php';
-                    try { dd_stamp_order($pdo, $acQuote, $factoryId); } catch (Throwable $e) { /* optional */ }
+                    try { dd_stamp_order($pdo, $acQuote); } catch (Throwable $e) { /* optional */ }
                     // Auto-placed straight to the factory on the customer's accept
                     // → email the factory that a new order has landed (once).
                     require_once __DIR__ . '/../_partials/factory_notify.php';

@@ -307,21 +307,21 @@ function fc_making_stage(string $status, string $fs, string $fj): string
 function fc_order_status(PDO $pdo, int $factoryId, array $quote): array
 {
     $id = (int) ($quote['id'] ?? 0);
-    $fj = '';
-    try {
-        $st = $pdo->prepare('SELECT status FROM factory_jobs WHERE quote_id = ? LIMIT 1');
-        $st->execute([$id]);
-        $fj = (string) ($st->fetchColumn() ?: '');
-    } catch (Throwable $e) { /* no floor jobs table */ }
+    // This factory's own part of the order (a mixed order's other factory has its own).
+    $fj   = op_fj_status($pdo, $id, $factoryId);
+    $part = op_part($pdo, $id, $factoryId);
+    $fs   = $part !== null ? (string) ($part['fulfilment_stage'] ?? '') : (string) ($quote['fulfilment_stage'] ?? '');
     $own = (int) ($quote['client_id'] ?? 0) === $factoryId;
     $r = [
         'id'          => $id,
         'quote_number' => (string) ($quote['quote_number'] ?? ''),
         'status'      => (string) ($quote['status'] ?? ''),
-        'stage'       => fc_making_stage((string) ($quote['status'] ?? ''), (string) ($quote['fulfilment_stage'] ?? ''), $fj),
+        'stage'       => fc_making_stage((string) ($quote['status'] ?? ''), $fs, $fj),
         'invoices'    => fc_money_visible() ? (fc_order_invoices($pdo, $factoryId, [$id])[$id] ?? []) : [],
         'tracks'      => ot_order_tracks($pdo, [$id], $factoryId)[$id] ?? null,
-        'account_key' => (int) ($quote['account_client_id'] ?? 0) > 0 ? (int) $quote['account_client_id'] : ($own ? 0 : (int) ($quote['client_id'] ?? 0)),
+        // Another factory's order is billed to that factory, never its customer.
+        'account_key' => (int) ($quote['account_client_id'] ?? 0) > 0 && ($own || !in_array((int) ($quote['client_id'] ?? 0), qb_factory_client_ids($pdo), true))
+            ? (int) $quote['account_client_id'] : ($own ? 0 : (int) ($quote['client_id'] ?? 0)),
     ];
     $r['stage'] = fc_supplier_stage($r['stage'], $r['tracks'], $fj);
     $r['billed_here'] = !($own && $r['account_key'] === 0);
@@ -355,6 +355,9 @@ function fc_orders(PDO $pdo, int $factoryId): array
     };
     $hasFj      = $has('SELECT 1 FROM factory_jobs LIMIT 0');
     $hasStage   = $has('SELECT fulfilment_stage FROM quotes LIMIT 0');
+    $hasParts   = $has('SELECT 1 FROM order_factory_parts LIMIT 0');
+    // This factory's own part's stage (a mixed order's other factory has its own).
+    $stageExpr  = $hasParts ? 'COALESCE(ofp.fulfilment_stage, q.fulfilment_stage)' : 'q.fulfilment_stage';
     $hasAcct    = $has('SELECT account_client_id FROM quotes LIMIT 0');
     // The factory's own UNPLACED quotes used to be narrowed to trade ones
     // ($tradeOwn: sale_type = 'trade' OR an account), which contradicted the
@@ -403,7 +406,7 @@ function fc_orders(PDO $pdo, int $factoryId): array
     $sql = "SELECT q.id, q.client_id, q.quote_number, q.status, q.created_at,
                    q.customer_reference, q.end_customer_name, q.subtotal,
                    " . ($hasAcct ? 'q.account_client_id' : 'NULL') . " AS account_client_id,
-                   " . ($hasStage ? 'q.fulfilment_stage' : 'NULL') . " AS fulfilment_stage,
+                   " . ($hasStage ? $stageExpr : 'NULL') . " AS fulfilment_stage,
                    " . ($hasFj ? 'fj.status' : 'NULL') . " AS factory_status,
                    c.company_name AS tenant_name,
                    " . ($hasAcct ? 'ac.company_name' : 'NULL') . " AS account_name,
@@ -413,12 +416,14 @@ function fc_orders(PDO $pdo, int $factoryId): array
               FROM quotes q
               JOIN clients c ON c.id = q.client_id
               " . ($hasAcct ? 'LEFT JOIN clients ac ON ac.id = q.account_client_id' : '') . "
-              " . ($hasFj ? 'LEFT JOIN factory_jobs fj ON fj.quote_id = q.id' : '') . "
+              " . ($hasFj ? 'LEFT JOIN factory_jobs fj ON fj.quote_id = q.id'
+                    . ($hasParts ? ' AND fj.factory_client_id = ' . (int) $factoryId : '') : '') . "
+              " . ($hasParts ? 'LEFT JOIN order_factory_parts ofp ON ofp.quote_id = q.id AND ofp.factory_client_id = ' . (int) $factoryId : '') . "
              WHERE ((q.status IN ($inPlaced)
                      AND EXISTS (SELECT 1 FROM quote_items qi JOIN products p ON p.id = qi.product_id
                                   WHERE qi.quote_id = q.id AND $owner = ?))
                  OR (q.client_id = ? AND q.status IN ('draft','sent','accepted') ))
-          ORDER BY " . ($hasStage ? "CASE WHEN COALESCE(q.fulfilment_stage, '') = 'dispatched' THEN 1 ELSE 0 END, " : '') . "q.created_at DESC, q.id DESC
+          ORDER BY " . ($hasStage ? "CASE WHEN COALESCE($stageExpr, '') = 'dispatched' THEN 1 ELSE 0 END, " : '') . "q.created_at DESC, q.id DESC
              LIMIT 400";
     try {
         $st = $pdo->prepare($sql);
@@ -445,6 +450,7 @@ function fc_orders(PDO $pdo, int $factoryId): array
     // "Being made" once the floor has finished. Same helper as Incoming orders.
     $tracks = ot_order_tracks($pdo, array_map(static fn ($r) => (int) $r['id'], array_filter($rows, static fn ($r) => (string) ($r['fulfilment_stage'] ?? '') !== 'dispatched')), $factoryId);
 
+    $otherFactories = array_values(array_diff(qb_factory_client_ids($pdo), [$factoryId]));
     foreach ($rows as &$r) {
         $id  = (int) $r['id'];
         $r['remake_of'] = $remakeOf[$id] ?? '';
@@ -453,10 +459,14 @@ function fc_orders(PDO $pdo, int $factoryId): array
         $stage = fc_making_stage((string) $r['status'], (string) ($r['fulfilment_stage'] ?? ''), (string) ($r['factory_status'] ?? ''));
         $stage = fc_supplier_stage($stage, $r['tracks'], (string) ($r['factory_status'] ?? ''));
         $r['stage']   = $stage;
-        $r['account'] = trim((string) ($r['account_name'] ?? '')) !== ''
+        // Another factory's order is that factory's, even when it keyed it in for
+        // one of its own trade customers — we bill and deliver to the factory,
+        // never its customer (John, 2026-10-17).
+        $viaFactory = !$own && in_array((int) $r['client_id'], $otherFactories, true);
+        $r['account'] = !$viaFactory && trim((string) ($r['account_name'] ?? '')) !== ''
             ? (string) $r['account_name']
             : ($own ? 'One-off sale' : (string) $r['tenant_name']);
-        $r['account_key'] = (int) ($r['account_client_id'] ?? 0) > 0
+        $r['account_key'] = !$viaFactory && (int) ($r['account_client_id'] ?? 0) > 0
             ? (int) $r['account_client_id']
             : ($own ? 0 : (int) $r['client_id']);
         $r['value']   = $valueBy[$id] ?? ($own ? (float) $r['subtotal'] : null);

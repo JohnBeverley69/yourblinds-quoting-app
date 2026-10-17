@@ -25,6 +25,7 @@ require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require __DIR__ . '/../_partials/blind_jobs.php';
 require __DIR__ . '/../_partials/qr.php';
+require_once __DIR__ . '/../_partials/order_parts.php';   // op_due_sql — this factory's own due date
 
 requireFactory();
 
@@ -205,7 +206,7 @@ if ($mine && bj_tables_ready($pdo)) {
     foreach ($mine as $w) { $ors[] = '(bj.product_id = ? AND bs.stream = ?)'; $args[] = (int) $w['product_id']; $args[] = (string) $w['stream']; }
     $sql =
         "SELECT bs.id AS stream_id, bs.stream, bs.status, q.quote_number, qi.line_no, bj.unit_no, qi.quantity,
-                qi.product_name_snapshot, qi.width_mm, qi.drop_mm, qi.room_name, q.due_date,
+                qi.product_name_snapshot, qi.width_mm, qi.drop_mm, qi.room_name, " . op_due_sql($pdo, (int) $MASTER) . " AS due_date,
                 rs.label AS stage
            FROM factory_blind_streams bs
            JOIN factory_blind_jobs bj ON bj.id = bs.blind_job_id
@@ -213,7 +214,7 @@ if ($mine && bj_tables_ready($pdo)) {
            JOIN quotes q       ON q.id = bj.quote_id
            LEFT JOIN product_route_steps rs ON rs.id = bs.route_step_id
           WHERE bs.status IN ('queued','in_progress') AND (" . implode(' OR ', $ors) . ")
-          ORDER BY q.due_date IS NULL, q.due_date, q.created_at, qi.line_no, bj.unit_no
+          ORDER BY due_date IS NULL, due_date, q.created_at, qi.line_no, bj.unit_no
           LIMIT 60";
     try { $st = $pdo->prepare($sql); $st->execute($args); $queue = $st->fetchAll(PDO::FETCH_ASSOC); }
     catch (Throwable $e) { $queue = []; }

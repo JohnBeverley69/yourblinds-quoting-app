@@ -304,25 +304,18 @@ function factory_autosend_suppliers(PDO $pdo, int $quoteId): void
 {
     if ($quoteId <= 0) return;
     try {
-        // Resolve the making factory (dominant product owner), like factory_notify.
-        $fs = $pdo->prepare(
-            "SELECT COALESCE(NULLIF(p.source_client_id,0), p.client_id) AS fac, COUNT(*) AS n
-               FROM quote_items qi JOIN products p ON p.id = qi.product_id
-              WHERE qi.quote_id = ? GROUP BY fac ORDER BY n DESC LIMIT 1"
-        );
-        $fs->execute([$quoteId]);
-        $factoryId = (int) ($fs->fetchColumn() ?: 0);
-        if ($factoryId <= 0) return;
-
-        $on = 0;
-        try {
-            $s = $pdo->prepare('SELECT auto_send_suppliers FROM client_settings WHERE client_id = ? LIMIT 1');
-            $s->execute([$factoryId]);
-            $on = (int) ($s->fetchColumn() ?: 0);
-        } catch (Throwable $e) { return; }
-        if ($on !== 1) return;
-
-        factory_send_outstanding($pdo, $quoteId, $factoryId, 0);
+        // Every factory making part of the order, each by its OWN setting and
+        // only for its own bought-in lines (order_parts.php).
+        require_once __DIR__ . '/order_parts.php';
+        foreach (op_order_factories($pdo, $quoteId) as $factoryId) {
+            $on = 0;
+            try {
+                $s = $pdo->prepare('SELECT auto_send_suppliers FROM client_settings WHERE client_id = ? LIMIT 1');
+                $s->execute([$factoryId]);
+                $on = (int) ($s->fetchColumn() ?: 0);
+            } catch (Throwable $e) { return; }
+            if ($on === 1) factory_send_outstanding($pdo, $quoteId, $factoryId, 0);
+        }
     } catch (Throwable $e) {
         error_log('factory_autosend_suppliers skipped for quote ' . $quoteId . ': ' . $e->getMessage());
     }

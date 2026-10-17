@@ -434,7 +434,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // date from the production times in force now, once and for good.
             if ($advancedToOrdered) {
                 require_once __DIR__ . '/../_partials/due_dates.php';
-                dd_stamp_order(db(), $quoteId, $factoryId);
+                dd_stamp_order(db(), $quoteId);
                 // Placed → email the factory a new order has landed (once).
                 require_once __DIR__ . '/../_partials/factory_notify.php';
                 factory_notify_new_order(db(), $quoteId);
