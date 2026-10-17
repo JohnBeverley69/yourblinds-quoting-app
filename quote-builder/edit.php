@@ -133,12 +133,18 @@ if ($editingItemId > 0) {
         // user_value is optional (added by migrate_extra_length_input).
         // Try-fallback so editing still works pre-migration.
         try {
+            // A shared-fascia width the system worked out (is_auto) is not
+            // something the user typed: leave it out of the form, otherwise it
+            // comes back as an "Over size" width and is saved as typed. The
+            // group's width is recalculated when the line is saved.
+            $autoCol = qb_fascia_auto_ready(db());
             $exSt = db()->prepare(
-                'SELECT product_extra_id, product_extra_choice_id, user_value
+                'SELECT product_extra_id, product_extra_choice_id, user_value' . ($autoCol ? ', is_auto' : '') . '
                    FROM quote_item_extras WHERE quote_item_id = ? ORDER BY id'
             );
             $exSt->execute([$editingItemId]);
             foreach ($exSt->fetchAll() as $r) {
+                if (!empty($r['is_auto'])) continue;
                 $editingExtras[] = [
                     'extra_id'   => (int) $r['product_extra_id'],
                     'choice_id'  => (int) $r['product_extra_choice_id'],
