@@ -286,7 +286,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'bulk_axis_edit') {
             : 'No changes.';
     } catch (Throwable $e) {
         $pdo->rollBack();
-        $_SESSION['flash_error'] = 'Bulk edit failed: ' . $e->getMessage();
+        $_SESSION['flash_error'] = 'Bulk edit failed: ' . user_error_text($e);
     }
 
     $back = '/admin/products/price-table.php?id=' . (int) $tableId;
@@ -345,7 +345,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'rename_axis') {
             if (stripos($e->getMessage(), 'duplicate') !== false || stripos($e->getMessage(), 'uniq') !== false) {
                 $_SESSION['flash_error'] = "Can't rename to {$newValue}mm — that value already exists on this table. Remove it first or pick a different number.";
             } else {
-                $_SESSION['flash_error'] = 'Rename failed: ' . $e->getMessage();
+                $_SESSION['flash_error'] = 'Rename failed: ' . user_error_text($e);
             }
         }
     }
@@ -420,7 +420,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'copy_from') {
                     . " — tweak the prices that differ, then Save.";
             } catch (Throwable $e) {
                 $pdo->rollBack();
-                $_SESSION['flash_error'] = 'Copy failed: ' . $e->getMessage();
+                $_SESSION['flash_error'] = 'Copy failed: ' . user_error_text($e);
             }
         }
     }
@@ -482,7 +482,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'bump_prices') {
                 . ($puSnapId ? ' Wrong number? Press Undo just below.' : '');
         } catch (Throwable $e) {
             $pdo->rollBack();
-            $_SESSION['flash_error'] = 'Could not adjust prices: ' . $e->getMessage();
+            $_SESSION['flash_error'] = 'Could not adjust prices: ' . user_error_text($e);
         }
     }
 
@@ -564,7 +564,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'update_trade_terms') {
             $_SESSION['flash_success'] = 'Trade terms saved for this system.';
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            $_SESSION['flash_error'] = 'Could not save trade terms: ' . $e->getMessage();
+            $_SESSION['flash_error'] = 'Could not save trade terms: ' . user_error_text($e);
         }
     }
 
@@ -746,7 +746,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'update_meta') {
             if (str_contains($e->getMessage(), 'uniq_price_table_product_system_band')) {
                 $_SESSION['flash_error'] = 'A price table for that band already exists on this system. Pick a different band code.';
             } else {
-                $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage();
+                $_SESSION['flash_error'] = 'Could not save: ' . user_error_text($e);
             }
         }
     }
@@ -845,7 +845,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save_grid') {
         exit;
     } catch (Throwable $e) {
         $pdo->rollBack();
-        $error = 'Database error: ' . $e->getMessage();
+        $error = 'Database error: ' . user_error_text($e);
     }
 }
 
@@ -883,7 +883,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save_sqm') {
         exit;
     } catch (Throwable $e) {
         $pdo->rollBack();
-        $_SESSION['flash_error'] = 'Database error: ' . $e->getMessage();
+        $_SESSION['flash_error'] = 'Database error: ' . user_error_text($e);
         header('Location: /admin/products/price-table.php?id=' . $tableId . $wizQs, true, 303);
         exit;
     }
@@ -961,7 +961,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'save_width') {
         exit;
     } catch (Throwable $e) {
         $pdo->rollBack();
-        $error = 'Database error: ' . $e->getMessage();
+        $error = 'Database error: ' . user_error_text($e);
     }
 }
 
@@ -1543,12 +1543,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'upload') {
                         ];
                     } catch (Throwable $e) {
                         $pdo->rollBack();
-                        $error = 'Database error: ' . $e->getMessage();
+                        $error = 'Database error: ' . user_error_text($e);
                     }
                 }
             }
         } catch (Throwable $e) {
-            $error = 'Could not read the file: ' . $e->getMessage();
+            $error = 'Could not read the file: ' . user_error_text($e);
         }
     }
 }
@@ -1625,12 +1625,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'upload_flex') {
                         ];
                     } catch (Throwable $e) {
                         $pdo->rollBack();
-                        $error = 'Database error: ' . $e->getMessage();
+                        $error = 'Database error: ' . user_error_text($e);
                     }
                 }
             }
         } catch (Throwable $e) {
-            $error = 'Could not read the file: ' . $e->getMessage();
+            $error = 'Could not read the file: ' . user_error_text($e);
         }
     }
 }

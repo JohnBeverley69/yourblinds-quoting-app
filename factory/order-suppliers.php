@@ -80,7 +80,7 @@ try {
     $iStmt->execute([$quoteId, $factoryId]);
     $lines = $iStmt->fetchAll();
 } catch (Throwable $e) {
-    qb_flash_redirect($backToOrder, 'error', 'Could not read the bought-in lines: ' . $e->getMessage());
+    qb_flash_redirect($backToOrder, 'error', 'Could not read the bought-in lines: ' . user_error_text($e));
 }
 
 // Extras per line, formatted as on every PO.

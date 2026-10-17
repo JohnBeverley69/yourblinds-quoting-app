@@ -348,5 +348,5 @@ try {
     qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId . $anchor, 'success', $msg);
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
-    qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId . '#add-line', 'error', 'Could not add blind: ' . $e->getMessage());
+    qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId . '#add-line', 'error', 'Could not add blind: ' . user_error_text($e));
 }

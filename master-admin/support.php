@@ -72,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['_action'] ?? '', [
             pc_set('SUPPORT_AI_DAILY_USER_LIMIT', (string) max(0, (int) ($_POST['ai_daily'] ?? SUPPORT_AI_DEFAULT_DAILY)));
             $_SESSION['flash_success'] = 'AI assistant settings saved.';
         } catch (Throwable $e) {
-            $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage();
+            $_SESSION['flash_error'] = 'Could not save: ' . user_error_text($e);
         }
     } else {
         [$code, $resp, $err] = support_ai_request([

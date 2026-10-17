@@ -83,7 +83,7 @@ try {
     uasort($byDevice, static fn ($a, $b) => $b['visits'] <=> $a['visits']);
     krsort($daily);
 } catch (Throwable $e) {
-    $loadError = $e->getMessage();
+    $loadError = user_error_text($e);
 }
 
 $pct = static fn (int $a, int $b): string => $b > 0 ? round($a / $b * 100) . '%' : '–';

@@ -223,7 +223,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $hasTable) {
         $tid = (int) ($_POST['template_id'] ?? 0);
         if ($tid > 0) {
             try { $pdo->prepare('DELETE FROM worksheet_templates WHERE id = ? AND product_id = ?')->execute([$tid, $productId]); }
-            catch (Throwable $e) { $_SESSION['flash_error'] = 'Could not delete: ' . $e->getMessage(); }
+            catch (Throwable $e) { $_SESSION['flash_error'] = 'Could not delete: ' . user_error_text($e); }
         }
         header('Location: /factory/worksheets.php?product_id=' . $productId);
         exit;
@@ -250,7 +250,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $hasTable) {
                 $_SESSION['flash_success'] = 'Restored a previous version of this worksheet.';
             }
         } catch (Throwable $e) {
-            $_SESSION['flash_error'] = 'Could not restore: ' . $e->getMessage();
+            $_SESSION['flash_error'] = 'Could not restore: ' . user_error_text($e);
         }
         header('Location: /factory/worksheets.php?product_id=' . $productId . '&template_id=' . $tid);
         exit;
@@ -319,7 +319,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $hasTable) {
             $_SESSION['flash_success'] = "Saved “{$name}”.";
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage();
+            $_SESSION['flash_error'] = 'Could not save: ' . user_error_text($e);
         }
         header('Location: /factory/worksheets.php?product_id=' . $productId . '&template_id=' . $tid);
         exit;

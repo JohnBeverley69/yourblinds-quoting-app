@@ -73,7 +73,7 @@ function supplier_import_to_catalogue(PDO $pdo, int $masterClientId, string $pre
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             foreach ($countersBefore as $k => $v) $summary[$k] = $v;   // undo stale increments
-            $summary['errors'][] = ['product' => $productName, 'message' => $e->getMessage()];
+            $summary['errors'][] = ['product' => $productName, 'message' => user_error_text($e)];
         }
     }
 

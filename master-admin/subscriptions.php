@@ -126,7 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } catch (Throwable $e) {
                     error_log('Admin PayPal cancel failed: ' . $e->getMessage());
                     $paypalNote = ' — but the PayPal cancel call did NOT confirm ('
-                        . $e->getMessage() . '). Check PayPal directly to be sure billing stopped.';
+                        . user_error_text($e) . '). Check PayPal directly to be sure billing stopped.';
                 }
             }
 
@@ -301,7 +301,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             ? 'Subscription saved.'
             : $n . ' subscriptions saved.';
     } catch (Throwable $e) {
-        $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage();
+        $_SESSION['flash_error'] = 'Could not save: ' . user_error_text($e);
     }
     header('Location: /master-admin/subscriptions.php');
     exit;

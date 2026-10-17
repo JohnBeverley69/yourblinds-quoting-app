@@ -120,12 +120,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         ];
                     } catch (Throwable $e) {
                         $pdo->rollBack();
-                        $error = 'Database error: ' . $e->getMessage();
+                        $error = 'Database error: ' . user_error_text($e);
                     }
                 }
             }
         } catch (Throwable $e) {
-            $error = 'Could not read the file: ' . $e->getMessage();
+            $error = 'Could not read the file: ' . user_error_text($e);
         }
     }
 }

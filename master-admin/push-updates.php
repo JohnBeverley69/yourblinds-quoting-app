@@ -187,7 +187,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $agg = pu_merge_summary($agg, push_catalogue_to_client($pdo, $masterClientId, $tid, $pfx, $prefixToName[$pfx] ?? $pfx));
                 } catch (Throwable $e) {
                     error_log('push-updates JSON: tenant=' . $tid . ' prefix=' . $pfx . ' FAILED: ' . $e->getMessage());
-                    $agg['errors'][] = ['product' => '(' . $pfx . ')', 'message' => $e->getMessage()];
+                    $agg['errors'][] = ['product' => '(' . $pfx . ')', 'message' => user_error_text($e)];
                 }
             }
             echo json_encode(['ok' => true, 'tenant_id' => $tid, 'name' => $name, 'summary' => $agg]);
@@ -199,7 +199,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             );
             // best-effort — headers may already be sent if PHP died
             // mid-output, but the log line has the full picture.
-            echo json_encode(['ok' => false, 'error' => $outer->getMessage()]);
+            echo json_encode(['ok' => false, 'error' => user_error_text($outer)]);
             exit;
         }
     }
@@ -267,7 +267,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     'name'    => $names[$tid] ?? ('client #' . $tid),
                     'summary' => null,
                     'failed'  => true,
-                    'error'   => $e->getMessage(),
+                    'error'   => user_error_text($e),
                 ];
             }
         }
@@ -283,7 +283,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             . $outer->getMessage() . ' at ' . $outer->getFile() . ':' . $outer->getLine()
             . "\n" . $outer->getTraceAsString()
         );
-        $_SESSION['flash_error'] = 'Push could not run: ' . $outer->getMessage();
+        $_SESSION['flash_error'] = 'Push could not run: ' . user_error_text($outer);
         header('Location: /master-admin/push-updates.php');
         exit;
     }

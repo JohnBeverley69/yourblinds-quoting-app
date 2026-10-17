@@ -59,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $isSuper && $videoTableOk) {
             }
         }
     } catch (Throwable $e) {
-        $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage();
+        $_SESSION['flash_error'] = 'Could not save: ' . user_error_text($e);
     }
     header('Location: /help/index.php');
     exit;

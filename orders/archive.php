@@ -67,7 +67,7 @@ if ($ids) {
         $_SESSION['flash_success'] = $n . ' ' . ($n === 1 ? 'job' : 'jobs') . ' '
             . ($do === 'archive' ? 'archived.' : 'restored to active.');
     } catch (Throwable $e) {
-        $_SESSION['flash_error'] = 'Could not update: ' . $e->getMessage()
+        $_SESSION['flash_error'] = 'Could not update: ' . user_error_text($e)
             . ' — has migrate_quote_archive.php been run?';
     }
 } else {

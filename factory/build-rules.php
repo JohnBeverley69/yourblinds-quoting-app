@@ -196,7 +196,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             } catch (Throwable $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
-                $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage();
+                $_SESSION['flash_error'] = 'Could not save: ' . user_error_text($e);
             }
         }
         header('Location: /factory/build-rules.php?product_id=' . $productId);
@@ -256,7 +256,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $vars[$v['name']] = $val;
                 $testResults[] = ['var' => $v['name'], 'ok' => true, 'value' => $val];
             } catch (Throwable $e) {
-                $testResults[] = ['var' => $v['name'], 'ok' => false, 'value' => $e->getMessage()];
+                $testResults[] = ['var' => $v['name'], 'ok' => false, 'value' => user_error_text($e)];
             }
         }
     }

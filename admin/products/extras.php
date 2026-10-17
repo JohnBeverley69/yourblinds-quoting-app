@@ -213,7 +213,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
             exit;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            $error = 'Could not add: ' . $e->getMessage();
+            $error = 'Could not add: ' . user_error_text($e);
         }
     }
 }

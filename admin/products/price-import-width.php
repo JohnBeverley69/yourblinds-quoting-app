@@ -212,7 +212,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $stage   = 'preview';
                 }
             } catch (Throwable $e) {
-                $error = 'Could not read the spreadsheet: ' . $e->getMessage();
+                $error = 'Could not read the spreadsheet: ' . user_error_text($e);
             }
         }
     }

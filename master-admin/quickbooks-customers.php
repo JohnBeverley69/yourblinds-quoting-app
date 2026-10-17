@@ -46,7 +46,7 @@ try {
         if ((int) $a['active'] === 1 || (int) $a['invoices'] > 0) $accounts[(int) $a['id']] = $a;
     }
 } catch (Throwable $e) {
-    $loadError = $e->getMessage();
+    $loadError = user_error_text($e);
 }
 
 $links = [];
@@ -92,7 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $linked && empty($loadError)) {
             $_SESSION['flash_success'] = 'Created "' . $made['name'] . '" in QuickBooks and linked it.';
         }
     } catch (Throwable $e) {
-        $_SESSION['flash_error'] = $e->getMessage();
+        $_SESSION['flash_error'] = user_error_text($e);
     }
     header('Location: ' . $self . (isset($_POST['show']) && $_POST['show'] === 'all' ? '?show=all' : ''));
     exit;
@@ -103,7 +103,7 @@ $customers = [];
 $listError = null;
 if ($linked && empty($loadError)) {
     try { $customers = qbc_list($factory); }
-    catch (Throwable $e) { $listError = $e->getMessage(); }
+    catch (Throwable $e) { $listError = user_error_text($e); }
 }
 
 // QuickBooks customers already used by a link (to flag a customer linked twice).

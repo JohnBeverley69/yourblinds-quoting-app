@@ -316,7 +316,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
             } elseif (str_contains($e->getMessage(), 'uniq_client_user_username')) {
                 $error = 'That username is already in use.';
             } else {
-                $error = 'Could not update user: ' . $e->getMessage();
+                $error = 'Could not update user: ' . user_error_text($e);
             }
         }
     }

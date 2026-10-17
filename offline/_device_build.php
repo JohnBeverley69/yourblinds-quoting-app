@@ -28,5 +28,5 @@ try {
     ]));
     echo json_encode(['ok' => true, 'rows' => $rows, 'ms' => (int) round((microtime(true) - $t0) * 1000)]);
 } catch (Throwable $e) {
-    echo json_encode(['error' => $e->getMessage()]);
+    echo json_encode(['error' => function_exists('user_error_text') ? user_error_text($e) : $e->getMessage()]);   // on the device: no bootstrap
 }

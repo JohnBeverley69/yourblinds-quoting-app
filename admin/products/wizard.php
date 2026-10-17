@@ -313,7 +313,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         // problem) must NOT masquerade as "duplicate" — surface it,
                         // or a system that silently fails to save looks to the user
                         // like it saved when it didn't.
-                        $em = $e->getMessage();
+                        $em = user_error_text($e);
                         if (stripos($em, 'uniq_system_per_product') !== false
                             || stripos($em, 'Duplicate entry') !== false) {
                             $skipped++;
@@ -621,7 +621,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
     } catch (Throwable $e) {
-        $error = $e->getMessage();
+        $error = user_error_text($e);
     }
 }
 

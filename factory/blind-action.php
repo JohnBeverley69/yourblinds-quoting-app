@@ -61,7 +61,7 @@ try {
             $_SESSION['flash_error'] = 'Unknown action.';
     }
 } catch (Throwable $e) {
-    $_SESSION['flash_error'] = 'Could not update that blind: ' . $e->getMessage();
+    $_SESSION['flash_error'] = 'Could not update that blind: ' . user_error_text($e);
 }
 
 // Phase 0: roll the single fulfilment stage up from this floor movement.

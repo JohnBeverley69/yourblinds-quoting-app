@@ -55,7 +55,7 @@ if ($id > 0) {
         $pdo->commit();
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
-        $_SESSION['flash_error'] = 'Could not delete system: ' . $e->getMessage();
+        $_SESSION['flash_error'] = 'Could not delete system: ' . user_error_text($e);
     }
 }
 

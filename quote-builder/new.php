@@ -208,7 +208,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         } catch (Throwable $e) {
             if (db()->inTransaction()) db()->rollBack();
-            $error = 'Could not create quote: ' . $e->getMessage();
+            $error = 'Could not create quote: ' . user_error_text($e);
         }
     }
 }

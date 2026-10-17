@@ -56,7 +56,7 @@ try {
           ORDER BY c.company_name';
     $tenants = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
 } catch (Throwable $e) {
-    $loadError = $e->getMessage();
+    $loadError = user_error_text($e);
 }
 
 // Current plan tier per tenant (subscription or comp).

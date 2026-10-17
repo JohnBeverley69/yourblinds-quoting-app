@@ -121,7 +121,7 @@ function push_catalogue_to_client(
             if ($pdo->inTransaction()) $pdo->rollBack();
             $summary['errors'][] = [
                 'product' => (string) $sp['name'],
-                'message' => $e->getMessage(),
+                'message' => user_error_text($e),
             ];
         }
     }

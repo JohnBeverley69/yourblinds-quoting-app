@@ -130,7 +130,7 @@ try {
         $_SESSION['flash_success'] = $n === 1 ? 'Product filed.' : "$n products moved.";
     }
 } catch (Throwable $e) {
-    $_SESSION['flash_error'] = 'Could not update: ' . $e->getMessage();
+    $_SESSION['flash_error'] = 'Could not update: ' . user_error_text($e);
 }
 
 header('Location: /admin/products/index.php');

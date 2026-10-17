@@ -140,7 +140,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
             if (str_contains($e->getMessage(), 'uniq_system_per_product')) {
                 $error = 'A system with that name already exists for this product.';
             } else {
-                $error = 'Could not add: ' . $e->getMessage();
+                $error = 'Could not add: ' . user_error_text($e);
             }
         }
     }
@@ -171,7 +171,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
             exit;
         } catch (Throwable $e) {
             $pdo->rollBack();
-            $_SESSION['flash_error'] = 'Could not set default: ' . $e->getMessage();
+            $_SESSION['flash_error'] = 'Could not set default: ' . user_error_text($e);
             header('Location: /admin/products/systems.php?product_id=' . $productId);
             exit;
         }
@@ -229,7 +229,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
             if (str_contains($e->getMessage(), 'uniq_system_per_product')) {
                 $_SESSION['flash_error'] = 'A system with that name already exists for this product.';
             } else {
-                $_SESSION['flash_error'] = 'Could not rename: ' . $e->getMessage();
+                $_SESSION['flash_error'] = 'Could not rename: ' . user_error_text($e);
             }
         }
     }

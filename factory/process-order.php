@@ -101,7 +101,7 @@ if ($supplier === '') {
                  received_by = COALESCE(received_by, VALUES(received_by))"
         )->execute([$quoteId, $factoryId, $target, $userId ?: null, $userId ?: null]);
     } catch (Throwable $e) {
-        $fail('Could not process the order: ' . $e->getMessage() . ' — have the factory_jobs migrations been run?');
+        $fail('Could not process the order: ' . user_error_text($e) . ' — have the factory_jobs migrations been run?');
     }
     if ($target === 'in_production' && bj_tables_ready($pdo)) {
         $n = bj_release_order($pdo, $quoteId, $factoryId);

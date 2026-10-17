@@ -151,6 +151,6 @@ try {
     qb_flash_redirect(
         '/quote-builder/edit.php?id=' . $quoteId,
         'error',
-        'Could not duplicate: ' . $e->getMessage()
+        'Could not duplicate: ' . user_error_text($e)
     );
 }

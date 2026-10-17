@@ -168,7 +168,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     } catch (Throwable $e) {
-        $_SESSION['flash_error'] = 'Could not update: ' . $e->getMessage();
+        $_SESSION['flash_error'] = 'Could not update: ' . user_error_text($e);
     }
     header('Location: /master-admin/master-catalogue.php');
     exit;
@@ -213,7 +213,7 @@ if ($masterId > 0) {
         $st->execute([$masterId]);
         $products = $st->fetchAll(PDO::FETCH_ASSOC);
     } catch (Throwable $e) {
-        $loadError = $e->getMessage();
+        $loadError = user_error_text($e);
     }
 }
 

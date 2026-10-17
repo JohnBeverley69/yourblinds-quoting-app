@@ -54,7 +54,7 @@ if (paypal_is_configured()) {
         $apiPingDetail = 'OAuth token issued successfully.';
     } catch (Throwable $e) {
         $apiPingOk     = false;
-        $apiPingDetail = $e->getMessage();
+        $apiPingDetail = user_error_text($e);
     }
     $apiPingMs = (int) round((microtime(true) - $t0) * 1000);
 }

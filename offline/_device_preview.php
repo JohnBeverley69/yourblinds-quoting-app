@@ -45,5 +45,5 @@ try {
     $out['catalogue_date'] = (string) $meta['today'];
     echo json_encode($out, JSON_PRESERVE_ZERO_FRACTION);
 } catch (Throwable $e) {
-    echo json_encode(['error' => 'Offline pricing failed: ' . $e->getMessage(), 'stage' => 'offline']);
+    echo json_encode(['error' => 'Offline pricing failed: ' . (function_exists('user_error_text') ? user_error_text($e) : $e->getMessage()), 'stage' => 'offline']);
 }

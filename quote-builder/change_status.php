@@ -362,6 +362,6 @@ try {
     qb_flash_redirect(
         '/quote-builder/edit.php?id=' . $quoteId,
         'error',
-        'Could not change status: ' . $e->getMessage()
+        'Could not change status: ' . user_error_text($e)
     );
 }

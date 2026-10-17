@@ -91,7 +91,7 @@ try {
     $taxCodes = qbo_list_tax_codes($clientId);
     $accounts = qbo_list_accounts($clientId);
 } catch (Throwable $e) {
-    $loadError = $e->getMessage();
+    $loadError = user_error_text($e);
 }
 
 $flashMsg = $_SESSION['flash_success'] ?? null;

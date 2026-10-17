@@ -84,5 +84,5 @@ try {
 } catch (Throwable $e) {
     $pdo->rollBack();
     http_response_code(500);
-    echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+    echo json_encode(['ok' => false, 'error' => user_error_text($e)]);
 }

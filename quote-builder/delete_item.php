@@ -45,7 +45,7 @@ try {
     $pdo->commit();
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
-    qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId, 'error', 'Could not remove the blind: ' . $e->getMessage());
+    qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId, 'error', 'Could not remove the blind: ' . user_error_text($e));
 }
 
 qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId, 'success', 'Blind removed.');

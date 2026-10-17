@@ -224,7 +224,7 @@ $checkFormula = static function (string $formula) use ($validNames, $alw): array
         $r = formula_eval(be_norm_math($formula), $pool, $alw);
         return ['ok' => true, 'result' => is_numeric($r) ? (float) $r : (string) $r];
     } catch (Throwable $e) {
-        $msg = $e->getMessage();
+        $msg = user_error_text($e);
         $suggest = '';
         if (preg_match('/variable[:\s]+([A-Za-z_][A-Za-z0-9_]*)/i', $msg, $m)) {
             $bad = $m[1]; $bestD = 99;
@@ -318,7 +318,7 @@ if (($_GET['action'] ?? '') === 'evalbuild') {
         }
         echo json_encode(['ok' => true, 'vars' => $out]);
     } catch (Throwable $e) {
-        echo json_encode(['ok' => false, 'error' => $e->getMessage()]);
+        echo json_encode(['ok' => false, 'error' => user_error_text($e)]);
     }
     exit;
 }
@@ -357,7 +357,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ? 'Saved — this product now uses that product\'s cut rules on its worksheets.'
                 : 'Saved — this product uses its own cut rules.';
         } catch (Throwable $e) {
-            $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage();
+            $_SESSION['flash_error'] = 'Could not save: ' . user_error_text($e);
         }
         header('Location: /factory/build-rules-v2.php?product_id=' . $productId);
         exit;
@@ -402,7 +402,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['flash_success'] = 'Saved the multiple-blinds-in-one-fascia allowances — the worksheet now uses them.';
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage();
+            $_SESSION['flash_error'] = 'Could not save: ' . user_error_text($e);
         }
         header('Location: /factory/build-rules-v2.php?product_id=' . $productId);
         exit;
@@ -421,7 +421,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['flash_success'] = $lbTo === ''
                 ? "“{$lbOf}” is shown by its own name again."
                 : "“{$lbOf}” is now shown as “{$lbTo}”.";
-        } catch (Throwable $e) { $_SESSION['flash_error'] = 'Could not set the label: ' . $e->getMessage(); }
+        } catch (Throwable $e) { $_SESSION['flash_error'] = 'Could not set the label: ' . user_error_text($e); }
         header('Location: /factory/build-rules-v2.php?product_id=' . $productId); exit;
     }
 
@@ -434,7 +434,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['flash_success'] = $plTo
                 ? "“{$plOf}” is a working value now — the floor won't see it."
                 : "“{$plOf}” shows on the ticket again.";
-        } catch (Throwable $e) { $_SESSION['flash_error'] = 'Could not change it: ' . $e->getMessage(); }
+        } catch (Throwable $e) { $_SESSION['flash_error'] = 'Could not change it: ' . user_error_text($e); }
         header('Location: /factory/build-rules-v2.php?product_id=' . $productId); exit;
     }
 
@@ -453,7 +453,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['flash_success'] = "Renamed “{$rnOld}” to “{$rnNew}”."
                 . ($also ? ' Updated ' . implode(' and ', $also) . ' that named it.' : '');
         } catch (Throwable $e) {
-            $_SESSION['flash_error'] = 'Could not rename: ' . $e->getMessage();
+            $_SESSION['flash_error'] = 'Could not rename: ' . user_error_text($e);
         }
         header('Location: /factory/build-rules-v2.php?product_id=' . $productId); exit;
     }
@@ -472,7 +472,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     . (count($broke) === 1 ? '' : 's') . ' now print nothing: ' . implode('; ', $broke)
                     . '. Fix them on Worksheets.';
             }
-        } catch (Throwable $e) { $_SESSION['flash_error'] = 'Could not remove: ' . $e->getMessage(); }
+        } catch (Throwable $e) { $_SESSION['flash_error'] = 'Could not remove: ' . user_error_text($e); }
         header('Location: /factory/build-rules-v2.php?product_id=' . $productId); exit;
     }
 
@@ -634,7 +634,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
-        $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage();
+        $_SESSION['flash_error'] = 'Could not save: ' . user_error_text($e);
     }
     header('Location: /factory/build-rules-v2.php?product_id=' . $productId);
     exit;

@@ -199,4 +199,30 @@ function parse_strict_time(string $s): ?DateTimeImmutable
     return DateTimeImmutable::createFromFormat('!G:i:s', preg_replace('/^(\d+:\d\d)$/', '$1:00', $s)) ?: null;
 }
 
+// ---------------------------------------------------------------------------
+// An error's text, safe to put in front of the person using the site.
+//
+// Our own messages ("This order can't be deleted — it has been invoiced") are
+// written for people and pass straight through. A DATABASE or PHP-internal
+// error is not: it shows SQL, table names and file paths. Those become "a
+// database problem (reference AB12CD — it has been logged)" and the full detail
+// goes to the error log under that reference, so it can still be found. The
+// super-admin keeps seeing the real text, after the reference. (Security check
+// 2026-09-25: raw DB error text in flash/JSON messages; John, 2026-10-17.)
+// ---------------------------------------------------------------------------
+function user_error_text(Throwable $e): string
+{
+    $msg      = $e->getMessage();
+    $internal = $e instanceof PDOException || $e instanceof Error
+             || (class_exists('mysqli_sql_exception', false) && $e instanceof mysqli_sql_exception)
+             || str_contains($msg, 'SQLSTATE') || preg_match('/\bSQL syntax\b|\bTable \'|\bUnknown column\b/i', $msg);
+    if (!$internal) return $msg;
+
+    $ref = strtoupper(bin2hex(random_bytes(3)));
+    error_log("[YourBlinds err $ref] " . get_class($e) . ': ' . $msg . ' @ ' . $e->getFile() . ':' . $e->getLine());
+    $safe = ($e instanceof Error ? 'an unexpected problem' : 'a database problem') . " (reference $ref — it has been logged)";
+    if (function_exists('is_super_admin') && is_super_admin()) $safe .= ' — ' . $msg;
+    return $safe;
+}
+
 require_once APP_ROOT . '/db.php';

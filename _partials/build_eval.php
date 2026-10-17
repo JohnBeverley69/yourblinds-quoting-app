@@ -235,7 +235,7 @@ if (!function_exists('build_evaluate')) {
                 $vars[$name] = $val;
                 $results[] = ['name' => $name, 'ok' => true, 'value' => $val];
             } catch (Throwable $e) {
-                $results[] = ['name' => $name, 'ok' => false, 'value' => $e->getMessage()];
+                $results[] = ['name' => $name, 'ok' => false, 'value' => user_error_text($e)];
             }
         }
 

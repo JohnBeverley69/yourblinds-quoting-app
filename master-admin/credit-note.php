@@ -109,7 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit;
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
-        $_SESSION['flash_error'] = 'Could not raise credit note: ' . $e->getMessage();
+        $_SESSION['flash_error'] = 'Could not raise credit note: ' . user_error_text($e);
         header('Location: ' . $back);
         exit;
     }

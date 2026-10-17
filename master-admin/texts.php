@@ -80,7 +80,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['flash_success'] = $packs ? count($packs) . ' text bundle' . (count($packs) === 1 ? '' : 's') . ' on sale.' : 'No text bundles on sale.';
         }
     } catch (Throwable $e) {
-        $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage()
+        $_SESSION['flash_error'] = 'Could not save: ' . user_error_text($e)
             . ' — have migrate_platform_config.php and migrate_messages.php been run?';
     }
     header('Location: /master-admin/texts.php');
@@ -124,7 +124,7 @@ if ($ready) {
            ORDER BY m.id DESC LIMIT 25"
         )->fetchAll();
     } catch (Throwable $e) {
-        $loadError = $e->getMessage();
+        $loadError = user_error_text($e);
     }
 }
 

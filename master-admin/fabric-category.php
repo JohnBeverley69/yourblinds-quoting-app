@@ -135,7 +135,7 @@ try {
         $_SESSION['flash_success'] = 'Fabric filed.';
     }
 } catch (Throwable $e) {
-    $_SESSION['flash_error'] = 'Could not update: ' . $e->getMessage();
+    $_SESSION['flash_error'] = 'Could not update: ' . user_error_text($e);
 }
 
 header('Location: /master-admin/fabric-library.php');

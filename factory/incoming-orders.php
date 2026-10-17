@@ -153,7 +153,7 @@ try {
         }
     }
 } catch (Throwable $e) {
-    $loadError = $e->getMessage();
+    $loadError = user_error_text($e);
 }
 
 // Floor progress per order (blinds made / total) once released — Phase B.

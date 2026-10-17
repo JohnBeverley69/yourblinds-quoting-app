@@ -52,7 +52,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['flash_success'] = 'Delivery note ' . $dn['number'] . ' created (draft). View/print it below, then mark it dispatched.';
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            $_SESSION['flash_error'] = 'Could not raise delivery note: ' . $e->getMessage();
+            $_SESSION['flash_error'] = 'Could not raise delivery note: ' . user_error_text($e);
         }
         header('Location: /master-admin/wholesale.php'); exit;
     }
@@ -122,7 +122,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['flash_success'] = 'Delivery note cancelled.';
             }
         } catch (Throwable $e) {
-            $_SESSION['flash_error'] = 'Could not update delivery note: ' . $e->getMessage();
+            $_SESSION['flash_error'] = 'Could not update delivery note: ' . user_error_text($e);
         }
         if ($dnQid > 0) recompute_order_stage($pdo, $dnQid);
         header('Location: /master-admin/wholesale.php'); exit;
@@ -176,7 +176,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['flash_success'] = $msg . ' View/send it below.';
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            $_SESSION['flash_error'] = 'Could not raise invoice: ' . $e->getMessage();
+            $_SESSION['flash_error'] = 'Could not raise invoice: ' . user_error_text($e);
         }
         header('Location: /master-admin/wholesale.php'); exit;
     }
@@ -269,7 +269,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['flash_success'] = $msg;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            $_SESSION['flash_error'] = 'Could not print & invoice: ' . $e->getMessage();
+            $_SESSION['flash_error'] = 'Could not print & invoice: ' . user_error_text($e);
         }
         header('Location: /master-admin/wholesale.php'); exit;
     }
@@ -346,7 +346,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (Throwable $e) {
             // The void now spans two tables, so a half-done void must not stand.
             if ($pdo->inTransaction()) $pdo->rollBack();
-            $_SESSION['flash_error'] = 'Could not update invoice: ' . $e->getMessage();
+            $_SESSION['flash_error'] = 'Could not update invoice: ' . user_error_text($e);
         }
         header('Location: /master-admin/wholesale.php'); exit;
     }
@@ -364,7 +364,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['flash_success'] = 'Credit note ' . $cn['number'] . ' raised (£' . number_format($cn['total'], 2) . '). Email it from the order row.';
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            $_SESSION['flash_error'] = 'Could not raise credit note: ' . $e->getMessage();
+            $_SESSION['flash_error'] = 'Could not raise credit note: ' . user_error_text($e);
         }
         header('Location: /master-admin/wholesale.php'); exit;
     }
@@ -388,7 +388,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($againstId > 0) ar_recompute_invoice_paid($pdo, $againstId);
             $_SESSION['flash_success'] = 'Credit note voided.';
         } catch (Throwable $e) {
-            $_SESSION['flash_error'] = 'Could not void credit note: ' . $e->getMessage();
+            $_SESSION['flash_error'] = 'Could not void credit note: ' . user_error_text($e);
         }
         header('Location: /master-admin/wholesale.php'); exit;
     }

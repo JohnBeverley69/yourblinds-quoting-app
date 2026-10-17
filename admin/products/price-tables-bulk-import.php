@@ -230,7 +230,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'That selection expired — please upload the file again.';
         } else {
             try { $summary = ['bands' => $bpi_import($bands)]; }
-            catch (Throwable $e) { $error = 'Database error: ' . $e->getMessage(); }
+            catch (Throwable $e) { $error = 'Database error: ' . user_error_text($e); }
         }
     } elseif (!isset($_FILES['file']) || ($_FILES['file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
         $error = 'Please choose a file to upload.';
@@ -260,7 +260,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } elseif (count($sheetsWithBands) === 1) {
                 // Single usable sheet — import straight away (unchanged behaviour).
                 try { $summary = ['bands' => $bpi_import($sheetsWithBands[0]['bands'])]; }
-                catch (Throwable $e) { $error = 'Database error: ' . $e->getMessage(); }
+                catch (Throwable $e) { $error = 'Database error: ' . user_error_text($e); }
             } else {
                 // Several sheets have bands — let the user pick which one goes
                 // into THIS system.
@@ -268,7 +268,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pickSheets = $sheetsWithBands;
             }
         } catch (Throwable $e) {
-            $error = 'Could not read the file: ' . $e->getMessage();
+            $error = 'Could not read the file: ' . user_error_text($e);
         }
     }
 }

@@ -326,6 +326,6 @@ try {
     qb_flash_redirect(
         '/quote-builder/edit.php?id=' . $quoteId . '&edit_item=' . $itemId . '#add-line',
         'error',
-        'Could not save blind: ' . $e->getMessage()
+        'Could not save blind: ' . user_error_text($e)
     );
 }

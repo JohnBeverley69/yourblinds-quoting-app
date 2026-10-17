@@ -99,7 +99,7 @@ if ($target === 'made' && bj_tables_ready($pdo)) {
         try {
             $forcedBlinds = bj_force_complete_order($pdo, $quoteId, $userId ?: null, $MASTER);
         } catch (Throwable $e) {
-            $_SESSION['flash_error'] = 'Could not complete the blinds on the floor: ' . $e->getMessage();
+            $_SESSION['flash_error'] = 'Could not complete the blinds on the floor: ' . user_error_text($e);
             header('Location: ' . $backTo);
             exit;
         }
@@ -196,7 +196,7 @@ try {
                 : 'Order moved to ' . (FACTORY_STAGE_LABELS[$target] ?? $target) . '.') . $released;
     }
 } catch (Throwable $e) {
-    $_SESSION['flash_error'] = 'Could not update the order: ' . $e->getMessage()
+    $_SESSION['flash_error'] = 'Could not update the order: ' . user_error_text($e)
         . ' — have the factory_jobs migrations been run?';
     // The status write failed, so the order is NOT dispatched: stop here. Running
     // the dispatch side effects below anyway issued a dispatched delivery note

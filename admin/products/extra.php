@@ -141,7 +141,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
             exit;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            $_SESSION['flash_error'] = 'Could not add sub-option: ' . $e->getMessage();
+            $_SESSION['flash_error'] = 'Could not add sub-option: ' . user_error_text($e);
             header('Location: /admin/products/extra.php?id=' . $extraId . '#sub-options');
             exit;
         }

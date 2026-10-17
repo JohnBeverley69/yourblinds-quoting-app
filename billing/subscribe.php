@@ -93,7 +93,7 @@ try {
     ]);
 } catch (Throwable $e) {
     error_log('PayPal subscribe error: ' . $e->getMessage());
-    $_SESSION['flash_error'] = 'Could not start subscription: ' . $e->getMessage();
+    $_SESSION['flash_error'] = 'Could not start subscription: ' . user_error_text($e);
     header('Location: /billing/index.php');
     exit;
 }

@@ -52,7 +52,7 @@ if ($entry && $_SERVER['REQUEST_METHOD'] === 'POST') {
         header('Location: ' . $weekOf((string) $_POST['entry_date']));
         exit;
     } catch (RuntimeException $e) {
-        $err = $e->getMessage();
+        $err = user_error_text($e);
         $entry = array_merge($entry, $_POST);
     }
 }

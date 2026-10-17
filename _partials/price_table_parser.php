@@ -235,7 +235,7 @@ if (!function_exists('ptp_parse_width_price_input')) {
                 }
                 return ['rows' => $rows, 'error' => null];
             } catch (Throwable $e) {
-                return ['rows' => [], 'error' => 'Could not read the file: ' . $e->getMessage()];
+                return ['rows' => [], 'error' => 'Could not read the file: ' . (function_exists('user_error_text') ? user_error_text($e) : $e->getMessage())];   // also runs in the offline engine, which has no bootstrap
             }
         }
 

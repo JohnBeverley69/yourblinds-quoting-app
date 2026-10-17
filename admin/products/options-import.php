@@ -209,7 +209,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'upload') {
                     if (str_contains($e->getMessage(), 'uniq_option_per_product')) {
                         $skipped++;
                     } else {
-                        $rowErrs[] = "Row $rowNum: " . $e->getMessage();
+                        $rowErrs[] = "Row $rowNum: " . user_error_text($e);
                     }
                 }
             }
@@ -222,7 +222,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'upload') {
                 'mode'     => $hasHeaders ? 'header' : 'positional',
             ];
         } catch (Throwable $e) {
-            $error = 'Could not read the file: ' . $e->getMessage();
+            $error = 'Could not read the file: ' . user_error_text($e);
         }
     }
 }

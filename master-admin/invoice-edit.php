@@ -59,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
-        $_SESSION['flash_error'] = 'Could not update the invoice: ' . $e->getMessage();
+        $_SESSION['flash_error'] = 'Could not update the invoice: ' . user_error_text($e);
     }
     header('Location: ' . $back);
     exit;

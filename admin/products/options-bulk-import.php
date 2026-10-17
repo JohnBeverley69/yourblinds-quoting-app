@@ -177,7 +177,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stage  = 'map';
             }
         } catch (Throwable $e) {
-            $error = 'Could not read the file: ' . $e->getMessage();
+            $error = 'Could not read the file: ' . user_error_text($e);
         }
     }
 }

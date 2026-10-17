@@ -258,7 +258,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            $error = 'Could not save: ' . $e->getMessage();
+            $error = 'Could not save: ' . user_error_text($e);
         }
     }
 }

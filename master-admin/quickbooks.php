@@ -39,7 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION[$r['ran'] ? 'flash_success' : 'flash_error'] = $r['ran'] ? 'Done: ' . $r['message'] : $r['message'];
         }
     } catch (Throwable $e) {
-        $_SESSION['flash_error'] = $e->getMessage();
+        $_SESSION['flash_error'] = user_error_text($e);
     }
     header('Location: /master-admin/quickbooks.php#sending');
     exit;

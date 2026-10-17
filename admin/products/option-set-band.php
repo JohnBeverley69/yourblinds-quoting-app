@@ -57,7 +57,7 @@ try {
     $_SESSION['flash_success'] = $n . ' fabric' . ($n === 1 ? '' : 's')
         . ' set to band ' . ($band !== '' ? $band : '(none)') . '.';
 } catch (Throwable $e) {
-    $_SESSION['flash_error'] = 'Could not re-band: ' . $e->getMessage();
+    $_SESSION['flash_error'] = 'Could not re-band: ' . user_error_text($e);
 }
 
 header('Location: ' . $redirect);

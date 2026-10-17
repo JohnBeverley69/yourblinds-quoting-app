@@ -58,7 +58,7 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
     } catch (RuntimeException $e) {
-        $err = $e->getMessage();
+        $err = user_error_text($e);
         $old = $_POST;
     }
 }

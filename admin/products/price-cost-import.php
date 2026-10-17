@@ -150,7 +150,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$bands) { $error = 'That selection expired — upload the file again.'; }
         else {
             try { $summary = $overlayCost($bands); $summary['margin'] = $marginStats(); }
-            catch (Throwable $e) { $error = 'Database error: ' . $e->getMessage(); }
+            catch (Throwable $e) { $error = 'Database error: ' . user_error_text($e); }
         }
     } elseif (!isset($_FILES['file']) || ($_FILES['file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
         $error = 'Please choose a file to upload.';
@@ -195,12 +195,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     : 'No band sections found. Each band should start with "Band X" in column A.';
             } elseif (count($sheetsWithBands) === 1) {
                 try { $summary = $overlayCost($sheetsWithBands[0]['bands']); $summary['margin'] = $marginStats(); }
-                catch (Throwable $e) { $error = 'Database error: ' . $e->getMessage(); }
+                catch (Throwable $e) { $error = 'Database error: ' . user_error_text($e); }
             } else {
                 $stage = 'pick'; $pickSheets = $sheetsWithBands;   // several grids — pick the cost one
             }
         } catch (Throwable $e) {
-            $error = 'Could not read the file: ' . $e->getMessage();
+            $error = 'Could not read the file: ' . user_error_text($e);
         }
     }
 }
