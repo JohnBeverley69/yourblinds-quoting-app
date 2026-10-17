@@ -50,7 +50,7 @@ return [
     [
         'nav'   => 'Book it', 'icon' => '📞', 'secs' => 9,
         'title' => 'The phone rings. Booked in seconds.',
-        'body'  => 'One quick form does the lot. Type the customer\'s name, pop in the postcode and, on our Silver and Gold packages, the address fills itself in. Then book it your way: give the customer an exact time, or a time slot like morning, afternoon or evening, set up just the way you like them. Your choice. Make YourBlinds work the way you want to work. Choose who\'s going, click Book appointment, and the customer record is created as you book. Booking by time slot? Your customer gets a confirmation email with their slot. And the double-booking guard makes sure nobody is ever sent to two places at the same time.',
+        'body'  => 'One quick form does the lot. Type the customer\'s name, pop in the postcode and the address can fill itself in. Then book it your way: give the customer an exact time, or a time slot like morning, afternoon or evening, set up just the way you like them. Your choice. Make YourBlinds work the way you want to work. Choose who\'s going, click Book appointment, and the customer record is created as you book. Booking by time slot? Your customer gets a confirmation email with their slot. And the double-booking guard makes sure nobody is ever sent to two places at the same time.',
         'tier'  => $hwTier('feature_postcode_lookup', 'Postcode finder on %s', 'Postcode finder on Silver & Gold'),
         'mock'  => <<<'HTML'
 <div class="hw-win"><div class="hw-bar"><i></i><i></i><i></i><span>New appointment</span></div>
@@ -335,8 +335,8 @@ HTML,
     [
         'nav'   => 'Paid', 'icon' => '💷', 'secs' => 9,
         'title' => 'And then you get paid.',
-        'body'  => 'Email the invoice, with the balance due, in one tap. Record the payment, and the job settles itself to Paid and emails your customer a receipt. On Gold, Accounts shows everything outstanding at a glance, ready to export for your accountant.',
-        'tier'  => 'Accounts on Gold',
+        'body'  => 'Email the invoice, with the balance due, in one tap. Record the payment, and the job settles itself to Paid and emails your customer a receipt. Accounts shows everything outstanding at a glance, ready to export for your accountant.',
+        'tier'  => $hwTier('feature_accounts', 'Accounts on %s', 'Accounts on Gold'),
         'mock'  => <<<'HTML'
 <div class="hw-win"><div class="hw-bar"><i></i><i></i><i></i><span>Mrs Patel &middot; Invoice INV-2088</span></div>
   <div class="hw-body hw-paid">
