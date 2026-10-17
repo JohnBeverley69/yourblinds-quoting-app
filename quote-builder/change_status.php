@@ -259,16 +259,19 @@ try {
             if ($auto === 1 && $factoryId > 0 && $mayOrder) {
                 // Pure in-house? at least one line, and EVERY line is a factory-owned
                 // product with no external supplier. Mirrors order_suppliers' $isMfg.
+                // Made by ANY factory — a white-label factory's own "In House" lines count
+                // as much as the main factory's catalogue (mixed orders, TYL-2026-0006).
+                $facIn = implode(',', array_map('intval', qb_factory_client_ids($pdo))) ?: '0';
                 $chk = $pdo->prepare(
                     "SELECT COUNT(*) AS total,
                             SUM(CASE WHEN (p.supplier_name IS NULL OR TRIM(p.supplier_name) = ''
                                            OR LOWER(REPLACE(REPLACE(p.supplier_name, ' ', ''), '-', '')) = 'inhouse')
-                                      AND COALESCE(NULLIF(p.source_client_id, 0), p.client_id) = ?
+                                      AND COALESCE(NULLIF(p.source_client_id, 0), p.client_id) IN ($facIn)
                                      THEN 1 ELSE 0 END) AS mfg
                        FROM quote_items qi JOIN products p ON p.id = qi.product_id
                       WHERE qi.quote_id = ?"
                 );
-                $chk->execute([$factoryId, $quoteId]);
+                $chk->execute([$quoteId]);
                 $c     = $chk->fetch(PDO::FETCH_ASSOC) ?: ['total' => 0, 'mfg' => 0];
                 $total = (int) $c['total'];
                 $mfg   = (int) $c['mfg'];
