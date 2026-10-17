@@ -13,6 +13,7 @@ declare(strict_types=1);
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
 require_once __DIR__ . '/../_partials/factory_console.php';
+require_once __DIR__ . '/../_partials/process_order.php';   // the shared Process order button + summary
 
 requireFactoryOffice();
 
@@ -89,6 +90,9 @@ $activeNav = $stage === 'notplaced' ? 'factory-quotes' : 'factory-orders';
       a.fc-next:hover { text-decoration:underline; }
       .fc-next.urgent { color:#b91c1c; }
       .fc-next.done { color:#0d7a67; }
+      td .po-form { display:inline; margin:0; }
+      button.fc-po { font:inherit; font-size:.8125rem; font-weight:600; border:0; border-radius:6px; padding:.3rem .65rem; background:#1f3b5b; color:#fff; cursor:pointer; white-space:nowrap; }
+      button.fc-po:hover { filter:brightness(1.1); }
       .fc-sub a { color:inherit; }
       .fc-filters { display:flex; gap:.5rem; flex-wrap:wrap; margin:0 0 .9rem; }
       .fc-filters input, .fc-filters select { padding:.45rem .7rem; border:1px solid var(--border-strong); border-radius:8px;
@@ -211,7 +215,13 @@ $activeNav = $stage === 'notplaced' ? 'factory-quotes' : 'factory-orders';
                 <?php endforeach; ?></td><?php endif; ?>
               <td>
                 <?php [$nLabel, $nUrl, $nUrgent] = $r['next']; ?>
-                <?php if ($nUrl !== ''): ?><a class="fc-next<?= $nUrgent ? ' urgent' : '' ?>" href="<?= e($nUrl) ?>"><?= e($nLabel) ?></a>
+                <?php if ($r['stage'] === 'new' && $nLabel === 'Process order'): ?>
+                  <?php /* Pressable here (John, 2026-10-17: "it takes you to the Pipeline
+                     where you have to re-click it") — the shared button, same as the Pipeline. */ ?>
+                  <?= po_button((int) $r['id'], (string) $r['quote_number'],
+                        $r['tracks'] ?? ['make' => ['units' => 0, 'made' => 0, 'released' => false], 'buy' => []],
+                        'orders', 'fc-next fc-po', 'Process order', null, 'Take the order in, put its blinds on the floor and email its suppliers') ?>
+                <?php elseif ($nUrl !== ''): ?><a class="fc-next<?= $nUrgent ? ' urgent' : '' ?>" href="<?= e($nUrl) ?>"><?= e($nLabel) ?></a>
                 <?php else: ?><span class="fc-next<?= $nUrgent ? ' urgent' : '' ?><?= $nLabel === 'Done' ? ' done' : '' ?>"><?= e($nLabel) ?></span><?php endif; ?>
                 <?php if ($r['stage'] !== 'notplaced'): ?><a class="fc-rm" href="/factory/remake-new.php?order=<?= (int) $r['id'] ?>" title="Raise a remake on this order">&#8635; Remake</a><?php endif; ?></td>
             </tr>
@@ -225,6 +235,7 @@ $activeNav = $stage === 'notplaced' ? 'factory-quotes' : 'factory-orders';
     <p class="ui-hint" style="margin-top:.6rem">Showing the newest 400 orders.</p>
   <?php endif; ?>
 </main>
+<?= po_modal(po_skip_summary($pdo, current_factory_id())) ?>
 </div>
 <?php require_once __DIR__ . '/../_partials/factory_poll_banner.php'; fx_poll_banner(db(), 'incoming', current_factory_id()); ?>
 </body>
