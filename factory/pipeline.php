@@ -343,6 +343,9 @@ $activeNav = 'factory-pipeline';
       .pl-sups li form, .pl-sups li .po-form { margin-top:.15rem; }
       .pl-money { font-size:.78rem; }
       .pl-card form { margin:0; }
+      .pl-quick { margin-top:.25rem; }
+      .pl-quick form { margin:0; }
+      .pl-quick .pl-btn { min-height:2rem; padding:.35rem .6rem; }
       .pl-btn { display:block; width:100%; box-sizing:border-box; text-align:center; font:inherit; font-size:.8125rem; font-weight:600;
                 padding:.55rem .7rem; min-height:2.5rem; border-radius:8px; border:0; cursor:pointer; background:#1f3b5b; color:#fff; text-decoration:none; }
       .pl-btn:hover { filter:brightness(1.1); color:#fff; }
@@ -436,7 +439,13 @@ $activeNav = 'factory-pipeline';
               } else {
                   foreach ($cardLines as $l) if ($lineStatus($r, $l)[1] === 'bad') { $urgent = true; break; }
               }
+              // The card's next step. Process order sits UNDER the closed card
+              // (John, 2026-10-17: having to open the card to find it was a click
+              // too many); every other step stays inside the card.
+              $actHtml = $buyView ? '' : $action($part === 'make' && $tk ? (['tracks' => ['buy' => []] + $tk] + $r) : $r);
+              $quickProcess = str_contains($actHtml, '>Process order</button>');
             ?>
+            <div class="pl-slot">
             <details class="pl-card"<?= ($q !== '' || $account >= 0) ? ' open' : '' ?>>
               <summary title="<?= e($r['account']) ?>"><span class="pl-sn"><?= e((string) $r['quote_number']) ?></span><?php if ($part === 'make'): ?><span class="pl-ptag" title="The blinds we make">made</span><?php elseif ($part === 'buy'): ?><span class="pl-ptag" title="The bought-in items">bought-in</span><?php endif; ?><?php if ($r['remake_of'] !== ''): ?><span class="pl-rm" title="Remake of <?= e($r['remake_of']) ?>">R</span><?php endif; ?><?php if ($urgent): ?><span class="pl-dot" aria-label="Needs attention"></span><?php endif; ?></summary>
               <div class="pl-body">
@@ -478,10 +487,12 @@ $activeNav = 'factory-pipeline';
               <?php
                 // A bought-in card's buttons are on its supplier lines. A made
                 // part offers only the floor's step (See progress).
-                if (!$buyView) echo $action($part === 'make' && $tk ? (['tracks' => ['buy' => []] + $tk] + $r) : $r);
+                if (!$quickProcess) echo $actHtml;
               ?>
               </div>
             </details>
+            <?php if ($quickProcess): ?><div class="pl-quick"><?= $actHtml ?></div><?php endif; ?>
+            </div>
           <?php endforeach; ?>
         </section>
       <?php endforeach; ?>

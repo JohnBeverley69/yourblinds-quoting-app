@@ -721,8 +721,9 @@ return [
                 or <em>&middot; paid 8 Oct</em>. On Dispatched &middot; to invoice it shows <b>Needs invoicing</b>.</li>
           </ul>
 
-          <p><b>The Pipeline is the only screen with these buttons.</b> <b>Incoming orders</b> is the workshop&rsquo;s view: where
-             a step is due it names it and says <em>Do this on the Pipeline &rarr;</em>, which opens that order&rsquo;s card here. The
+          <p><b>The Pipeline is where orders are moved on.</b> A new order&rsquo;s <b>Process order</b> button sits just under its
+             card, so you don&rsquo;t need to open the card first. <b>Incoming orders</b> has the same <b>Process order</b> button; for any
+             other step it names the step and says <em>Do this on the Pipeline &rarr;</em>, which opens that order&rsquo;s card here. The
              Dashboard&rsquo;s order tiles open their column here, and the Orders list&rsquo;s <b>Next</b> links land on the order&rsquo;s
              card. A white-label factory has the Pipeline too (<b>Pipeline</b> in its menu once you switch to the <b>Factory</b> side),
              with one <b>Dispatched</b> column instead of the money columns.</p>
