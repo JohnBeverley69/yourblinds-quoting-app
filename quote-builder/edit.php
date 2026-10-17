@@ -1117,12 +1117,12 @@ if (is_factory_client($clientId) && function_exists('factory_console_user') && f
         ?>
             <div class="alert alert-error" role="status" style="display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;justify-content:space-between">
                 <span>This quote expired on <?= e(date('j F Y', (int) quote_accept_deadline($quote))) ?>
-                    (<?= (int) QUOTE_ACCEPT_DAYS ?> days after it was sent) — the customer can no longer accept it
+                    (<?= quote_valid_days((int) $quote['client_id']) ?> days after it was sent) — the customer can no longer accept it
                     from their link. Check the prices, then renew it or email it again.</span>
                 <form method="post" action="/quote-builder/renew_link.php" style="margin:0">
                     <?= csrf_field() ?>
                     <input type="hidden" name="quote_id" value="<?= (int) $quote['id'] ?>">
-                    <button type="submit" class="btn btn-secondary">Renew for <?= (int) QUOTE_ACCEPT_DAYS ?> days</button>
+                    <button type="submit" class="btn btn-secondary">Renew for <?= quote_valid_days((int) $quote['client_id']) ?> days</button>
                 </form>
             </div>
         <?php endif; ?>

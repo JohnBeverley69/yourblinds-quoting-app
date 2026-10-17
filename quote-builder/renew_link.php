@@ -38,4 +38,4 @@ db()->prepare('UPDATE quotes SET sent_at = NOW() WHERE id = ? AND client_id = ?'
     ->execute([$quoteId, $clientId]);
 
 qb_flash_redirect($back, 'success', 'Renewed — the customer can accept this quote for another '
-    . QUOTE_ACCEPT_DAYS . ' days (until ' . date('j F Y', time() + QUOTE_ACCEPT_DAYS * 86400) . ').');
+    . quote_valid_days($clientId) . ' days (until ' . date('j F Y', time() + quote_valid_days($clientId) * 86400) . ').');
