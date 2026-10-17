@@ -191,7 +191,7 @@ $activeNav = 'messages';
 
         <?php if (!$smsOn): ?>
             <div class="alert alert-info" role="status">
-                Emails you send are logged here on every plan. Customer texts are included in the Silver and Gold plans. <a href="/billing/index.php">See plans</a>
+                Emails you send are logged here on every plan. <?php require_once __DIR__ . '/../_partials/billing_helpers.php'; ?>Customer texts are included in <?= e(billing_feature_plans_phrase('feature_sms')) ?>. <a href="/billing/index.php">See plans</a>
             </div>
         <?php endif; ?>
 

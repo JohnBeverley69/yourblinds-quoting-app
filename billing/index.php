@@ -222,20 +222,25 @@ $activeNav = 'billing';
         .plan-card.tier-free     { box-shadow: inset 0 4px 0 #b87333; }
         .plan-card.tier-silver   { box-shadow: inset 0 4px 0 #9aa0a6; }
         .plan-card.tier-gold     { box-shadow: inset 0 4px 0 #d4af37; }
+        .plan-card.tier-platinum { box-shadow: inset 0 4px 0 #7f8fa6; }
         .plan-card.tier-free:not(.is-active):not(.is-trial)     { background: #fbf3ea; }
         .plan-card.tier-silver:not(.is-active):not(.is-trial)   { background: #f5f6f8; }
         .plan-card.tier-gold:not(.is-active):not(.is-trial)     { background: #fdf8e9; }
+        .plan-card.tier-platinum:not(.is-active):not(.is-trial) { background: #eef1f6; }
         [data-theme="dark"] .plan-card.tier-free:not(.is-active):not(.is-trial)     { background: rgba(184,115,51,0.12); }
         [data-theme="dark"] .plan-card.tier-silver:not(.is-active):not(.is-trial)   { background: rgba(154,160,166,0.12); }
         [data-theme="dark"] .plan-card.tier-gold:not(.is-active):not(.is-trial)     { background: rgba(212,175,55,0.12); }
+        [data-theme="dark"] .plan-card.tier-platinum:not(.is-active):not(.is-trial) { background: rgba(127,143,166,0.14); }
 
         /* "Your plan" summary tinted by the current tier. */
         .bill-summary.tier-free     { background: #fbf3ea; border-left: 4px solid #b87333; }
         .bill-summary.tier-silver   { background: #f5f6f8; border-left: 4px solid #9aa0a6; }
         .bill-summary.tier-gold     { background: #fdf8e9; border-left: 4px solid #d4af37; }
+        .bill-summary.tier-platinum { background: #eef1f6; border-left: 4px solid #7f8fa6; }
         [data-theme="dark"] .bill-summary.tier-free     { background: rgba(184,115,51,0.12); }
         [data-theme="dark"] .bill-summary.tier-silver   { background: rgba(154,160,166,0.12); }
         [data-theme="dark"] .bill-summary.tier-gold     { background: rgba(212,175,55,0.12); }
+        [data-theme="dark"] .bill-summary.tier-platinum { background: rgba(127,143,166,0.14); }
     </style>
 </head>
 <body>
@@ -246,7 +251,7 @@ $activeNav = 'billing';
         <div class="page-header">
             <div>
                 <h1 class="page-title">Billing</h1>
-                <p class="page-subtitle">Your plan tier — Bronze, Silver or Gold. Upgrade or downgrade any time.</p>
+                <p class="page-subtitle">Your plan tier — Bronze, Silver, Gold or Platinum. Upgrade or downgrade any time.</p>
             </div>
         </div>
 

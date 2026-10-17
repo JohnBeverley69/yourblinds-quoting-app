@@ -539,7 +539,8 @@ function sms_send(int $clientId, string $toRaw, string $body, array $ctx = []): 
 
     $block = null;
     if (!sms_feature_enabled($clientId)) {
-        $block = 'Texts are part of the Silver and Gold plans.';
+        require_once __DIR__ . '/billing_helpers.php';
+        $block = 'Texts are part of ' . billing_feature_plans_phrase('feature_sms') . '.';
     } elseif ($sender === '') {
         $block = 'Set a sender name in Settings → Texts first.';
     } elseif ($to === null) {

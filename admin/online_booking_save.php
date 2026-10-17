@@ -18,7 +18,8 @@ $clientId = (int) $user['client_id'];
 $back     = '/admin/settings.php#online-booking';
 
 if (!ob_feature_enabled($clientId)) {
-    $_SESSION['flash_error'] = 'Online booking is part of the Silver and Gold plans.';
+    require_once __DIR__ . '/../_partials/billing_helpers.php';
+    $_SESSION['flash_error'] = 'Online booking is part of ' . billing_feature_plans_phrase('feature_online_booking') . '.';
     header('Location: ' . $back);
     exit;
 }

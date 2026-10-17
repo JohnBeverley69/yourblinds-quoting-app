@@ -30,7 +30,7 @@ $smsHint     = 'color:#6b7280;font-size:0.875rem;margin:0 0 1rem;max-width:44rem
             and a heads-up when the fitter is on the way. Texts go out under your company name.
         </p>
         <p style="<?= $smsHint ?>">
-            Customer texts are included in the <strong>Silver</strong> and <strong>Gold</strong> plans.
+            <?php require_once __DIR__ . '/billing_helpers.php'; ?>Customer texts are included in <?= e(billing_feature_plans_phrase('feature_sms')) ?>.
             <a href="/billing/index.php">See plans</a>
         </p>
     </section>

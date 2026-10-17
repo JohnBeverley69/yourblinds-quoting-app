@@ -51,7 +51,7 @@ declare(strict_types=1);
  *  - the slot is re-checked inside a transaction that locks the company's
  *    online-booking row, so two customers can't both take the last place.
  *
- * Plans: Silver and Gold (feature_online_booking), plus the main factory.
+ * Plans: whichever tiers have feature_online_booking (Plan features board), plus the main factory.
  * Tables: migrate_online_booking.php (+ _lookups, _times, _phase2).
  */
 
@@ -121,7 +121,10 @@ function ob_feature_enabled(int $clientId): bool
  */
 function ob_status(int $clientId): array
 {
-    if (!ob_feature_enabled($clientId)) return [false, 'Online booking is part of the Silver and Gold plans.'];
+    if (!ob_feature_enabled($clientId)) {
+        require_once __DIR__ . '/billing_helpers.php';
+        return [false, 'Online booking is part of ' . billing_feature_plans_phrase('feature_online_booking') . '.'];
+    }
     $s = ob_settings($clientId);
     if ((int) $s['enabled'] !== 1)       return [false, 'Online booking is switched off.'];
     if ((string) ($s['slug'] ?? '') === '') return [false, 'There is no booking link name yet.'];
