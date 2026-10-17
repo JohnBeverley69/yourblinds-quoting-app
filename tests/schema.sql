@@ -355,6 +355,8 @@ CREATE TABLE `client_settings` (
   `process_skip_summary` tinyint(1) NOT NULL DEFAULT 0,
   `floor_sees_lanes` tinyint(1) NOT NULL DEFAULT 0,
   `feature_online_booking` tinyint(1) NOT NULL DEFAULT 0,
+  `sms_low_warned_at` datetime DEFAULT NULL,
+  `sms_out_warned_at` datetime DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uniq_client_settings_client` (`client_id`),
   CONSTRAINT `fk_client_settings_client` FOREIGN KEY (`client_id`) REFERENCES `clients` (`id`) ON DELETE CASCADE ON UPDATE CASCADE

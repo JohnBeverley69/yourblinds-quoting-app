@@ -32,6 +32,8 @@ function email_log_kinds(): array
         'account_document' => 'Invoice / credit note',
         'statement'        => 'Statement',
         'supplier_order'   => 'Supplier order',
+        'texts_low'        => 'Texts running low',
+        'texts_out'        => 'Texts stopped',
     ];
 }
 

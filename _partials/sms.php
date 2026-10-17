@@ -667,6 +667,97 @@ function sms_check_pending(int $minMinutes = 30, int $max = 50): array
 }
 
 /* ------------------------------------------------------------------ *
+ *  Running low / run out: email the company's admins (John, 17 Oct)
+ * ------------------------------------------------------------------ */
+
+/** Texts this company can still send: what's left of the month's allowance + bundle texts. */
+function sms_texts_left(int $clientId): int
+{
+    return max(0, sms_monthly_limit($clientId) - sms_used_this_month($clientId)) + sms_bundle_balance($clientId);
+}
+
+/** "Running low" kicks in at 20% of the monthly allowance left (at least 5 texts). */
+function sms_low_threshold(int $clientId): int
+{
+    return max(5, (int) ceil(sms_monthly_limit($clientId) * 0.2));
+}
+
+/**
+ * Email the company's admins that texts are running low ('low') or have
+ * stopped ('out'), with a link to buy more. Each goes at most once a month,
+ * plus once more after any new bundle (buying resets the warning).
+ * Never throws; returns how many emails went.
+ */
+function sms_credit_notice(int $clientId, string $type): int
+{
+    if (!in_array($type, ['low', 'out'], true)) return 0;
+    $col = $type === 'low' ? 'sms_low_warned_at' : 'sms_out_warned_at';
+    try {
+        $pdo = db();
+        $st  = $pdo->prepare("SELECT {$col} FROM client_settings WHERE client_id = ? LIMIT 1");
+        $st->execute([$clientId]);
+        $last = $st->fetchColumn();
+        if ($last) {
+            $lastBundle = null;
+            if (sms_bundles_ready()) {
+                $b = $pdo->prepare("SELECT MAX(paid_at) FROM sms_bundles WHERE client_id = ? AND status = 'paid'");
+                $b->execute([$clientId]);
+                $lastBundle = $b->fetchColumn() ?: null;
+            }
+            $sinceMonth  = (string) $last >= date('Y-m-01 00:00:00');
+            $sinceBundle = $lastBundle === null || (string) $last >= (string) $lastBundle;
+            if ($sinceMonth && $sinceBundle) return 0;   // already told them
+        }
+        // Claim it before sending, so two texts at once can't both email.
+        $pdo->prepare("INSERT INTO client_settings (client_id, {$col}) VALUES (?, NOW())
+                       ON DUPLICATE KEY UPDATE {$col} = NOW()")->execute([$clientId]);
+
+        $to = $pdo->prepare(
+            "SELECT DISTINCT email FROM client_users
+              WHERE client_id = ? AND role = 'admin' AND active = 1 AND email LIKE '%@%'"
+        );
+        $to->execute([$clientId]);
+        $emails = array_values(array_filter($to->fetchAll(PDO::FETCH_COLUMN), static fn ($e) => filter_var($e, FILTER_VALIDATE_EMAIL)));
+        if (!$emails) return 0;
+
+        $co = $pdo->prepare('SELECT company_name FROM clients WHERE id = ? LIMIT 1');
+        $co->execute([$clientId]);
+        $company = (string) ($co->fetchColumn() ?: 'your company');
+        $base    = rtrim((string) (env('APP_URL', '') ?: 'https://yourblinds.uk'), '/');
+        $buy     = $base . '/billing/texts.php';
+        $limit   = sms_monthly_limit($clientId);
+        $left    = sms_texts_left($clientId);
+
+        if ($type === 'low') {
+            $subject = "Texts running low: {$left} left for {$company}";
+            $body    = "Hello,\n\n{$company} has {$left} text" . ($left === 1 ? '' : 's') . " left this month "
+                     . "(your plan includes {$limit} a month, plus any bundle texts you've bought).\n\n"
+                     . "When they run out, appointment confirmations, reminders and other texts to your customers will stop "
+                     . "until next month. To keep them going, buy a bundle of texts here:\n{$buy}\n\n"
+                     . "Unused bundle texts carry over to the following months.\n\nYourBlinds";
+        } else {
+            $subject = "Texts have stopped for {$company}";
+            $body    = "Hello,\n\n{$company} has used all of this month's {$limit} texts and has no bundle texts left, "
+                     . "so texts to your customers (appointment confirmations, reminders and so on) are not being sent.\n\n"
+                     . "Buy a bundle of texts to start them again straight away:\n{$buy}\n\n"
+                     . "Otherwise they start again on the 1st of next month. Texts that didn't go are listed on the Messages page "
+                     . "as \"Not sent\".\n\nYourBlinds";
+        }
+
+        require_once __DIR__ . '/../mailer.php';
+        $sent = 0;
+        foreach (array_unique($emails) as $addr) {
+            if (mailer_send($addr, $subject, $body, null, null, ['links' => [$buy => 'Buy more texts'],
+                'log' => ['client_id' => $clientId, 'kind' => 'texts_' . $type]])) $sent++;
+        }
+        return $sent;
+    } catch (Throwable $e) {
+        error_log('sms_credit_notice(' . $clientId . ', ' . $type . '): ' . $e->getMessage());
+        return 0;
+    }
+}
+
+/* ------------------------------------------------------------------ *
  *  The one send function
  * ------------------------------------------------------------------ */
 
@@ -718,6 +809,7 @@ function sms_send(int $clientId, string $toRaw, string $body, array $ctx = []): 
         $allow      = sms_allowance_check($clientId, $segments);
         $block      = $allow['block'];
         $fromBundle = $allow['from_bundle'];
+        if ($block !== null) sms_credit_notice($clientId, 'out');   // tell the admins texts have stopped
     }
     if ($block === null && !sms_provider_configured()) {
         $block = 'Texting is not connected yet.';
@@ -751,6 +843,7 @@ function sms_send(int $clientId, string $toRaw, string $body, array $ctx = []): 
         if (!empty($res['ref']) && sms_apply_provider_status((string) $res['ref'], (string) ($res['pstatus'] ?? ''), $res['failurereason'] ?? null) === 'failed') {
             return ['ok' => false, 'status' => 'failed', 'message' => 'The SMS Works refused this text (' . strtolower((string) $res['pstatus']) . ').', 'id' => $id];
         }
+        if (sms_texts_left($clientId) <= sms_low_threshold($clientId)) sms_credit_notice($clientId, 'low');
         return ['ok' => true, 'status' => 'sent', 'message' => 'Text sent to ' . sms_display_number((string) $to) . '.', 'id' => $id];
     }
     db()->prepare("UPDATE messages SET status = 'failed', status_detail = ? WHERE id = ?")

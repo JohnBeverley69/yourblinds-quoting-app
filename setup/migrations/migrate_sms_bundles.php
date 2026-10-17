@@ -61,4 +61,17 @@ try {
     echo "  Added messages.from_bundle.\n";
 }
 
+// When the "running low" / "texts have stopped" emails last went to this
+// company's admins (sms_credit_notice() in _partials/sms.php), so each goes
+// once a month, and once more after any new bundle.
+foreach (['sms_low_warned_at', 'sms_out_warned_at'] as $col) {
+    try {
+        $pdo->query("SELECT {$col} FROM client_settings LIMIT 0");
+        echo "  client_settings.{$col} already exists — skipped.\n";
+    } catch (Throwable $e) {
+        $pdo->exec("ALTER TABLE client_settings ADD COLUMN {$col} DATETIME NULL");
+        echo "  Added client_settings.{$col}.\n";
+    }
+}
+
 echo "\nDone. Set the packs and prices on Master Admin -> Texts; companies buy them on Messages -> Buy more texts.\n";
