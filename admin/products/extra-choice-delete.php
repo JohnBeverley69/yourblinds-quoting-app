@@ -19,6 +19,11 @@ $user    = current_user();
 $id      = (int) ($_POST['id']       ?? 0);
 $extraId = (int) ($_POST['extra_id'] ?? 0);
 
+// Factory-catalogue pricing lock (_partials/product_lock.php), as extra-delete.php.
+require_once __DIR__ . '/../../_partials/product_lock.php';
+pl_require_unlocked_any([pl_product_of('choice', $id), pl_product_of('extra', $extraId)],
+    $extraId > 0 ? '/admin/products/extra.php?id=' . $extraId : '/admin/products/index.php');
+
 if ($id > 0) {
     // Tenant-scoped DELETE: join through to product_extras to scope by client_id.
     $stmt = db()->prepare(

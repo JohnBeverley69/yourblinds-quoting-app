@@ -111,7 +111,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $payload = json_decode((string) ($_POST['payload'] ?? ''), true);
         $map     = $_POST['map'] ?? [];   // sheet idx => product id (0 = skip)
         // Factory-catalogue pricing lock (_partials/product_lock.php).
-        pl_require_unlocked_any(array_map('intval', (array) $map), '/admin/products/options-bulk-import.php');
+        // Each sheet posts a LIST of product ids (map[i][]), so flatten before intval.
+        $mapIds = [];
+        foreach ((array) $map as $ids) foreach ((array) $ids as $pid) $mapIds[] = (int) $pid;
+        pl_require_unlocked_any($mapIds, '/admin/products/options-bulk-import.php');
         if (!is_array($payload)) {
             $error = 'That upload expired — please upload the file again.';
         } else {

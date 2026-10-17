@@ -87,7 +87,7 @@ function pl_product_of(string $kind, int $id): int
         'system' => 'SELECT product_id FROM product_systems WHERE id = ?',
         'option' => 'SELECT product_id FROM product_options WHERE id = ?',
         'extra'  => 'SELECT product_id FROM product_extras WHERE id = ?',
-        'choice' => 'SELECT e.product_id FROM product_extra_choices c JOIN product_extras e ON e.id = c.extra_id WHERE c.id = ?',
+        'choice' => 'SELECT e.product_id FROM product_extra_choices c JOIN product_extras e ON e.id = c.product_extra_id WHERE c.id = ?',
     ][$kind] ?? null;
     if ($sql === null) return 0;
     try {
@@ -95,7 +95,11 @@ function pl_product_of(string $kind, int $id): int
         $st->execute([$id]);
         return (int) ($st->fetchColumn() ?: 0);
     } catch (Throwable $e) {
-        return 0;
+        // Fail closed: callers treat 0 as "no product" = unlocked, so a broken
+        // lookup must not return 0 (a wrong column here once left the choice
+        // editor unlocked on every factory copy).
+        error_log("pl_product_of($kind, $id): " . $e->getMessage());
+        throw $e;
     }
 }
 
