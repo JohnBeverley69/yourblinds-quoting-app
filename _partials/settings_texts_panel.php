@@ -70,7 +70,7 @@ $smsHint     = 'color:#6b7280;font-size:0.875rem;margin:0 0 1rem;max-width:44rem
             <div class="form-group" style="max-width:20rem">
                 <label for="sms_sender_name">Sender name <span style="color:#9ca3af;font-weight:400">(what the customer sees, up to 11 characters; leave blank for &ldquo;<?= e(SMS_DEFAULT_SENDER) ?>&rdquo;)</span></label>
                 <input id="sms_sender_name" name="sms_sender_name" type="text" maxlength="11"
-                       value="<?= e($smsSender) ?>" placeholder="<?= e(SMS_DEFAULT_SENDER) ?>">
+                       value="<?= e($smsSender !== '' ? $smsSender : SMS_DEFAULT_SENDER) ?>" placeholder="<?= e(SMS_DEFAULT_SENDER) ?>">
                 <?php if (($smsRisk = sms_sender_risk($smsSender)) !== null): ?>
                     <div class="alert alert-error" role="alert" style="margin-top:0.5rem;font-size:0.8125rem"><?= e($smsRisk) ?></div>
                 <?php else: ?>
