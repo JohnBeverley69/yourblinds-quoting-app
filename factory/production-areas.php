@@ -23,6 +23,16 @@ $MASTER = current_factory_id();
 
 require_once __DIR__ . '/../_partials/factory_kv.php';   // fx_kv_get / fx_kv_set
 
+// The workshop WiFi is PER FACTORY (wifi_ssid:<factory id>): it used to be one
+// global pair, so a white-label factory saw the main factory's WiFi password in
+// its setup QR and saving its own overwrote it. The main factory still reads the
+// old global pair until it next saves, so nothing needs migrating.
+$wifiGet = static function (string $name) use ($pdo, $MASTER): string {
+    $v = fx_kv_get($pdo, $name . ':' . $MASTER, null);
+    if ($v === null && $MASTER === factory_client_id()) $v = fx_kv_get($pdo, $name, null);
+    return (string) ($v ?? '');
+};
+
 $scanHost = (string) ($_SERVER['HTTP_HOST'] ?? 'yourblinds.uk');
 
 /**
@@ -90,8 +100,8 @@ if (isset($_GET['qr'])) {
         $row = $st->fetch(PDO::FETCH_ASSOC) ?: null;
     } catch (Throwable $e) { $row = null; }
 
-    $qrSsid = (string) fx_kv_get($pdo, 'wifi_ssid', '');
-    $qrPass = (string) fx_kv_get($pdo, 'wifi_password', '');
+    $qrSsid = $wifiGet('wifi_ssid');
+    $qrPass = $wifiGet('wifi_password');
 
     if (!$row || trim((string) ($row['scan_key'] ?? '')) === '' || trim($qrSsid) === '') {
         http_response_code(404);
@@ -222,8 +232,8 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['flash_success'] = 'Area removed. Any blinds already on the floor for it are no longer tied to an area, so every bench can scan them.';
             }
         } elseif ($action === 'set_wifi') {
-            // The network every bench scanner joins. Factory-wide, so it lives in
-            // factory_kv alongside the scan secret rather than per area.
+            // The network every bench scanner joins: one per factory (not per
+            // area), keyed on the acting factory in factory_kv.
             $ssid = trim((string) ($_POST['wifi_ssid'] ?? ''));
             $pass = (string) ($_POST['wifi_password'] ?? '');
             // AT+RAP=<ssid>,<password> is comma-separated and the command list is
@@ -232,10 +242,15 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
             if (strpbrk($ssid, ',;') !== false || strpbrk($pass, ',;') !== false) {
                 $_SESSION['flash_error'] = 'WiFi name and password cannot contain a comma or semicolon — the scanner\'s setup command uses both as separators.';
             } else {
-                fx_kv_set($pdo, 'wifi_ssid', $ssid);
+                fx_kv_set($pdo, 'wifi_ssid:' . $MASTER, $ssid);
                 // Blank password box = leave the stored one alone, so saving a
                 // corrected SSID doesn't wipe the password you can't see.
-                if ($pass !== '') fx_kv_set($pdo, 'wifi_password', $pass);
+                if ($pass !== '') fx_kv_set($pdo, 'wifi_password:' . $MASTER, $pass);
+                // The main factory's first save carries a password it can't see over
+                // from the old global pair, so a blank box still leaves it alone.
+                elseif ($MASTER === factory_client_id() && fx_kv_get($pdo, 'wifi_password:' . $MASTER, null) === null) {
+                    fx_kv_set($pdo, 'wifi_password:' . $MASTER, (string) fx_kv_get($pdo, 'wifi_password', ''));
+                }
                 $_SESSION['flash_success'] = 'Workshop WiFi saved — the setup QR codes now carry it.';
             }
         } elseif ($action === 'gen_scan_key') {
@@ -516,8 +531,8 @@ require __DIR__ . '/../_partials/factory_head.php';
       <p class="pa-sub">Add an area first, then generate its scanner key here.</p>
     <?php else: ?>
       <?php
-        $wifiSsid = (string) fx_kv_get($pdo, 'wifi_ssid', '');
-        $wifiPass = (string) fx_kv_get($pdo, 'wifi_password', '');
+        $wifiSsid = $wifiGet('wifi_ssid');
+        $wifiPass = $wifiGet('wifi_password');
       ?>
       <form method="post" class="wifi-bar">
         <?= csrf_field() ?>

@@ -142,3 +142,44 @@ test('a factory\'s Build Rules save never changes another factory\'s allowances 
     db()->exec("DELETE FROM allowance_rows WHERE client_id = 103 AND table_name = 'roller_pole' AND key_norm = 'cloth'");
     $_SESSION = [];
 });
+
+test('a white-label factory\'s bench scanner key can\'t move the main factory\'s blinds (audit 2026-10-17)', function () {
+    require_once APP_ROOT . '/_partials/qr.php';
+    $a = as_user('alpha.admin');
+    $qid = flow_new_quote($a, fx('customer_alpha'), 'SCAN-KEY-PEEK');
+    flow_add_line($a, $qid, 101, price_scenarios()['Roller, side winder, 1200 × 1600']);
+    flow_place_order($a, $qid);
+    t_submit(as_user('factory.office'), '/factory/process-order.php', ['quote_id' => $qid, 'back' => '/factory/pipeline.php']);
+    $item = (int) t_val('SELECT id FROM quote_items WHERE quote_id = ? ORDER BY id LIMIT 1', [$qid]);
+    $streams = static fn () => t_rows('SELECT s.* FROM factory_blind_streams s JOIN factory_blind_jobs j ON j.id = s.blind_job_id WHERE j.quote_id = ? ORDER BY s.id', [$qid]);
+    // A blind with no bench yet (unmapped stream) is the case the area check lets through.
+    db()->prepare('UPDATE factory_blind_streams s JOIN factory_blind_jobs j ON j.id = s.blind_job_id SET s.area_id = NULL WHERE j.quote_id = ?')->execute([$qid]);
+    $before = $streams();
+    check($before !== [], 'set-up: the main factory\'s blind is not on the floor');
+    $key = 'zzcharliebenchkey' . substr(md5((string) $qid), 0, 10);
+    db()->prepare("INSERT INTO production_areas (client_id, name, scan_key) VALUES (103, 'Charlie bench', ?)")->execute([$key]);
+    $r = (new YbHttp())->get('/factory/scan-in.php?key=' . $key . '&c=' . qr_blind_code($item, 1, 0));
+    check_same(409, $r->status, 'scan reply status (' . trim($r->body) . ')');
+    check_same($before, $streams(), 'the main factory\'s blind after the white-label bench scanned it');
+    db()->exec("DELETE FROM production_areas WHERE name = 'Charlie bench'");
+});
+
+test('each factory has its own workshop WiFi (audit 2026-10-17)', function () {
+    require_once APP_ROOT . '/_partials/factory_kv.php';
+    fx_kv_set(db(), 'wifi_ssid', 'BEV-WORKSHOP');      // the main factory's, saved before WiFi was per factory
+    fx_kv_set(db(), 'wifi_password', 'bev-secret-pw');
+    db()->exec("INSERT INTO production_areas (client_id, name, scan_key) VALUES (103, 'Charlie wifi bench', 'zzcharliewifikey000001')");
+    $aid = (int) db()->lastInsertId();
+    $c = as_user('charlie.office');
+    $page = $c->get('/factory/production-areas.php');
+    check_not_contains('BEV-WORKSHOP', $page->body, 'the white-label factory\'s Production areas page');
+    check_not_contains('bev-secret-pw', $c->get("/factory/production-areas.php?qr=$aid&big=1")->body, 'the white-label factory\'s setup QR page');
+    t_submit($c, '/factory/production-areas.php', ['_action' => 'set_wifi', 'wifi_ssid' => 'CHARLIE-NET', 'wifi_password' => 'charlie-pw']);
+    $main = as_user('factory.office')->get('/factory/production-areas.php')->body;
+    check_contains('BEV-WORKSHOP', $main, 'the main factory still sees its own WiFi');
+    check_not_contains('CHARLIE-NET', $main, 'the main factory\'s Production areas page');
+    check_contains('CHARLIE-NET', $c->get('/factory/production-areas.php')->body, 'the white-label factory sees its own WiFi');
+    db()->exec("DELETE FROM production_areas WHERE id = $aid");
+    db()->exec("DELETE FROM factory_kv WHERE k LIKE 'wifi\_%'");
+    $_SESSION = [];
+});
