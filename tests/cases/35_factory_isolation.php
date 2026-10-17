@@ -124,3 +124,21 @@ test('one factory\'s dispatched delivery note doesn\'t move another factory\'s o
         'Charlie got more than one note');
     $_SESSION = [];
 });
+
+test('a factory\'s Build Rules save never changes another factory\'s allowances (audit 2026-10-17)', function () use (&$s) {
+    if (empty($s['charlie_product'])) skip('set-up failed');
+    // Charlie gets its own copy of one main-factory allowance, so both factories have the key.
+    db()->exec("DELETE FROM allowance_rows WHERE client_id = 103 AND table_name = 'roller_pole' AND key_norm = 'cloth'");
+    db()->exec("INSERT INTO allowance_rows (client_id, table_name, key_norm, keys_display, value, seq) VALUES (103, 'roller_pole', 'cloth', 'Cloth', 5, 0)");
+    $main = static fn () => (float) t_val("SELECT value FROM allowance_rows WHERE client_id = 3 AND table_name = 'roller_pole' AND key_norm = 'cloth'");
+    $mainBefore = $main();
+    $c = as_user('charlie.office');
+    $r = t_submit($c, '/factory/build-rules-v2.php?product_id=' . $s['charlie_product'],
+        ['cut' => ['Anything' => ['alw:roller_pole:cloth' => '999']], 'cutdir' => ['Anything' => 'mixed']]);
+    check(!$r->phpErrors, "PHP problems:\n    " . implode("\n    ", $r->phpErrors));
+    check_same($mainBefore, $main(), 'the main factory\'s allowance after Charlie saved its own');
+    check_same(999.0, (float) t_val("SELECT value FROM allowance_rows WHERE client_id = 103 AND table_name = 'roller_pole' AND key_norm = 'cloth'"),
+        'Charlie\'s own allowance after its save');
+    db()->exec("DELETE FROM allowance_rows WHERE client_id = 103 AND table_name = 'roller_pole' AND key_norm = 'cloth'");
+    $_SESSION = [];
+});
