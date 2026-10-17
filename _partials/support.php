@@ -278,6 +278,26 @@ function support_create_ticket(array $user, string $category, string $message, a
     return $id;
 }
 
+/**
+ * Data protection (John, 2026-10-17): a RESOLVED ticket is deleted 12 months
+ * after it was last touched (resolved / noted). Tickets still New or In progress
+ * are never removed. Tickets carry the reporter's name, email and whatever they
+ * typed, and no files, so deleting the row removes it all. Run by
+ * cron_messages.php alongside the Messages-log purge; a batch at a time.
+ * Returns how many were deleted.
+ */
+function support_purge_old(int $months = 12): int
+{
+    try {
+        $cut = (new DateTimeImmutable('now'))->modify("-{$months} months")->format('Y-m-d H:i:s');
+        $st  = db()->prepare("DELETE FROM support_tickets WHERE status = 'resolved' AND updated_at < ? LIMIT 2000");
+        $st->execute([$cut]);
+        return $st->rowCount();
+    } catch (Throwable $e) {
+        return 0;   // pre-migration
+    }
+}
+
 /** Count of tickets still marked New — for the sidebar badge. Defensive. */
 function support_new_count(): int
 {

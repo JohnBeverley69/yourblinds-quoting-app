@@ -7,7 +7,8 @@ declare(strict_types=1);
  * Sends, 10am–8pm UK time:
  *   - day-before appointment reminders (sms_run_day_before(), _partials/sms.php)
  *   - quote follow-ups (qfu_run(), _partials/quote_follow_up.php)
- * and deletes Messages-log entries over 12 months old (sms_purge_old()).
+ * and deletes Messages-log entries over 12 months old (sms_purge_old()) and
+ * support tickets resolved over 12 months ago (support_purge_old()).
  *
  * RUN IT — one of:
  *   CLI (the Cloudways cron; no auth needed, nothing served):
@@ -113,3 +114,8 @@ if ((int) $now->format('G') < 10 || (int) $now->format('G') >= 20) {
 // Messages log retention: 12 months (privacy policy).
 $purged = sms_purge_old();
 if ($purged > 0) echo "Messages log: {$purged} entries over 12 months old deleted.\n";
+
+// Support tickets: resolved ones go 12 months after they were resolved.
+require_once __DIR__ . '/_partials/support.php';
+$tk = support_purge_old();
+if ($tk > 0) echo "Support tickets: {$tk} resolved over 12 months ago deleted.\n";

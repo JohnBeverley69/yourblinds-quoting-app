@@ -234,6 +234,7 @@ $activeNav = 'support';
                 <p class="page-subtitle">
                     Reports sent from the <strong>💬 Support</strong> button on every page, with the page, version,
                     browser, JavaScript errors and last clicks captured automatically.
+                    Resolved tickets are deleted 12 months after they were resolved (data protection).
                 </p>
             </div>
             <div style="display:flex;gap:0.5rem;flex-wrap:wrap">
