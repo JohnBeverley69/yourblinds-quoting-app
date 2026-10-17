@@ -228,7 +228,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         // Shared allowance tables, so a "what happens" formula can still LOOKUP().
         $allowances = [];
         try {
-            foreach ($pdo->query('SELECT table_name, key_norm, value FROM allowance_rows') as $ar) {
+            $arq = $pdo->prepare('SELECT table_name, key_norm, value FROM allowance_rows WHERE client_id = ?');
+            $arq->execute([$MASTER]);
+            foreach ($arq as $ar) {
                 $allowances[strtolower((string) $ar['table_name'])][(string) $ar['key_norm']] = (float) $ar['value'];
             }
         } catch (Throwable $e) { /* allowance_rows not migrated */ }

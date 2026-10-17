@@ -70,7 +70,9 @@ if ($productId > 0) {
 // the looked-up value so those cuts show as a plain editable number too.
 $alw = [];
 try {
-    $ars = $pdo->query('SELECT table_name, key_norm, value FROM allowance_rows');
+    // This factory's own allowances only (each factory has its own rows).
+    $ars = $pdo->prepare('SELECT table_name, key_norm, value FROM allowance_rows WHERE client_id = ?');
+    $ars->execute([$MASTER]);
     foreach ($ars->fetchAll(PDO::FETCH_ASSOC) as $a) {
         $alw[strtolower((string) $a['table_name'])][(string) $a['key_norm']] = (float) $a['value'];
     }
@@ -537,6 +539,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         header("Location: $redirect"); exit;
     }
 
+    // The general save edits one product's rules (and the factory's allowances
+    // they LOOKUP); with no product of this factory's there is nothing to save.
+    if ($productId === 0) {
+        $_SESSION['flash_error'] = 'Pick one of your products first.';
+        header('Location: /factory/build-rules-v2.php');
+        exit;
+    }
+
     $edits = (array) ($_POST['cut'] ?? []);   // [ varName => [ rowIdx => takeoff ] ]
     $fmtN = static fn ($v) => rtrim(rtrim(number_format((float) $v, 3, '.', ''), '0'), '.');
     // $adj is the actual change to the measurement: negative shrinks, positive grows.
@@ -549,7 +559,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $pdo->beginTransaction();
         $sel = $pdo->prepare('SELECT rows_json FROM build_variables WHERE product_id = ? AND name = ?');
         $upd = $pdo->prepare('UPDATE build_variables SET rows_json = ? WHERE product_id = ? AND name = ?');
-        $alwUpd = $pdo->prepare('UPDATE allowance_rows SET value = ? WHERE LOWER(table_name) = ? AND key_norm = ?');
+        // Scoped to the acting factory: without client_id this rewrote every
+        // factory's allowance with that key (Beverley's and white-labels' alike).
+        $alwUpd = $pdo->prepare('UPDATE allowance_rows SET value = ? WHERE LOWER(table_name) = ? AND key_norm = ? AND client_id = ?');
         foreach ($edits as $vname => $rowTakes) {
             $vname = (string) $vname;
             // Each cut declares its direction: deduct (positive shrinks), add
@@ -582,7 +594,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $rest = explode(':', substr($tok, 4), 2);
                         if (count($rest) < 2) continue;
                         // Base + LOOKUP(value): the stored allowance IS the signed change.
-                        $alwUpd->execute([$adj, strtolower($rest[0]), $rest[1]]);
+                        $alwUpd->execute([$adj, strtolower($rest[0]), $rest[1], $MASTER]);
                     } elseif (strncmp($tok, 'new:', 4) === 0) {
                         // Brand-new row for a previously-rowless option choice.
                         if ($varBase === null) continue;
