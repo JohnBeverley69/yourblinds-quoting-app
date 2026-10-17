@@ -8,7 +8,9 @@ require_once __DIR__ . '/../_partials/customer_access.php';
 requireLogin();
 
 $user     = current_user();
-$clientId = $user['client_id'];
+$clientId = $user['client_id'];
+require_once __DIR__ . '/../_partials/plan_gate.php';
+plan_require_feature((int) $clientId, 'customers');   // plan features (Master Admin → Plan features)
 $isAdmin  = $user['role'] === 'admin';
 
 $id = (int) ($_GET['id'] ?? $_POST['id'] ?? 0);

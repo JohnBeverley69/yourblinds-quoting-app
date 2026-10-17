@@ -92,8 +92,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     // permissions". People already on the account are never affected.
     require_once __DIR__ . '/../_partials/plan_gate.php';
     $planKey = $rolesIn === ['fitter'] ? 'fitters' : 'team';
-    $planErr = plan_feature_allowed((int) $clientId, $planKey)
-        ? '' : plan_feature_message($planKey) . ' Upgrade on the Billing page to add more people.';
+    $planOk  = $planKey === 'fitters'
+        ? plan_feature_allowed((int) $clientId, 'fitters')
+        : plan_feature_allowed((int) $clientId, 'team');
+    $planErr = $planOk ? '' : plan_feature_message($planKey) . ' Upgrade on the Billing page to add more people.';
 
     if ($planErr !== '') {
         $error = $planErr;

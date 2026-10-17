@@ -11,7 +11,9 @@ require __DIR__ . '/../_partials/slot_window.php';
 requireLogin();
 
 $user     = current_user();
-$clientId = $user['client_id'];
+$clientId = $user['client_id'];
+require_once __DIR__ . '/../_partials/plan_gate.php';
+plan_require_feature((int) $clientId, 'calendar');   // plan features (Master Admin → Plan features)
 $isAdmin  = $user['role'] === 'admin';
 
 // Postcode lookup add-on — gates the lookup widget rendered inside the

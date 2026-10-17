@@ -37,6 +37,10 @@ if ($publicMode) {
     requireLogin();
     $user     = current_user();
     $clientId = (int) $user['client_id'];
+    // Plan features (Master Admin → Plan features). The PUBLIC InstaPrice above
+    // is the sign-up funnel and stays open; this is a signed-in company's own.
+    require_once __DIR__ . '/../_partials/plan_gate.php';
+    plan_require_feature($clientId, 'instaprice');
     $isAdmin  = ($user['role'] ?? '') === 'admin';
     $_perms   = current_user_permissions();
     $canCreateQuotes = $isAdmin || !empty($_perms['can_create_quotes']);

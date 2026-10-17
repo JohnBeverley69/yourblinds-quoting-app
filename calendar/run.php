@@ -9,7 +9,9 @@ require __DIR__ . '/../_partials/job_status_colours.php';
 requireLogin();
 
 $user     = current_user();
-$clientId = $user['client_id'];
+$clientId = $user['client_id'];
+require_once __DIR__ . '/../_partials/plan_gate.php';
+plan_require_feature((int) $clientId, 'calendar');   // plan features (Master Admin → Plan features)
 
 // ---------------------------------------------------------------------------
 // Resolve the day being viewed. ?date=YYYY-MM-DD, defaulting to today.

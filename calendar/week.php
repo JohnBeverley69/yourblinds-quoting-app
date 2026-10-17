@@ -40,7 +40,9 @@ $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
 $user     = current_user();
-$clientId = (int) $user['client_id'];
+$clientId = (int) $user['client_id'];
+require_once __DIR__ . '/../_partials/plan_gate.php';
+plan_require_feature((int) $clientId, 'calendar');   // plan features (Master Admin → Plan features)
 $myUserId = (int) $user['user_id'];
 $isAdmin  = ($user['role'] ?? '') === 'admin';
 

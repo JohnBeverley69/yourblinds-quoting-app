@@ -191,7 +191,7 @@ $navSections = [
         'name'  => 'Work',
         'items' => [
             'dashboard' => ['/dashboard/index.php',         'Dashboard', $hasQuotes && $canSeeAnyDashPanel && $_ybPlan('dashboard')],
-            'calendar'  => ['/calendar/index.php',          'Calendar',  true],
+            'calendar'  => ['/calendar/index.php',          'Calendar',  $_ybPlan('calendar')],
             'pipeline'  => ['/orders/pipeline.php',         'Pipeline',  $hasQuotes && $isStaff && $_ybPlan('pipeline')],
             // Production back-office (its own app) — makes both retail & trade.
             'factory'   => ['/factory/incoming-orders.php', 'Factory',   $canSeeFactory],
@@ -207,7 +207,7 @@ $navSections = [
         // list page filtered to retail (type=retail).
         'name'  => 'Retail',
         'items' => [
-            'customers'     => ['/customer-manager/index.php',                'Customers', $canSeeCustomers],
+            'customers'     => ['/customer-manager/index.php',                'Customers', $canSeeCustomers && $_ybPlan('customers')],
             'messages'      => ['/messages/index.php',                        'Messages',  $canSeeAllJobs && $_ybPlan('messages_log')],   // texts are paid; the log is a plan feature
             'retail-quotes' => ['/orders/index.php?scope=quotes&type=retail', 'Quotes',    $hasQuotes && $canSeeQuoteHistory],
             'retail-orders' => ['/orders/index.php?scope=orders&type=retail', 'Orders',    $hasQuotes && $canSeeOrders],
@@ -244,8 +244,8 @@ $navSections = [
         // they buy from, with any price lists / option / EDI files attached.
         'name'  => 'Supplier catalogues',
         'items' => [
-            'supplier-catalogues' => ['/library/index.php',          'Supplier ranges',    $isAdmin],
-            'request-supplier'    => ['/library/index.php#request',  'Request a supplier', $isAdmin],
+            'supplier-catalogues' => ['/library/index.php',          'Supplier ranges',    $isAdmin && $_ybPlan('supplier_ranges')],
+            'request-supplier'    => ['/library/index.php#request',  'Request a supplier', $isAdmin && $_ybPlan('supplier_ranges')],
         ],
     ],
     [
@@ -525,12 +525,13 @@ window.addEventListener('pageshow', function (e) {
         <?php endif; ?>
         <div class="app-sidebar-brand">
             <?php // The logo goes home on the side you're on; the switch below is the way across. ?>
-            <a href="<?= e($isFactoryConsole ? factory_console_home() : ($ybSide === 'factory' ? $ybFactoryHome : '/calendar/index.php')) ?>" class="app-brand-mark">Your<span class="accent">Blinds</span></a>
+            <?php $_ybShopHome = $_ybPlan('calendar') ? '/calendar/index.php' : '/orders/index.php?scope=quotes'; ?>
+            <a href="<?= e($isFactoryConsole ? factory_console_home() : ($ybSide === 'factory' ? $ybFactoryHome : $_ybShopHome)) ?>" class="app-brand-mark">Your<span class="accent">Blinds</span></a>
             <span class="app-brand-tag"><?= e($dashTag) ?></span>
         </div>
         <?php if ($ybBothSides): ?>
             <nav class="side-switch" aria-label="Shop or factory">
-                <a href="/calendar/index.php"<?= $ybSide === 'shop' ? ' class="is-on" aria-current="true"' : '' ?>>Shop</a>
+                <a href="<?= e($_ybShopHome) ?>"<?= $ybSide === 'shop' ? ' class="is-on" aria-current="true"' : '' ?>>Shop</a>
                 <a href="<?= e($ybFactoryHome) ?>"<?= $ybSide === 'factory' ? ' class="is-on" aria-current="true"' : '' ?>>Factory</a>
             </nav>
         <?php endif; ?>
@@ -568,7 +569,7 @@ window.addEventListener('pageshow', function (e) {
             <div class="sidebar-cta">
                 <?php if ($isFactoryOffice && $isFactoryAccounts): ?>
                     <a href="/master-admin/new-order.php" class="sidebar-cta-btn"><span aria-hidden="true">+</span> New</a>
-                <?php else: ?>
+                <?php elseif ($_ybPlan('quotes')): ?>
                     <a href="/quote-builder/new.php" class="sidebar-cta-btn"><span aria-hidden="true">+</span> New</a>
                 <?php endif; ?>
             </div>
@@ -584,7 +585,7 @@ window.addEventListener('pageshow', function (e) {
         // between the two buttons no other permission combination gets.
         $ctaAbove = $hasQuotes && ($canCreateQuotes || $canCreateOrders || $isSuperAdmin);
         ?>
-        <?php if ($ybShopCtas): ?>
+        <?php if ($ybShopCtas && $_ybPlan('instaprice')): ?>
         <div class="sidebar-cta"<?= $ctaAbove ? ' style="padding-top:0.375rem"' : '' ?>>
             <a href="/instaprice/index.php"
                class="sidebar-cta-btn is-instaprice<?= $activeNav === 'instaprice' ? ' is-active' : '' ?>">
@@ -661,8 +662,10 @@ foreach ($navSections as $section):
 <?php endforeach; ?>
         </nav>
         <div class="app-sidebar-foot">
+            <?php if ($_ybPlan('help')): ?>
             <a href="/help/index.php">Help &amp; guide</a>
             &middot;
+            <?php endif; ?>
             <a href="/auth/change_password.php">Change password</a>
             &middot;
             <a href="/auth/logout.php" onclick="document.getElementById('ybLogoutForm').submit(); return false;">Sign out &rarr;</a>
