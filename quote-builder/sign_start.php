@@ -26,7 +26,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 csrf_check();
 
 $user     = current_user();
-$clientId = (int) $user['client_id'];
+$clientId = (int) $user['client_id'];
+require_once __DIR__ . '/../_partials/plan_gate.php';
+plan_require_feature((int) $clientId, 'sign_in_person');   // plan features (Master Admin → Plan features)
 $quoteId  = (int) ($_POST['quote_id'] ?? 0);
 $back     = '/quote-builder/edit.php?id=' . $quoteId;
 

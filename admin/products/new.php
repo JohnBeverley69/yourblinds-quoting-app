@@ -7,7 +7,9 @@ require __DIR__ . '/../../auth/middleware.php';
 requireAdmin();
 
 $user     = current_user();
-$clientId = $user['client_id'];
+$clientId = $user['client_id'];
+require_once __DIR__ . '/../../_partials/plan_gate.php';
+plan_require_feature((int) $clientId, 'products');   // plan features (Master Admin → Plan features)
 
 $f = ['name' => '', 'option_label' => 'Fabric'];
 $error = null;

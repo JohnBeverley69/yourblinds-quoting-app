@@ -88,7 +88,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     $fullName = trim($form['first_name'] . ' ' . $form['last_name']);
     if ($fullName === '') $fullName = $form['username'];
 
-    if ($form['email'] === '' && $form['username'] === '') {
+    // Plan features: a fitter-only login is "Fitters"; anyone else is "Team and
+    // permissions". People already on the account are never affected.
+    require_once __DIR__ . '/../_partials/plan_gate.php';
+    $planKey = $rolesIn === ['fitter'] ? 'fitters' : 'team';
+    $planErr = plan_feature_allowed((int) $clientId, $planKey)
+        ? '' : plan_feature_message($planKey) . ' Upgrade on the Billing page to add more people.';
+
+    if ($planErr !== '') {
+        $error = $planErr;
+    } elseif ($form['email'] === '' && $form['username'] === '') {
         $error = 'Enter an email address or a username — workshop staff can log in with just a username.';
     } elseif (strpos($form['username'], '@') !== false) {
         // A username that looks like an email could shadow someone's login.

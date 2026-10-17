@@ -76,6 +76,11 @@ if ($action === 'save') {
 if ($action === 'follow_up') {
     require_once __DIR__ . '/../_partials/quote_follow_up.php';
     $on     = !empty($_POST['qfu_on']) ? 1 : 0;
+    require_once __DIR__ . '/../_partials/plan_gate.php';
+    if ($on && !plan_feature_allowed((int) $clientId, 'quote_followup')) {
+        $_SESSION['flash_error'] = plan_feature_message('quote_followup') . ' Upgrade on the Billing page to switch it on.';
+        $on = 0;
+    }
     $days   = max(1, min(25, (int) ($_POST['qfu_days'] ?? 7)));
     $method = (string) ($_POST['qfu_method'] ?? 'email');
     if (!in_array($method, ['sms', 'email', 'both'], true)) $method = 'email';

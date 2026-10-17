@@ -32,7 +32,9 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 csrf_check();
 
 $user     = current_user();
-$clientId = (int) $user['client_id'];
+$clientId = (int) $user['client_id'];
+require_once __DIR__ . '/../_partials/plan_gate.php';
+plan_require_feature((int) $clientId, 'payments');   // plan features (Master Admin → Plan features)
 $quoteId  = (int) ($_POST['quote_id'] ?? 0);
 $action   = (string) ($_POST['_action'] ?? '');
 $quote    = qb_load_quote_or_404($quoteId, $clientId);

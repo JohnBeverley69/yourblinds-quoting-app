@@ -40,8 +40,9 @@ return [
     'invoices'       => ['Invoices',                 'Invoice the customer straight from the job',                               'silver'],
     'dashboard'      => ['Dashboard',                'Your sales, quotes won and money owed at a glance',                        'gold'],
     // ── Your products ───────────────────────────────────────────────────
-    'products'       => ['Your own products',        'Add your own products, options and price tables',                          'silver'],
-    'price_import'   => ['Price list import',        'Import price tables from a spreadsheet, with undo',                        'platinum'],
+    // One feature (John, 2026-10-17): you can't really add your own products
+    // without importing their price lists. (Was two: 'products' + 'price_import'.)
+    'products'       => ['Your own products and price lists', 'Add your own products and options, and import their price lists from a spreadsheet, with undo', 'silver'],
     // ── Running the business ────────────────────────────────────────────
     'team'           => ['Team and permissions',     'Add staff, choose who sees costs and who can order',                       'platinum'],
     'messages_log'   => ['Messages log',             'Every text and email sent to a customer, in one place',                    'gold'],

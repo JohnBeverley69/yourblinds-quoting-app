@@ -23,6 +23,8 @@ if (!is_logged_in()) {
 }
 
 $user    = current_user();
+require_once __DIR__ . '/../_partials/plan_gate.php';
+plan_require_feature_json((int) $user['client_id'], 'work_offline');   // plan features
 $isAdmin = ($user['role'] ?? '') === 'admin';
 $files   = offline_engine_sources();
 

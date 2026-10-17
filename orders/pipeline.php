@@ -38,7 +38,9 @@ requireLogin();
 factory_console_redirect(factory_console_screens()['/orders/pipeline.php']);  // console users: one Orders list
 
 $user        = current_user();
-$clientId    = (int) $user['client_id'];
+$clientId    = (int) $user['client_id'];
+require_once __DIR__ . '/../_partials/plan_gate.php';
+plan_require_feature((int) $clientId, 'pipeline');   // plan features (Master Admin → Plan features)
 $myUserId    = (int) $user['user_id'];
 $isAdmin     = ($user['role'] ?? '') === 'admin';
 

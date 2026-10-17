@@ -25,7 +25,9 @@ require_once __DIR__ . '/../_partials/email_log.php';
 requireLogin();
 
 $user     = current_user();
-$clientId = (int) $user['client_id'];
+$clientId = (int) $user['client_id'];
+require_once __DIR__ . '/../_partials/plan_gate.php';
+plan_require_feature((int) $clientId, 'messages_log');   // plan features (Master Admin → Plan features)
 
 if (!cm_can_view_all_customers($user)) {
     http_response_code(403);

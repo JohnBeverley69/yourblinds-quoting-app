@@ -1470,6 +1470,8 @@ if ($action === 'template' && $_SERVER['REQUEST_METHOD'] === 'GET') {
 // ---------------------------------------------------------------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'upload') {
     csrf_check();
+    require_once __DIR__ . '/../../_partials/plan_gate.php';
+    plan_require_feature((int) $clientId, 'products');   // importing a spreadsheet is a plan feature
 
     if (!isset($_FILES['file']) || ($_FILES['file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
         $error = 'Please choose a file to upload.';
@@ -1560,6 +1562,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'upload') {
 // ---------------------------------------------------------------------------
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $action === 'upload_flex') {
     csrf_check();
+    require_once __DIR__ . '/../../_partials/plan_gate.php';
+    plan_require_feature((int) $clientId, 'products');   // importing a spreadsheet is a plan feature
 
     if (!isset($_FILES['file']) || ($_FILES['file']['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
         $error = 'Please choose a file to upload.';

@@ -45,6 +45,19 @@ function pf_flag_snapshot(array $cols): array
     return $out;
 }
 
+require_once __DIR__ . '/../_partials/plan_gate.php';
+
+// The master switch: listed features become real switches (plan_gate.php).
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['action'] ?? '') === 'enforce') {
+    csrf_check();
+    $on = (string) ($_POST['on'] ?? '') === '1';
+    $_SESSION[app_setting_set(PLAN_ENFORCE_KEY, $on ? '1' : '0') ? 'flash_success' : 'flash_error'] = $on
+        ? 'Listed features are now switches: companies below a feature\'s tier can\'t use it, and its menu item hides.'
+        : 'Listed features are describe-only again: every company can use them.';
+    header('Location: /master-admin/plan-features.php');
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_check();
     $action = (string) ($_POST['action'] ?? '');
@@ -211,6 +224,41 @@ $activeNav = 'plan-features';
         <?php if ($flashErr): ?>
             <div class="alert alert-error" role="alert"><?= e((string) $flashErr) ?></div>
         <?php endif; ?>
+
+        <?php
+            // Who is on which plan now — so switching enforcement on is never a surprise.
+            $enforcing = plan_enforcing();
+            $onTier = [];
+            foreach (db()->query('SELECT id FROM clients')->fetchAll(PDO::FETCH_COLUMN) as $cid) {
+                if (function_exists('factory_client_id') && (int) $cid === (int) factory_client_id()) continue;
+                $t = billing_current_tier_code((int) $cid);
+                $onTier[$t] = ($onTier[$t] ?? 0) + 1;
+            }
+        ?>
+        <section class="section" style="border:1px solid <?= $enforcing ? '#86efac' : 'var(--border)' ?>;border-radius:12px;padding:1rem">
+            <h2 class="section-title" style="margin:0 0 .35rem">
+                Listed features: <?= $enforcing ? '<span style="color:#15803d">real switches (on)</span>' : '<span style="color:var(--text-muted)">describe only (off)</span>' ?>
+            </h2>
+            <p style="color:var(--text-muted);font-size:.875rem;margin:0 0 .6rem;line-height:1.55">
+                When this is <strong>on</strong>, a company below a feature's tier can't use it: its menu item hides and its
+                page says which plan has it. People and records they already have keep working (existing staff and
+                fitters still sign in). Your own factory and you are never locked.
+                <br>Companies on each plan now (comps and paid):
+                <?php foreach (billing_plans() as $pc => $pp): ?>
+                    <strong><?= e((string) $pp['name']) ?></strong> <?= (int) ($onTier[$pc] ?? 0) ?><?= $pc !== array_key_last(billing_plans()) ? ' &middot;' : '' ?>
+                <?php endforeach; ?>
+            </p>
+            <form method="post" data-confirm="<?= $enforcing
+                ? 'Switch enforcement off? Every company can use every listed feature again.'
+                : 'Switch enforcement on? Companies below a feature\'s tier lose it straight away.' ?>">
+                <?= csrf_field() ?>
+                <input type="hidden" name="action" value="enforce">
+                <input type="hidden" name="on" value="<?= $enforcing ? '0' : '1' ?>">
+                <button type="submit" class="btn <?= $enforcing ? 'btn-secondary' : 'btn-primary' ?>">
+                    <?= $enforcing ? 'Switch enforcement off' : 'Switch enforcement on' ?>
+                </button>
+            </form>
+        </section>
 
         <section class="section">
             <p style="color:var(--text-muted);font-size:0.875rem;margin:0 0 1rem;line-height:1.55">
