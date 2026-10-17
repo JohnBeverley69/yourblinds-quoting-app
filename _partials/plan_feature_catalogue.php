@@ -23,9 +23,9 @@ return [
     'instaprice'     => ['InstaPrice',               'Price any blind in seconds, from your own and your suppliers\' price lists', 'free'],
     'quotes'         => ['Quotes',                   'Build, price and email professional quotes with a PDF',                     'free'],
     'online_accept'  => ['Online quote acceptance',  'Customers view, sign and accept their quote online',                        'free'],
-    'sign_in_person' => ['Sign on your device',      'The customer signs on your tablet or phone there and then',                 'free'],
-    'quote_followup' => ['Quote follow-ups',         'An automatic reminder for quotes that haven\'t been answered',              'free'],
-    'pipeline'       => ['Sales pipeline',           'Every enquiry, quote and job, from first visit to paid',                    'free'],
+    'sign_in_person' => ['Sign on your device',      'The customer signs on your tablet or phone there and then',                 'silver'],
+    'quote_followup' => ['Quote follow-ups',         'An automatic reminder for quotes that haven\'t been answered',              'silver'],
+    'pipeline'       => ['Sales pipeline',           'Every enquiry, quote and job, from first visit to paid',                    'gold'],
     'customers'      => ['Customers',                'Customer records with every quote, order and visit',                        'free'],
     // ── Ordering ────────────────────────────────────────────────────────
     'orders'         => ['Orders',                   'Turn an accepted quote into an order in one click',                        'free'],
@@ -34,18 +34,18 @@ return [
     'supplier_ranges'=> ['Supplier ranges',          'See the supplier ranges available and ask for new ones',                   'free'],
     // ── Calendar and fitting ────────────────────────────────────────────
     'calendar'       => ['Calendar',                 'Measures and fittings, with your own booking slots',                       'free'],
-    'fitters'        => ['Fitters',                  'Fitter logins with their own day of jobs',                                 'free'],
+    'fitters'        => ['Fitters',                  'Fitter logins with their own day of jobs',                                 'gold'],
     // ── Money ───────────────────────────────────────────────────────────
-    'payments'       => ['Payments and deposits',    'Take deposits, record payments and send receipts',                         'free'],
-    'invoices'       => ['Invoices',                 'Invoice the customer straight from the job',                               'free'],
-    'dashboard'      => ['Dashboard',                'Your sales, quotes won and money owed at a glance',                        'free'],
+    'payments'       => ['Payments and deposits',    'Take deposits, record payments and send receipts',                         'silver'],
+    'invoices'       => ['Invoices',                 'Invoice the customer straight from the job',                               'silver'],
+    'dashboard'      => ['Dashboard',                'Your sales, quotes won and money owed at a glance',                        'gold'],
     // ── Your products ───────────────────────────────────────────────────
-    'products'       => ['Your own products',        'Add your own products, options and price tables',                          'free'],
-    'price_import'   => ['Price list import',        'Import price tables from a spreadsheet, with undo',                        'free'],
+    'products'       => ['Your own products',        'Add your own products, options and price tables',                          'silver'],
+    'price_import'   => ['Price list import',        'Import price tables from a spreadsheet, with undo',                        'platinum'],
     // ── Running the business ────────────────────────────────────────────
-    'team'           => ['Team and permissions',     'Add staff, choose who sees costs and who can order',                       'free'],
-    'messages_log'   => ['Messages log',             'Every text and email sent to a customer, in one place',                    'free'],
-    'work_offline'   => ['Work offline',             'Quote on a tablet with no signal; it sends when you\'re back online',      'free'],
+    'team'           => ['Team and permissions',     'Add staff, choose who sees costs and who can order',                       'platinum'],
+    'messages_log'   => ['Messages log',             'Every text and email sent to a customer, in one place',                    'gold'],
+    'work_offline'   => ['Work offline',             'Quote on a tablet with no signal; it sends when you\'re back online',      'platinum'],
     'help'           => ['Help guides and assistant','Animated step-by-step guides and a support assistant',                     'free'],
     // ── The factory side (manufacturers) ────────────────────────────────
     'factory_pipeline' => ['Factory Pipeline',       'Every order from new to paid, with one button for the next step',          'factory'],
