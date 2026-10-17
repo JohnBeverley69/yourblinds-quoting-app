@@ -101,7 +101,7 @@ function oc_findings(PDO $pdo, int $factory): array
     if (!$orders) return [];
 
     $ids    = array_map(static fn ($o) => (int) $o['id'], $orders);
-    $floor  = bj_tables_ready($pdo) ? bj_order_progress($pdo, $ids) : [];
+    $floor  = bj_tables_ready($pdo) ? bj_order_progress($pdo, $ids, $factory) : [];
     // Bought-in tracks only for orders not yet out — a failed PO after dispatch is history.
     $notOut = [];
     foreach ($orders as $o) if ((string) $o['fj'] !== 'dispatched' && (int) $o['dn_dispatched'] === 0) $notOut[] = (int) $o['id'];

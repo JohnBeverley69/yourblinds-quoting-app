@@ -456,15 +456,62 @@ function bj_release_order(PDO $pdo, int $quoteId, int $master): int
     return $created;
 }
 
-/** Remove an order's blinds from the floor (used when it's reset to "new"). */
-function bj_clear_order(PDO $pdo, int $quoteId): void
+/**
+ * SQL for "this floor job belongs to factory ?": the job's line is owned by that
+ * factory, or the line is gone (an orphan no factory owns — anyone may tidy it).
+ * An order can mix two factories' lines (a white-label factory's own blinds plus
+ * the main factory's), and each factory's floor jobs are its own: one factory's
+ * reset, resync or force-complete must never touch the other's. Binds two ?s,
+ * both the factory id.
+ */
+function bj_job_owner_cond(string $j = 'j'): string
 {
+    return "COALESCE((SELECT COALESCE(NULLIF(bjp.source_client_id,0), bjp.client_id)
+                        FROM quote_items bjqi JOIN products bjp ON bjp.id = bjqi.product_id
+                       WHERE bjqi.id = {$j}.quote_item_id), ?) = ?";
+}
+
+/**
+ * Remove an order's blinds from the floor (used when it's reset to "new").
+ * $factory: only that factory's blinds — pass it whenever a factory acts, so a
+ * mixed order's other factory keeps its own. Null clears every blind (the
+ * whole-order delete).
+ */
+function bj_clear_order(PDO $pdo, int $quoteId, ?int $factory = null): void
+{
+    $own  = $factory !== null ? ' AND ' . bj_job_owner_cond('j') : '';
+    $args = $factory !== null ? [$quoteId, $factory, $factory] : [$quoteId];
     $pdo->prepare(
         'DELETE s FROM factory_blind_streams s
            JOIN factory_blind_jobs j ON j.id = s.blind_job_id
-          WHERE j.quote_id = ?'
-    )->execute([$quoteId]);
-    $pdo->prepare('DELETE FROM factory_blind_jobs WHERE quote_id = ?')->execute([$quoteId]);
+          WHERE j.quote_id = ?' . $own
+    )->execute($args);
+    $pdo->prepare('DELETE j FROM factory_blind_jobs j WHERE j.quote_id = ?' . $own)->execute($args);
+}
+
+/**
+ * bj_resync_order() for every factory that makes a line on the order — what the
+ * placing side calls after a (re)place. Each factory resyncs only its own lines,
+ * so a mixed order's two factories never prune each other's floor jobs.
+ */
+function bj_resync_order_all(PDO $pdo, int $quoteId): void
+{
+    if ($quoteId <= 0) return;
+    try {
+        $st = $pdo->prepare(
+            'SELECT DISTINCT COALESCE(NULLIF(p.source_client_id,0), p.client_id)
+               FROM quote_items qi JOIN products p ON p.id = qi.product_id
+              WHERE qi.quote_id = ?'
+        );
+        $st->execute([$quoteId]);
+        $owners = array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN));
+    } catch (Throwable $e) { return; }
+    $factories = function_exists('qb_factory_client_ids')
+        ? qb_factory_client_ids($pdo)
+        : [function_exists('factory_client_id') ? (int) factory_client_id() : 3];
+    foreach ($owners as $fid) {
+        if (in_array($fid, $factories, true)) bj_resync_order($pdo, $quoteId, $fid);
+    }
 }
 
 /**
@@ -489,8 +536,10 @@ function bj_resync_order(PDO $pdo, int $quoteId, int $master): array
     try {
         if ($quoteId <= 0 || !bj_tables_ready($pdo)) return $out;
 
-        $cnt = $pdo->prepare('SELECT COUNT(*) FROM factory_blind_jobs WHERE quote_id = ?');
-        $cnt->execute([$quoteId]);
+        // Only $master's own floor jobs: on a mixed order the other factory's
+        // are theirs to keep (bj_job_owner_cond).
+        $cnt = $pdo->prepare('SELECT COUNT(*) FROM factory_blind_jobs j WHERE j.quote_id = ? AND ' . bj_job_owner_cond('j'));
+        $cnt->execute([$quoteId, $master, $master]);
         $hasJobs = ((int) $cnt->fetchColumn()) > 0;
 
         $fj = '';
@@ -500,7 +549,16 @@ function bj_resync_order(PDO $pdo, int $quoteId, int $master): array
             $fj = (string) ($s->fetchColumn() ?: '');
         } catch (Throwable $e) { $fj = ''; }
 
-        if (!$hasJobs && !in_array($fj, ['in_production', 'made'], true)) return $out;
+        if (!$hasJobs) {
+            if (!in_array($fj, ['in_production', 'made'], true)) return $out;
+            // factory_jobs is one row per order, shared by every factory on it,
+            // so another factory having started its part says nothing about
+            // ours: someone else's blinds on the floor and none of ours means
+            // ours haven't been started — they wait for our own Process order.
+            $oth = $pdo->prepare('SELECT COUNT(*) FROM factory_blind_jobs j WHERE j.quote_id = ? AND NOT (' . bj_job_owner_cond('j') . ')');
+            $oth->execute([$quoteId, $master, $master]);
+            if ((int) $oth->fetchColumn() > 0) return $out;
+        }
 
         // The in-house lines as they stand now (same selection as bj_release_order).
         require_once __DIR__ . '/bought_in.php';
@@ -517,8 +575,8 @@ function bj_resync_order(PDO $pdo, int $quoteId, int $master): array
         foreach ($li->fetchAll(PDO::FETCH_ASSOC) as $r) $qtyOf[(int) $r['id']] = max(1, (int) $r['quantity']);
 
         // Prune jobs that no longer match a line/unit.
-        $js = $pdo->prepare('SELECT id, quote_item_id, unit_no FROM factory_blind_jobs WHERE quote_id = ?');
-        $js->execute([$quoteId]);
+        $js = $pdo->prepare('SELECT j.id, j.quote_item_id, j.unit_no FROM factory_blind_jobs j WHERE j.quote_id = ? AND ' . bj_job_owner_cond('j'));
+        $js->execute([$quoteId, $master, $master]);
         $drop = [];
         foreach ($js->fetchAll(PDO::FETCH_ASSOC) as $j) {
             $iid = (int) $j['quote_item_id'];
@@ -557,11 +615,13 @@ function bj_resync_order(PDO $pdo, int $quoteId, int $master): array
  * the order reading made while the floor still says 0 of 2). Returns how many
  * blinds were completed by this call.
  */
-function bj_force_complete_order(PDO $pdo, int $quoteId, ?int $userId): int
+function bj_force_complete_order(PDO $pdo, int $quoteId, ?int $userId, ?int $factory = null): int
 {
     if ($quoteId <= 0 || !bj_tables_ready($pdo)) return 0;
-    $open = $pdo->prepare("SELECT id FROM factory_blind_jobs WHERE quote_id = ? AND status <> 'complete'");
-    $open->execute([$quoteId]);
+    // $factory: only that factory's blinds — a mixed order's other factory finishes its own.
+    $own  = $factory !== null ? ' AND ' . bj_job_owner_cond('j') : '';
+    $open = $pdo->prepare("SELECT j.id FROM factory_blind_jobs j WHERE j.quote_id = ? AND j.status <> 'complete'" . $own);
+    $open->execute($factory !== null ? [$quoteId, $factory, $factory] : [$quoteId]);
     $ids = array_map('intval', $open->fetchAll(PDO::FETCH_COLUMN));
     if (!$ids) return 0;
     $ph = implode(',', array_fill(0, count($ids), '?'));
@@ -817,16 +877,19 @@ function bj_maybe_complete_order(PDO $pdo, int $quoteId): void
  * Per-order floor progress for a set of quote ids: [quoteId => [total, done]],
  * counted in whole blinds. Used by Incoming Orders for the "X of Y made" pill.
  */
-function bj_order_progress(PDO $pdo, array $quoteIds): array
+function bj_order_progress(PDO $pdo, array $quoteIds, ?int $factory = null): array
 {
     $quoteIds = array_values(array_filter(array_map('intval', $quoteIds)));
     if (!$quoteIds) return [];
     $ph = implode(',', array_fill(0, count($quoteIds), '?'));
+    // $factory: count only that factory's blinds, so a mixed order's other
+    // factory's finished blinds can't make ours read made / Ready.
+    $own = $factory !== null ? ' AND ' . bj_job_owner_cond('j') : '';
     $st = $pdo->prepare(
-        "SELECT quote_id, COUNT(*) AS total, SUM(status = 'complete') AS done_cnt
-           FROM factory_blind_jobs WHERE quote_id IN ($ph) GROUP BY quote_id"
+        "SELECT j.quote_id, COUNT(*) AS total, SUM(j.status = 'complete') AS done_cnt
+           FROM factory_blind_jobs j WHERE j.quote_id IN ($ph)" . $own . " GROUP BY j.quote_id"
     );
-    $st->execute($quoteIds);
+    $st->execute($factory !== null ? array_merge($quoteIds, [$factory, $factory]) : $quoteIds);
     $out = [];
     foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
         $out[(int) $r['quote_id']] = ['total' => (int) $r['total'], 'done' => (int) $r['done_cnt']];
@@ -845,7 +908,7 @@ function bj_order_progress(PDO $pdo, array $quoteIds): array
  * omitted — its outstanding count just mirrors the "X/Y made" pill, so listing
  * it would be noise. Degrades to [] if the streams table isn't there.
  */
-function bj_order_waiting(PDO $pdo, array $quoteIds): array
+function bj_order_waiting(PDO $pdo, array $quoteIds, ?int $factory = null): array
 {
     $quoteIds = array_values(array_filter(array_map('intval', $quoteIds)));
     if (!$quoteIds) return [];
@@ -856,11 +919,12 @@ function bj_order_waiting(PDO $pdo, array $quoteIds): array
                FROM factory_blind_streams s
                JOIN factory_blind_jobs j ON j.id = s.blind_job_id
               WHERE j.quote_id IN ($ph)
-                AND (s.status IS NULL OR s.status <> 'done')
+                AND (s.status IS NULL OR s.status <> 'done')"
+            . ($factory !== null ? ' AND ' . bj_job_owner_cond('j') : '') . "
            GROUP BY j.quote_id, s.stream
            ORDER BY outstanding DESC"
         );
-        $st->execute($quoteIds);
+        $st->execute($factory !== null ? array_merge($quoteIds, [$factory, $factory]) : $quoteIds);
     } catch (Throwable $e) {
         return [];   // streams table not migrated / renamed — just show no breakdown
     }

@@ -149,9 +149,9 @@ try {
 $floorProg = [];
 $waitingBy = [];
 if (bj_tables_ready($pdo) && !empty($ids)) {
-    try { $floorProg = bj_order_progress($pdo, $ids); } catch (Throwable $e) { $floorProg = []; }
+    try { $floorProg = bj_order_progress($pdo, $ids, $MASTER); } catch (Throwable $e) { $floorProg = []; }
     // "Waiting on …" — which parts (streams) are still outstanding per order.
-    try { $waitingBy = bj_order_waiting($pdo, $ids); } catch (Throwable $e) { $waitingBy = []; }
+    try { $waitingBy = bj_order_waiting($pdo, $ids, $MASTER); } catch (Throwable $e) { $waitingBy = []; }
 }
 
 // Possible duplicates: another placed order from the SAME customer (tenant, or

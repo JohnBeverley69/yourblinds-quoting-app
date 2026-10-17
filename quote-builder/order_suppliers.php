@@ -443,7 +443,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // (Re)placed: an order already on the floor gets its blind jobs
                 // brought in line with the current lines/units.
                 require_once __DIR__ . '/../_partials/order_stage.php';
-                bj_resync_order(db(), $quoteId, $factoryId);
+                bj_resync_order_all(db(), $quoteId);
             }
         } catch (Throwable $e) {
             error_log('Auto-advance to ordered failed: ' . $e->getMessage());

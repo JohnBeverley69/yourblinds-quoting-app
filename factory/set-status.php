@@ -87,7 +87,7 @@ if (!in_array((string) ($stq->fetchColumn() ?: ''), ['ordered', 'fitted', 'invoi
 // count and the order status agree, rather than silently disagreeing.
 $forcedBlinds = 0;
 if ($target === 'made' && bj_tables_ready($pdo)) {
-    $prog = bj_order_progress($pdo, [$quoteId])[$quoteId] ?? ['total' => 0, 'done' => 0];
+    $prog = bj_order_progress($pdo, [$quoteId], $MASTER)[$quoteId] ?? ['total' => 0, 'done' => 0];
     if ((int) $prog['total'] > 0 && (int) $prog['done'] < (int) $prog['total']) {
         if (empty($_POST['force_made'])) {
             $_SESSION['flash_error'] = 'The floor still has ' . ((int) $prog['total'] - (int) $prog['done']) . ' of '
@@ -97,7 +97,7 @@ if ($target === 'made' && bj_tables_ready($pdo)) {
             exit;
         }
         try {
-            $forcedBlinds = bj_force_complete_order($pdo, $quoteId, $userId ?: null);
+            $forcedBlinds = bj_force_complete_order($pdo, $quoteId, $userId ?: null, $MASTER);
         } catch (Throwable $e) {
             $_SESSION['flash_error'] = 'Could not complete the blinds on the floor: ' . $e->getMessage();
             header('Location: ' . $backTo);
@@ -137,6 +137,17 @@ try {
         //
         // Same shared check as the tenant-side delete and reopen guards (#958,
         // #959), so all four paths agree on what the factory's paperwork means.
+        // The factory_jobs row is one per order. When another factory makes part
+        // of it, deleting that row would knock the other factory's order back to
+        // new as well — so a mixed order can't be stepped back to new here.
+        require_once __DIR__ . '/../_partials/factory_order_delete.php';
+        $other = fod_other_factory_reason($pdo, $quoteId, $MASTER);
+        if ($other !== '') {
+            $_SESSION['flash_error'] = 'This order can\'t be stepped back to new — ' . $other
+                . ', and stepping back would reset their side too.';
+            header('Location: ' . $backTo);
+            exit;
+        }
         $paper = qb_factory_paperwork_block($pdo, $quoteId, 'stepped back to new');
         if ($paper !== '') {
             $_SESSION['flash_error'] = $paper . ' Its floor record would be lost.';
@@ -145,7 +156,7 @@ try {
         }
         $pdo->prepare("DELETE FROM factory_jobs WHERE quote_id = ?")->execute([$quoteId]);
         // Reset pulls the order's blinds back off the floor too.
-        if (bj_tables_ready($pdo)) bj_clear_order($pdo, $quoteId);
+        if (bj_tables_ready($pdo)) bj_clear_order($pdo, $quoteId, $MASTER);
         $_SESSION['flash_success'] = 'Order moved back to new.';
     } else {
         // "Accept" (Incoming orders): take the order on AND put its blinds on the

@@ -322,7 +322,7 @@ try {
         factory_autosend_suppliers($pdo, $quoteId);
         // (Re)placed: if the order is already on the floor, bring its blind jobs
         // in line with the current lines/units so nothing added is left off.
-        bj_resync_order($pdo, $quoteId, qb_order_factory_id($pdo, $quoteId));
+        bj_resync_order_all($pdo, $quoteId);
         recompute_order_stage($pdo, $quoteId);
     }
 
