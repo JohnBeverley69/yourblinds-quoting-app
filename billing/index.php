@@ -361,8 +361,8 @@ $activeNav = 'billing';
                                 <?php endif; ?>
                             <?php endif; ?>
                         </div>
-                        <div class="p-desc"><?= e($p['description']) ?></div>
-                        <?= billing_listed_html((string) $code, true, 'What this plan adds') ?>
+                        <div class="p-desc"><?= e(billing_plan_heading((string) $code)) ?></div>
+                        <?= billing_listed_html((string) $code, true, 'What this plan adds', true) ?>
 
                         <?php if ($hasTrial && $trial['expires_at']): ?>
                             <div class="p-meta <?= $trialUrgent ? 'p-trial-urgent' : 'p-trial' ?>">

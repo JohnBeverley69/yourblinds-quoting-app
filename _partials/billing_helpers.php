@@ -188,13 +188,51 @@ function billing_plan_listed(string $planCode, bool $newOnly = false): array
     $plans = billing_plans();
     if (!isset($plans[$planCode])) return [];
     $tier = (int) ($plans[$planCode]['tier'] ?? 0);
-    $out  = [];
-    foreach (billing_catalogue() as $f) {
-        if ($f['code'] === '') continue;
-        $at = (int) ($plans[$f['code']]['tier'] ?? PHP_INT_MAX);
-        if ($newOnly ? $at === $tier : $at <= $tier) $out[] = ['label' => $f['label'], 'desc' => $f['desc']];
+
+    // Every box on the Plan features board — the five original switches AND the
+    // listed features — so a plan card lists exactly what the board shows for
+    // that tier (John, 2026-10-17: they "don't marry up" otherwise).
+    $byTier = $plans;
+    uasort($byTier, static fn ($a, $b) => (int) ($a['tier'] ?? 0) <=> (int) ($b['tier'] ?? 0));
+    $flagLabels = require __DIR__ . '/feature_flags.php';
+    $blurbs     = billing_feature_blurbs();
+    $boxes = [];   // id => [label, desc, tier]
+    foreach ($flagLabels as $flag => $label) {
+        $at = PHP_INT_MAX;
+        foreach ($byTier as $p) {
+            if (in_array($flag, $p['features'] ?? [], true)) { $at = (int) ($p['tier'] ?? 0); break; }
+        }
+        $boxes['f:' . $flag] = [$label, ucfirst((string) ($blurbs[$flag] ?? $label)), $at];
+    }
+    foreach (billing_catalogue() as $key => $f) {
+        $boxes['c:' . $key] = [$f['label'], $f['desc'], $f['code'] === '' ? PHP_INT_MAX : (int) ($plans[$f['code']]['tier'] ?? PHP_INT_MAX)];
+    }
+    // The board's saved order (unsaved boxes keep their natural place after it).
+    $pos = billing_feature_order();
+    $nat = array_flip(array_keys($boxes));
+    uksort($boxes, static fn ($a, $b) => ($pos[$a] ?? 100000 + $nat[$a]) <=> ($pos[$b] ?? 100000 + $nat[$b]));
+
+    $out = [];
+    foreach ($boxes as [$label, $desc, $at]) {
+        if ($at === PHP_INT_MAX) continue;
+        if ($newOnly ? $at === $tier : $at <= $tier) $out[] = ['label' => $label, 'desc' => $desc];
     }
     return $out;
+}
+
+/** The one-line heading over a plan card's list: "Everything in Gold, plus:" (Bronze: free to start). */
+function billing_plan_heading(string $planCode): string
+{
+    $plans = billing_plans();
+    if (!isset($plans[$planCode])) return '';
+    $tier = (int) ($plans[$planCode]['tier'] ?? 0);
+    if ($tier === 0) return 'Free to start. Everything in the list below is included.';
+    $prev = null;
+    foreach ($plans as $p) {
+        $t = (int) ($p['tier'] ?? 0);
+        if ($t < $tier && ($prev === null || $t > (int) ($prev['tier'] ?? 0))) $prev = $p;
+    }
+    return 'Everything in ' . (string) ($prev['name'] ?? 'the plan below') . ', plus:';
 }
 
 /**
@@ -202,7 +240,7 @@ function billing_plan_listed(string $planCode, bool $newOnly = false): array
  * <details><summary>$summary (N)</summary><ul>…</ul></details>, or '' when there
  * is nothing to list. Each feature shows its one-line description on hover.
  */
-function billing_listed_html(string $planCode, bool $newOnly, string $summary = "What's included"): string
+function billing_listed_html(string $planCode, bool $newOnly, string $summary = "What's included", bool $open = false): string
 {
     $items = billing_plan_listed($planCode, $newOnly);
     if (!$items) return '';
@@ -212,7 +250,7 @@ function billing_listed_html(string $planCode, bool $newOnly, string $summary = 
         $li .= '<li title="' . $h($i['desc']) . '"><strong>' . $h($i['label']) . '</strong>'
              . '<span class="bl-desc"> — ' . $h($i['desc']) . '</span></li>';
     }
-    return '<details class="billing-listed"><summary>' . $h($summary) . ' (' . count($items) . ')</summary>'
+    return '<details class="billing-listed"' . ($open ? ' open' : '') . '><summary>' . $h($summary) . ' (' . count($items) . ')</summary>'
          . '<ul>' . $li . '</ul></details>';
 }
 
