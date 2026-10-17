@@ -5,6 +5,8 @@
 //   1. Add a column to client_settings via SQL ALTER
 //   2. Add the entry here
 //   3. Reference the constant column name in your gating code
+//   4. Put it on a tier: list it in billing_plans.php, or drag it onto one on
+//      Master Admin → Plan features (and add a phrase in billing_feature_blurbs())
 return [
     'feature_maps'            => 'Maps',
     'feature_postcode_lookup' => 'Postcode lookup',

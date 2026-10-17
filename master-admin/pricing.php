@@ -432,6 +432,7 @@ $activeNav = 'pricing';
                 <p class="page-subtitle">
                     <a href="/master-admin/index.php">&larr; Master Admin</a>
                     &middot; Default plan prices, free trials, and per-client comp overrides.
+                    Which extras are in each tier: <a href="/master-admin/plan-features.php">Plan features</a>.
                 </p>
             </div>
         </div>

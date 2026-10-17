@@ -14,7 +14,7 @@ declare(strict_types=1);
  *
  * Keep the claims TRUE to the app: every scene describes something the app
  * really does today (checked 2026-10-07). If a feature changes, change its
- * scene. Tier tags (Silver/Gold) must match _partials/billing_plans.php.
+ * scene. Feature tier tags follow Master Admin → Plan features.
  */
 
 require __DIR__ . '/bootstrap.php';
@@ -24,6 +24,7 @@ require_once __DIR__ . '/_partials/app_settings.php';
 $loggedIn      = is_logged_in();
 $signupsClosed = app_setting_on('signups_paused');
 
+require_once __DIR__ . '/_partials/billing_helpers.php';   // live tier tags (Plan features)
 $SCENES     = require __DIR__ . '/_partials/how_it_works_scenes.php';
 $sceneCount = count($SCENES);
 ?><!doctype html>

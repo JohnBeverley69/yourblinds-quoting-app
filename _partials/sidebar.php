@@ -259,6 +259,7 @@ $navSections = [
             ]],
             ['heading' => 'Billing & plans', 'items' => [
                 'pricing'       => ['/master-admin/pricing.php',       'Pricing',       $isSuperAdmin],
+                'plan-features' => ['/master-admin/plan-features.php', 'Plan features', $isSuperAdmin],
                 'subscriptions' => ['/master-admin/subscriptions.php', 'Subscriptions', $isSuperAdmin],
                 'paypal-health' => ['/master-admin/paypal-health.php', 'PayPal health', $isSuperAdmin],
                 'texts'         => ['/master-admin/texts.php',         'Texts',         $isSuperAdmin],

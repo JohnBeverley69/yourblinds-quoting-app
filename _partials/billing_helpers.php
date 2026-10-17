@@ -41,12 +41,13 @@ declare(strict_types=1);
  *
  * Cached per-request.
  */
-function billing_plans(): array
+function billing_plans(bool $refresh = false): array
 {
     static $cache = null;
-    if ($cache !== null) return $cache;
+    if ($cache !== null && !$refresh) return $cache;
 
     $registry = require __DIR__ . '/billing_plans.php';
+    $registry = billing_apply_feature_layout($registry, billing_feature_layout());
 
     $live = [];
     try {
@@ -76,6 +77,123 @@ function billing_plans(): array
 
     $cache = $registry;
     return $cache;
+}
+
+/** app_settings key holding the drag-and-drop tier layout (Master Admin → Plan features). */
+const BILLING_FEATURE_LAYOUT_KEY = 'plan_feature_tiers';
+
+/**
+ * The saved tier layout: feature flag => the LOWEST plan code that includes it
+ * ('' = in no plan; switched on by hand on Master Admin). Flags missing from it
+ * keep the placement in billing_plans.php. Read straight from the DB (not
+ * app_setting_get's per-request cache) so a save can re-read it at once.
+ */
+function billing_feature_layout(): array
+{
+    try {
+        $st = db()->prepare('SELECT setting_value FROM app_settings WHERE setting_key = ? LIMIT 1');
+        $st->execute([BILLING_FEATURE_LAYOUT_KEY]);
+        $map = json_decode((string) ($st->fetchColumn() ?: ''), true);
+    } catch (Throwable $e) {
+        return [];
+    }
+    if (!is_array($map)) return [];
+    $out = [];
+    foreach ($map as $flag => $code) {
+        if (is_string($flag) && is_string($code)) $out[$flag] = $code;
+    }
+    return $out;
+}
+
+/**
+ * Re-cut each plan's 'features' from a layout. A feature placed on a tier goes
+ * on that tier AND every tier above it (the ladder stays cumulative); placed on
+ * '' it is in no plan. Unknown flags and unknown plan codes are ignored. Once a
+ * layout is saved the descriptions are rebuilt from the result, so the Billing
+ * and welcome pages can never list a feature the tier doesn't give.
+ */
+function billing_apply_feature_layout(array $plans, array $layout): array
+{
+    $known = require __DIR__ . '/feature_flags.php';
+    foreach ($layout as $flag => $code) {
+        if (!isset($known[$flag])) continue;
+        if ($code !== '' && !isset($plans[$code])) continue;
+        $from = $code === '' ? PHP_INT_MAX : (int) ($plans[$code]['tier'] ?? 0);
+        foreach ($plans as &$p) {
+            $p['features'] = array_values(array_diff($p['features'] ?? [], [$flag]));
+            if ((int) ($p['tier'] ?? 0) >= $from) $p['features'][] = $flag;
+        }
+        unset($p);
+    }
+    if ($layout) $plans = billing_describe_plans($plans);
+    return $plans;
+}
+
+/** Short phrases used when a tier's description is built from its features. */
+function billing_feature_blurbs(): array
+{
+    return [
+        'feature_maps'            => 'Maps (day run planner with directions, one-tap Google Maps / Waze navigation)',
+        'feature_postcode_lookup' => 'Postcode lookup',
+        'feature_sms'             => 'customer texts (booking confirmations and reminders)',
+        'feature_online_booking'  => 'online booking (customers book a visit from your website)',
+        'feature_accounts'        => 'Accounts (payment tracking, outstanding balances and the account summary)',
+    ];
+}
+
+/** "a, b and c" */
+function billing_join_words(array $words): string
+{
+    if (count($words) <= 1) return (string) ($words[0] ?? '');
+    $last = array_pop($words);
+    return implode(', ', $words) . ' and ' . $last;
+}
+
+/**
+ * Rebuild the descriptions from the features: Bronze keeps its core-platform
+ * line (plus anything placed on it); each paid tier is "Everything in <the tier
+ * below>, plus <what it adds>".
+ */
+function billing_describe_plans(array $plans): array
+{
+    $labels = require __DIR__ . '/feature_flags.php';
+    $blurbs = billing_feature_blurbs();
+    $phrase = static fn (string $f): string => $blurbs[$f] ?? ($labels[$f] ?? $f);
+
+    $order = $plans;
+    uasort($order, static fn ($a, $b) => (int) ($a['tier'] ?? 0) <=> (int) ($b['tier'] ?? 0));
+    $prev = null;
+    foreach (array_keys($order) as $code) {
+        $feats = $plans[$code]['features'] ?? [];
+        if ($prev === null) {
+            $plans[$code]['description'] = 'Create and send quotes, plus the core platform — calendar, customers, orders and products.'
+                . ($feats ? ' Also includes ' . billing_join_words(array_map($phrase, $feats)) . '.' : '')
+                . ' Free to start.';
+        } else {
+            $adds     = array_values(array_diff($feats, $plans[$prev]['features'] ?? []));
+            $prevName = (string) ($plans[$prev]['name'] ?? $prev);
+            $plans[$code]['description'] = $adds
+                ? 'Everything in ' . $prevName . ', plus ' . billing_join_words(array_map($phrase, $adds)) . '.'
+                : 'Everything in ' . $prevName . '.';
+        }
+        $prev = $code;
+    }
+    return $plans;
+}
+
+/**
+ * "Silver & Gold", "Gold", or '' when every tier (Bronze up) has the feature —
+ * for marketing tags like the How-it-works tour.
+ */
+function billing_feature_tier_names(string $flag): string
+{
+    $names = [];
+    $all   = true;
+    foreach (billing_plans() as $p) {
+        if (in_array($flag, $p['features'] ?? [], true)) $names[] = (string) ($p['name'] ?? '');
+        else $all = false;
+    }
+    return $all ? '' : implode(' & ', $names);
 }
 
 /**
@@ -348,6 +466,9 @@ function billing_has_active_subscription_for(int $clientId, string $planCode): b
  */
 function billing_plan_active_for(int $clientId, string $planCode): bool
 {
+    // Bronze is the baseline everyone is on — anything placed on it on
+    // Master Admin → Plan features is everyone's, no subscription needed.
+    if ($planCode === 'free') return true;
     return billing_has_active_subscription_for($clientId, $planCode)
         || billing_client_has_comp($clientId, $planCode);
 }
@@ -553,7 +674,9 @@ function billing_sync_feature_flags_force(int $clientId): void
     $st->execute([$clientId]);
     $subs = $st->fetchAll();
 
+    // Bronze (free) features are everyone's.
     $granted = [];
+    foreach ((billing_plan('free')['features'] ?? []) as $f) $granted[$f] = true;
     foreach ($compCodes as $code) {
         $p = billing_plan((string) $code);
         if ($p) foreach (($p['features'] ?? []) as $f) $granted[$f] = true;
