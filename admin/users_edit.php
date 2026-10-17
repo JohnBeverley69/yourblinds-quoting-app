@@ -145,7 +145,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
     $fullName = trim($first . ' ' . $last);
     if ($fullName === '') $fullName = $uname;
 
-    if ($email === '' && $uname === '') {
+    // Plan features: making someone a fitter who wasn't one is "Fitters".
+    require_once __DIR__ . '/../_partials/plan_gate.php';
+    $fitterErr = (in_array('fitter', $rolesIn, true) && !in_array('fitter', $existingRoles, true)
+                  && !plan_feature_allowed((int) $clientId, 'fitters'))
+        ? plan_feature_message('fitters') . ' Upgrade on the Billing page to add fitters.' : '';
+
+    if ($fitterErr !== '') {
+        $error = $fitterErr;
+    } elseif ($email === '' && $uname === '') {
         $error = 'Enter an email address or a username.';
     } elseif (strpos($uname, '@') !== false) {
         // A username that looks like an email could shadow someone's login.

@@ -138,6 +138,8 @@ function qfu_run(?DateTimeImmutable $now = null): array
         $cid = (int) $q['client_id'];
         try {
             if (!sms_feature_enabled($cid)) continue;   // paid plans only
+            require_once __DIR__ . '/plan_gate.php';
+            if (!plan_feature_allowed($cid, 'quote_followup')) continue;   // Plan features board
             $cfg  = qfu_settings($cid);
             $vars = [
                 'first_name'    => ucfirst(sms_first_name((string) $q['end_customer_name'])) ?: 'there',

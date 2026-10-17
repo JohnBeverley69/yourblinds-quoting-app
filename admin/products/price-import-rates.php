@@ -36,6 +36,8 @@ requireAdmin();
 
 $user     = current_user();
 $clientId = (int) $user['client_id'];
+require_once __DIR__ . '/../../_partials/plan_gate.php';
+plan_require_feature((int) $clientId, 'products');   // plan features (Master Admin → Plan features)
 $pdo      = db();
 
 $productId = (int) ($_GET['product_id'] ?? $_POST['product_id'] ?? 0);

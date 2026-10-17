@@ -26,6 +26,8 @@ requireSuperAdmin();
 
 $user     = current_user();
 $clientId = (int) $user['client_id'];
+require_once __DIR__ . '/../../_partials/plan_gate.php';
+plan_require_feature((int) $clientId, 'products');   // plan features (Master Admin → Plan features)
 
 $systemId = (int) ($_GET['system_id'] ?? $_POST['system_id'] ?? 0);
 if ($systemId <= 0) { header('Location: /admin/products/index.php'); exit; }

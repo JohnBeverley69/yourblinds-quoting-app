@@ -39,7 +39,9 @@ requireLogin();
 factory_console_redirect(factory_console_screens()['/dashboard/index.php']);  // the factory office's home is the console
 
 $user      = current_user();
-$clientId  = (int) $user['client_id'];
+$clientId  = (int) $user['client_id'];
+require_once __DIR__ . '/../_partials/plan_gate.php';
+plan_require_feature((int) $clientId, 'dashboard', '/orders/index.php?scope=quotes');   // plan features (Master Admin → Plan features)
 $pricingBasis = pricing_basis_for(db(), $clientId); // markup vs margin wording
 $myUserId  = (int) ($user['user_id'] ?? $user['id'] ?? 0);
 $isAdmin   = ($user['role'] ?? '') === 'admin';

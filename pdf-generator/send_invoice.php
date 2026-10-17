@@ -44,6 +44,8 @@ $id      = (int) ($_POST['id'] ?? $_POST['quote_id'] ?? 0);
 $quote   = qb_load_quote_or_404($id, $clientId);
 qb_require_quote_access($quote, $user, current_user_permissions());
 $backUrl = '/quote-builder/edit.php?id=' . $id;
+require_once __DIR__ . '/../_partials/plan_gate.php';
+plan_require_feature($clientId, 'invoices', $backUrl);   // plan features (Master Admin → Plan features)
 
 // Invoicing is an order-side action.
 if (!$isAdmin && empty($_perms['can_create_orders'])) {

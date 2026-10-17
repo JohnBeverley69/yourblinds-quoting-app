@@ -179,14 +179,20 @@ if ($isSuperAdmin) {
 // obvious home. Then SETUP (configure) and PLATFORM (run the platform). The
 // retail/trade split on the shared list page is a ?type= facet on
 // orders/index.php; nav keys retail-*/trade-* drive the active-row highlight.
+// Plan features: a feature the company's plan doesn't include drops out of the
+// menu (its page says which plan has it). Off until enforcing is switched on.
+require_once __DIR__ . '/plan_gate.php';
+$_ybPlanCid = (int) ($user['client_id'] ?? 0);
+$_ybPlan    = static fn (string $key): bool => plan_feature_allowed($_ybPlanCid, $key);
+
 $navSections = [
     [
         // Everyday, cross-mode — not tied to retail vs trade.
         'name'  => 'Work',
         'items' => [
-            'dashboard' => ['/dashboard/index.php',         'Dashboard', $hasQuotes && $canSeeAnyDashPanel],
+            'dashboard' => ['/dashboard/index.php',         'Dashboard', $hasQuotes && $canSeeAnyDashPanel && $_ybPlan('dashboard')],
             'calendar'  => ['/calendar/index.php',          'Calendar',  true],
-            'pipeline'  => ['/orders/pipeline.php',         'Pipeline',  $hasQuotes && $isStaff],
+            'pipeline'  => ['/orders/pipeline.php',         'Pipeline',  $hasQuotes && $isStaff && $_ybPlan('pipeline')],
             // Production back-office (its own app) — makes both retail & trade.
             'factory'   => ['/factory/incoming-orders.php', 'Factory',   $canSeeFactory],
             // A white-label factory (no Factory Console, #1059) moves its orders
@@ -202,7 +208,7 @@ $navSections = [
         'name'  => 'Retail',
         'items' => [
             'customers'     => ['/customer-manager/index.php',                'Customers', $canSeeCustomers],
-            'messages'      => ['/messages/index.php',                        'Messages',  $canSeeAllJobs],   // email log on every plan; texts are paid
+            'messages'      => ['/messages/index.php',                        'Messages',  $canSeeAllJobs && $_ybPlan('messages_log')],   // texts are paid; the log is a plan feature
             'retail-quotes' => ['/orders/index.php?scope=quotes&type=retail', 'Quotes',    $hasQuotes && $canSeeQuoteHistory],
             'retail-orders' => ['/orders/index.php?scope=orders&type=retail', 'Orders',    $hasQuotes && $canSeeOrders],
             // The tenant's own customers' payments (retail A/R). Key/route stay
@@ -673,7 +679,7 @@ foreach ($navSections as $section):
                 <!-- Work offline on this tablet (offline/engine.js). Shown on touch
                      screens, or on a device already set up; the script below unhides it. -->
                 <button type="button" class="theme-toggle" id="ybOfflineToggle" aria-expanded="false"
-                        aria-controls="ybOfflinePanel" hidden>
+                        aria-controls="ybOfflinePanel" hidden<?= $_ybPlan('work_offline') ? '' : ' data-plan-off="1"' ?>>
                     <span class="theme-icon" aria-hidden="true">&#128246;</span>
                     <span id="ybOfflineLabel">Work offline</span>
                 </button>
@@ -762,6 +768,9 @@ foreach ($navSections as $section):
     var label = document.getElementById('ybOfflineLabel');
     var panel = document.getElementById('ybOfflinePanel');
     if (!btn || !label || !panel || !window.ybEngine) return;
+    // Work offline isn't in this company's plan (Plan features); a device already
+    // set up still shows it, so it can be turned off.
+    if (btn.getAttribute('data-plan-off') === '1' && !ybEngine.enabled()) return;
     // Offline mode is for touch devices — tablets and phones (John, 2026-10-08;
     // tablet-only before); a device already set up
     // always shows it so it can be updated or turned off.
