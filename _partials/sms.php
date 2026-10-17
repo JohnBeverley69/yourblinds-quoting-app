@@ -178,6 +178,26 @@ function sms_clean_sender(?string $name): ?string
     return $s;
 }
 
+/**
+ * Why a sender name is likely to be dropped by the mobile networks, or null.
+ * Seen 17 Oct 2026: "T S Blinds" was accepted by The SMS Works but never
+ * reached the phone, while "ABC Blinds" was delivered to the same phone.
+ * Names built from initials with gaps, or too short, get filtered.
+ */
+function sms_sender_risk(?string $name): ?string
+{
+    $s = trim((string) $name);
+    if ($s === '') return null;
+    if (preg_match('/(^|\s)[A-Za-z0-9](\s|$)/', $s)) {
+        return 'Names with single letters and gaps (like "T S Blinds") are often blocked by the mobile networks. Try it without the gaps, e.g. "'
+             . substr(str_replace(' ', '', $s), 0, 11) . '".';
+    }
+    if (strlen(str_replace(' ', '', $s)) < 4) {
+        return 'Very short names are often blocked by the mobile networks. Use 4 or more letters.';
+    }
+    return null;
+}
+
 /** A suggested sender from the company name: "Beverley Blinds Ltd" → "BeverleyBli". */
 function sms_suggest_sender(string $companyName): string
 {
