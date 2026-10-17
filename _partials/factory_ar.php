@@ -12,6 +12,7 @@ declare(strict_types=1);
  */
 
 require_once __DIR__ . '/delivery_charges.php';
+require_once __DIR__ . '/extra_value.php';
 
 /** The factory (Beverley) client id. */
 function ar_factory_id(): int
@@ -421,6 +422,7 @@ function ar_order_lines_for_doc(PDO $pdo, int $factoryId, int $quoteId): array
     foreach ($lines as &$ln) {
         $opts = [];
         foreach ($exBy[(int) $ln['id']] ?? [] as $e) {
+            if (extra_is_blank_choice($e)) continue;   // "None" / "Select" — not worth printing
             $name  = trim((string) $e['extra_name_snapshot']);
             $label = trim((string) $e['choice_label_snapshot']);
             $uv    = $e['user_value'] ?? null;

@@ -643,7 +643,7 @@ if ($wt > 0.0049 && $showLinePrices && !empty($items)) {
 <?php if ($showLineSizes && ($__sz = $lineSizeStr($item)) !== ''): ?>
 <div class="size"><?= e($__sz) ?></div>
 <?php endif; ?>
-<?php $exs = $extrasByItem[(int) $item['id']] ?? []; ?>
+<?php $exs = array_filter($extrasByItem[(int) $item['id']] ?? [], static fn ($x) => !extra_is_blank_choice($x)); ?>
 <?php if ($exs): ?>
 <div class="extras">
 <?php foreach ($exs as $ex): ?>

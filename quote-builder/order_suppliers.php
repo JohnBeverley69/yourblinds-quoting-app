@@ -188,6 +188,7 @@ if ($lineIds) {
         unset($er);
     }
     foreach ($exRows as $er) {
+        if (extra_is_blank_choice($er)) continue;   // "None" / "Select" — not worth printing
         $extrasByItem[(int) $er['quote_item_id']][] = $er;
     }
 }

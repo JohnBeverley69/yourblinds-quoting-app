@@ -19,3 +19,18 @@ if (!function_exists('extra_value_suffix')) {
         return (string) ($ex['mode'] ?? '') === 'per_unit' ? ' × ' . $n : ' — ' . $n . 'mm';
     }
 }
+
+/*
+ * An option left on "None" or "Select" says nothing, so paperwork leaves it
+ * off: quotes, invoices, the online quote and purchase orders. Matches the
+ * whole choice label only ("None", "- Select -", "Please select…"), not a
+ * choice that merely contains the word ("No Motor", "Selected Colour").
+ */
+if (!function_exists('extra_is_blank_choice')) {
+    function extra_is_blank_choice(array $ex): bool
+    {
+        $c = trim((string) ($ex['choice_label_snapshot'] ?? ''));
+        if ($c === '') return false;
+        return (bool) preg_match('/^[\s\-\x{2013}\x{2014}._*()\[\]]*(none|(please\s+)?select)[\s\-\x{2013}\x{2014}._*()\[\]\x{2026}]*$/iu', $c);
+    }
+}
