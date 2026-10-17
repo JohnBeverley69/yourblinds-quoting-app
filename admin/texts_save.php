@@ -34,6 +34,7 @@ $action = (string) ($_POST['_action'] ?? '');
 if ($action === 'save') {
     $rawSender = trim((string) ($_POST['sms_sender_name'] ?? ''));
     $sender    = sms_clean_sender($rawSender);
+    if ($sender !== null && strcasecmp($sender, SMS_DEFAULT_SENDER) === 0) $sender = null;   // the standard one
     if ($rawSender !== '' && $sender === null) {
         $_SESSION['flash_error'] = 'The sender name must be 3 to 11 letters or numbers (spaces allowed), with at least one letter.';
         header('Location: ' . $back);
@@ -98,9 +99,6 @@ if ($action === 'follow_up') {
         $_SESSION['flash_success'] = $on
             ? "Quote follow-up is on: {$days} day" . ($days === 1 ? '' : 's') . " after a quote is sent, {$how}."
             : 'Quote follow-up is off.';
-        if ($on && $method !== 'email' && sms_clean_sender(sms_settings($clientId, true)['sms_sender_name'] ?? '') === null) {
-            $_SESSION['flash_success'] .= ' Set a sender name above so the texts can go out.';
-        }
     } catch (Throwable $e) {
         $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage() . ' — has migrate_messages.php been run?';
     }

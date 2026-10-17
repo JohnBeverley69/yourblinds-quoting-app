@@ -207,6 +207,19 @@ function sms_sender_risk(?string $name): ?string
     return null;
 }
 
+/**
+ * The standard sender every company texts as unless it sets its own name
+ * (John, 17 Oct 2026). A plain word the networks don't block; the company's
+ * own name is in the wording of every text.
+ */
+const SMS_DEFAULT_SENDER = 'Blinds';
+
+/** The sender name this company's texts go out as. */
+function sms_sender_for(int $clientId): string
+{
+    return sms_clean_sender(sms_settings($clientId)['sms_sender_name'] ?? '') ?? SMS_DEFAULT_SENDER;
+}
+
 /** A suggested sender from the company name: "Beverley Blinds Ltd" → "BeverleyBli". */
 function sms_suggest_sender(string $companyName): string
 {
@@ -680,7 +693,7 @@ function sms_send(int $clientId, string $toRaw, string $body, array $ctx = []): 
     }
 
     $settings = sms_settings($clientId);
-    $sender   = sms_clean_sender($settings['sms_sender_name'] ?? '') ?? '';
+    $sender   = sms_sender_for($clientId);
     $to       = sms_normalise_uk_mobile($toRaw);
     $body     = sms_plain(trim($body));
     $segments = max(1, sms_segments($body));
@@ -689,8 +702,6 @@ function sms_send(int $clientId, string $toRaw, string $body, array $ctx = []): 
     if (!sms_feature_enabled($clientId)) {
         require_once __DIR__ . '/billing_helpers.php';
         $block = 'Texts are part of ' . billing_feature_plans_phrase('feature_sms') . '.';
-    } elseif ($sender === '') {
-        $block = 'Set a sender name in Settings → Texts first.';
     } elseif ($to === null) {
         $block = 'Not a UK mobile number.';
     } elseif ($body === '') {
