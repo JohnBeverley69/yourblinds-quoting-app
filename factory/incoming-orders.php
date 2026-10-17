@@ -216,6 +216,7 @@ if (!empty($ids)) {
 // Phase 0: the single derived fulfilment stage, shown next to the old pills so
 // it can be checked against them. Guarded (column added by migration).
 require_once __DIR__ . '/../_partials/order_stage.php';
+require_once __DIR__ . '/../_partials/process_order.php';   // the shared Process order button + summary
 $stageBy = [];
 if (!empty($ids)) {
     // This factory's own part's stage (a mixed order's other factory has its own).
@@ -732,6 +733,11 @@ require __DIR__ . '/../_partials/factory_head.php';
                         ?>
                             <?php if (($due['kind'] ?? '') === 'floor'): ?>
                                 <a class="io-btn floor" href="/factory/order-areas.php?order=<?= $qid ?>" title="The floor is making these — see how far each blind has got">See progress</a>
+                            <?php elseif ($dueSup === '' && ($due['kind'] ?? '') === 'process'): ?>
+                                <?php /* Pressable here too (John, 2026-10-17) — the SAME shared
+                                   button, summary and code as the Pipeline (_partials/process_order.php),
+                                   so the two screens can never do it differently. */ ?>
+                                <?= po_button($qid, $ref, $t, $lane, 'io-btn advance', 'Process order', null, 'Take the order in, put its blinds on the floor and email its suppliers') ?>
                             <?php elseif ($dueTxt !== ''): ?>
                                 <a class="io-pl" href="<?= e($plUrl) ?>" title="<?= e($dueTxt) ?> is done on the Pipeline"><span class="io-pl-what"><?= e($dueTxt) ?></span>Do this on the Pipeline &rarr;</a>
                             <?php endif; ?>
@@ -811,6 +817,8 @@ require __DIR__ . '/../_partials/factory_head.php';
         <?php endforeach; ?>
     </div>
 <?php endif; ?>
+
+<?= po_modal(po_skip_summary($pdo, current_factory_id())) ?>
 
 <script>
 (function () {
