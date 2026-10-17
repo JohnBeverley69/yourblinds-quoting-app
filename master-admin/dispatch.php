@@ -201,7 +201,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                           . ($e->invNumber !== '' ? ' on ' . $e->invNumber : '');
             } catch (Throwable $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
-                $failed[] = (string) $allowed[$qid]['quote_number'] . ' — ' . $e->getMessage();
+                $failed[] = (string) $allowed[$qid]['quote_number'] . ' — ' . user_error_text($e);
             }
         }
 
@@ -357,7 +357,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $printed[$qid] = $dnId;
         }
     } catch (Throwable $e) {
-        $_SESSION['flash_error'] = 'Could not build the delivery notes: ' . $e->getMessage();
+        $_SESSION['flash_error'] = 'Could not build the delivery notes: ' . user_error_text($e);
         header('Location: /master-admin/dispatch.php'); exit;
     }
 
@@ -384,7 +384,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($r['warning'] !== '') $warn[] = ($accName[$acc] ?? 'Account') . ': ' . $r['warning'];
             }
         } catch (Throwable $e) {
-            $warn[] = 'delivery charges could not be worked out (' . $e->getMessage() . ')';
+            $warn[] = 'delivery charges could not be worked out (' . user_error_text($e) . ')';
         }
         if ($warn) $_SESSION['flash_error'] = 'Delivery charge: ' . implode(' · ', $warn);
     }

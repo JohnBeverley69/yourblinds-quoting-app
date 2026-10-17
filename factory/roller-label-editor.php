@@ -77,7 +77,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $tpl['layout_json'] = json_encode($layout, JSON_UNESCAPED_UNICODE);
                     $flashOk = 'Saved — the roller label now uses this layout.';
                 } catch (Throwable $e) {
-                    $flashErr = 'Could not save: ' . $e->getMessage();
+                    $flashErr = 'Could not save: ' . user_error_text($e);
                 }
             }
         }

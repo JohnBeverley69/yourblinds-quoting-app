@@ -52,7 +52,7 @@ try {
     $_SESSION['flash_success'] = $n . ' fabric' . ($n === 1 ? '' : 's')
         . ' set to supplier ' . ($supplier !== '' ? '"' . $supplier . '"' : '(none)') . '.';
 } catch (Throwable $e) {
-    $_SESSION['flash_error'] = 'Could not set supplier: ' . $e->getMessage();
+    $_SESSION['flash_error'] = 'Could not set supplier: ' . user_error_text($e);
 }
 
 header('Location: ' . $redirect);

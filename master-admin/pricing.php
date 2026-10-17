@@ -101,7 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         paypal_update_plan_price($paypalId, $price);
                     } catch (Throwable $e) {
                         $payPalWarn = 'Local price saved, but PayPal sync failed: '
-                            . $e->getMessage()
+                            . user_error_text($e)
                             . ' — existing subscribers will keep paying the OLD price '
                             . 'until you retry. Click Save again once the issue is fixed.';
                         error_log('paypal_update_plan_price failed: ' . $e->getMessage());
@@ -252,7 +252,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('Unknown action.');
         }
     } catch (Throwable $e) {
-        $_SESSION['flash_error'] = $e->getMessage();
+        $_SESSION['flash_error'] = user_error_text($e);
     }
 
     header('Location: /master-admin/pricing.php');

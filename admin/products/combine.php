@@ -270,7 +270,7 @@ if ($action === 'combine') {
             exit;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            $error = 'Could not combine: ' . $e->getMessage();
+            $error = 'Could not combine: ' . user_error_text($e);
         }
     }
 }

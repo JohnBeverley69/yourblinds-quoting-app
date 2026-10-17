@@ -30,7 +30,7 @@ header('Cache-Control: no-store');
 set_exception_handler(static function (Throwable $e) {
     http_response_code(500);
     header('Content-Type: text/plain; charset=utf-8');
-    echo 'parity_sample failed: ' . $e->getMessage() . ' @ ' . basename($e->getFile()) . ':' . $e->getLine();
+    echo 'parity_sample failed: ' . user_error_text($e) . ' @ ' . basename($e->getFile()) . ':' . $e->getLine();
 });
 
 $pdo = db();

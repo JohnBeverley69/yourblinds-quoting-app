@@ -51,7 +51,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $ready) {
             $_SESSION['flash_success'] = 'Request removed.';
         }
     } catch (Throwable $e) {
-        $_SESSION['flash_error'] = 'Could not update: ' . $e->getMessage();
+        $_SESSION['flash_error'] = 'Could not update: ' . user_error_text($e);
     }
     header('Location: /master-admin/supplier-requests.php');
     exit;

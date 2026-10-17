@@ -80,7 +80,7 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         }
     } catch (RuntimeException $e) {
-        $_SESSION['flash_error'] = $e->getMessage();
+        $_SESSION['flash_error'] = user_error_text($e);
     } catch (Throwable $e) {
         error_log('remakes: ' . $e->getMessage());
         $_SESSION['flash_error'] = 'Something went wrong — nothing was changed. Please try again.';

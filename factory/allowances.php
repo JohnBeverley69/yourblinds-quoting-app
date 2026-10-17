@@ -133,7 +133,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $hasTable) {
             $_SESSION['flash_success'] = "Saved {$n} allowance" . ($n === 1 ? '' : 's') . " in “{$table}”.";
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage();
+            $_SESSION['flash_error'] = 'Could not save: ' . user_error_text($e);
         }
     }
     header('Location: /factory/allowances.php?table=' . urlencode($table)

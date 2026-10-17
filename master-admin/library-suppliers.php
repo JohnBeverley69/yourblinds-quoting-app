@@ -105,7 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $tableReady) {
             }
         }
     } catch (Throwable $e) {
-        $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage();
+        $_SESSION['flash_error'] = 'Could not save: ' . user_error_text($e);
     }
 
     header('Location: /master-admin/library-suppliers.php');

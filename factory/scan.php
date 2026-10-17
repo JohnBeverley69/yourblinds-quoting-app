@@ -184,7 +184,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (trim($code) !== '') $result = $handleScan($code);
         }
     } catch (Throwable $e) {
-        $result = ['ok' => false, 'title' => 'Error', 'detail' => $e->getMessage()];
+        $result = ['ok' => false, 'title' => 'Error', 'detail' => user_error_text($e)];
     }
     if (!$isAjax) {
         if ($result !== null) $_SESSION['scan_result'] = $result;

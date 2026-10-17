@@ -291,7 +291,7 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     } catch (Throwable $e) {
-        $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage();
+        $_SESSION['flash_error'] = 'Could not save: ' . user_error_text($e);
     }
 
     // Come back to the bench you were working on, not the top of the page.

@@ -88,7 +88,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ? 'No company\'s features changed.'
                 : $changed . ' compan' . ($changed === 1 ? 'y\'s' : 'ies\'') . ' features were switched on or off to match.');
     } catch (Throwable $e) {
-        $_SESSION['flash_error'] = $e->getMessage();
+        $_SESSION['flash_error'] = user_error_text($e);
     }
     header('Location: /master-admin/plan-features.php');
     exit;

@@ -67,7 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ar_payments_ready($pdo)) {
                 ? 'Applied £' . number_format($r['applied'], 2) . ' of credit on account to ' . implode(', ', $r['invoices']) . '.'
                 : 'Nothing to apply — there is no unallocated payment on account, or no open invoice to put it against.';
         } catch (Throwable $e) {
-            $_SESSION['flash_error'] = 'Could not apply credit: ' . $e->getMessage();
+            $_SESSION['flash_error'] = 'Could not apply credit: ' . user_error_text($e);
         }
         $to = (string) ($_POST['return'] ?? '') === 'account' ? '/master-admin/account.php?id=' . $accountId : $back;
         header('Location: ' . $to);
@@ -82,7 +82,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ar_payments_ready($pdo)) {
             qbo_push_kick($factory);   // void it in QuickBooks too, if it went across
             $_SESSION['flash_success'] = 'Payment voided — the invoices it covered are open again.';
         } catch (Throwable $e) {
-            $_SESSION['flash_error'] = 'Could not void: ' . $e->getMessage();
+            $_SESSION['flash_error'] = 'Could not void: ' . user_error_text($e);
         }
         header('Location: ' . $back);
         exit;
@@ -147,7 +147,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ar_payments_ready($pdo)) {
         qbo_push_kick($factory);   // send it to QuickBooks now if that's switched on
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
-        $_SESSION['flash_error'] = 'Could not record the payment: ' . $e->getMessage();
+        $_SESSION['flash_error'] = 'Could not record the payment: ' . user_error_text($e);
         header('Location: ' . $back);
         exit;
     }

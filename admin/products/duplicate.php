@@ -259,7 +259,7 @@ try {
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
     error_log('Product duplicate failed (source=' . $sourceId . '): ' . $e->getMessage());
-    $_SESSION['flash_error'] = 'Could not duplicate product: ' . $e->getMessage();
+    $_SESSION['flash_error'] = 'Could not duplicate product: ' . user_error_text($e);
     header('Location: /admin/products/index.php');
     exit;
 }

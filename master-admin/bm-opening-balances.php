@@ -69,7 +69,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['flash_success'] = sprintf('Imported %d invoices (£%s). %d already in YourBlinds were skipped.', $r['made'], number_format($r['total'], 2), $r['skipped']);
         }
     } catch (Throwable $e) {
-        $_SESSION['flash_error'] = $e->getMessage();
+        $_SESSION['flash_error'] = user_error_text($e);
     }
     header('Location: ' . $self);
     exit;

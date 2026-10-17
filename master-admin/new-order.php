@@ -55,7 +55,7 @@ if ($autoOk && ($_GET['auto'] ?? '') === '1' && (int) ($_GET['account'] ?? 0) > 
         header('Location: /quote-builder/edit.php?id=' . $res['id'] . '#add-line');
         exit;
     } catch (Throwable $e) {
-        $error = 'Could not start the quote: ' . $e->getMessage();
+        $error = 'Could not start the quote: ' . user_error_text($e);
     }
 }
 
@@ -73,7 +73,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 header('Location: /quote-builder/edit.php?id=' . $res['id'] . '#add-line');
                 exit;
             } catch (Throwable $e) {
-                $error = $e->getMessage();
+                $error = user_error_text($e);
             }
         }
     } elseif ($mode === 'manual') {
@@ -103,7 +103,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     exit;
                 } catch (Throwable $e) {
                     if (db()->inTransaction()) db()->rollBack();
-                    $error = 'Could not create the account: ' . $e->getMessage();
+                    $error = 'Could not create the account: ' . user_error_text($e);
                 }
             }
         } else {
@@ -112,7 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 header('Location: /quote-builder/edit.php?id=' . $res['id'] . '#add-line');
                 exit;
             } catch (Throwable $e) {
-                $error = $e->getMessage();
+                $error = user_error_text($e);
             }
         }
     } elseif ($mode === 'retail') {

@@ -63,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $src) {
         exit;
     } catch (RuntimeException $e) {
         rm_discard_photo($photo);   // nothing saved — do not leave the upload on disk
-        $error = $e->getMessage();
+        $error = user_error_text($e);
     } catch (Throwable $e) {
         rm_discard_photo($photo);
         error_log('remake request: ' . $e->getMessage());

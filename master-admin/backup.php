@@ -158,7 +158,7 @@ if ($action === 'restore') {
             'Restore complete. Ran ' . $result['ran'] . ' of ' . $result['total']
             . ' statements. Auto-snapshot saved as ' . basename($autoPath) . '.';
     } catch (Throwable $e) {
-        $_SESSION['flash_error'] = 'Restore failed: ' . $e->getMessage()
+        $_SESSION['flash_error'] = 'Restore failed: ' . user_error_text($e)
             . ' (an auto-snapshot was taken just before — use it to roll back if needed)';
     }
 

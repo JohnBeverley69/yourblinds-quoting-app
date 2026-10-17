@@ -160,7 +160,7 @@ try {
     $iStmt->execute([$quoteId]);
     $lines = $iStmt->fetchAll();
 } catch (Throwable $e) {
-    qb_flash_redirect($backToQuote, 'error', 'Could not read the order lines: ' . $e->getMessage());
+    qb_flash_redirect($backToQuote, 'error', 'Could not read the order lines: ' . user_error_text($e));
 }
 
 // Options / extras per line — the supplier needs the full spec (tilt, mid

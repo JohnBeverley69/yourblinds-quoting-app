@@ -54,6 +54,6 @@ try {
     require_once __DIR__ . '/../_partials/order_stage.php';
     recompute_order_stage($pdo, $quoteId);
 } catch (Throwable $e) {
-    qb_flash_redirect($back, 'error', 'Could not update: ' . $e->getMessage());
+    qb_flash_redirect($back, 'error', 'Could not update: ' . user_error_text($e));
 }
 qb_flash_redirect($back, 'success', $msg);

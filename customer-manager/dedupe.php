@@ -153,7 +153,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               . $totalDeleted . ' duplicates in total.';
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
-        $_SESSION['flash_error'] = 'Merge failed: ' . $e->getMessage();
+        $_SESSION['flash_error'] = 'Merge failed: ' . user_error_text($e);
     }
     header('Location: /customer-manager/dedupe.php');
     exit;

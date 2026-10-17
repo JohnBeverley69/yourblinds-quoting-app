@@ -102,7 +102,7 @@ if ($ready && $_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['flash_success'] = 'Production time saved — it applies to orders placed from now on. Orders already placed keep the date they were promised.';
         }
     } catch (Throwable $e) {
-        $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage();
+        $_SESSION['flash_error'] = 'Could not save: ' . user_error_text($e);
     }
     header('Location: /factory/routes.php' . ($productId > 0 ? '?product_id=' . $productId : ''));
     exit;

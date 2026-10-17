@@ -233,7 +233,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && (string) ($_POST['_action'] ?? '') 
             if (str_contains($e->getMessage(), 'uniq_price_table_product_system_band')) {
                 $error = 'A price table for that band already exists in this system.';
             } else {
-                $error = 'Could not create: ' . $e->getMessage();
+                $error = 'Could not create: ' . user_error_text($e);
             }
         }
     }

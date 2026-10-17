@@ -43,7 +43,7 @@ try {
         ->execute([$unit, $quoteId, $clientId]);
 } catch (Throwable $e) {
     qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId, 'error',
-        'Could not set the unit — has migrate_measurement_unit.php been run? ' . $e->getMessage());
+        'Could not set the unit — has migrate_measurement_unit.php been run? ' . user_error_text($e));
 }
 
 qb_flash_redirect('/quote-builder/edit.php?id=' . $quoteId . '#add-line', 'success',

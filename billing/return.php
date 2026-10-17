@@ -49,7 +49,7 @@ try {
     $r = paypal_request('GET', '/v1/billing/subscriptions/' . rawurlencode($subId));
 } catch (Throwable $e) {
     error_log('PayPal return lookup error for ' . $subId . ': ' . $e->getMessage());
-    $_SESSION['flash_error'] = 'Could not verify subscription with PayPal: ' . $e->getMessage();
+    $_SESSION['flash_error'] = 'Could not verify subscription with PayPal: ' . user_error_text($e);
     header('Location: /billing/index.php');
     exit;
 }

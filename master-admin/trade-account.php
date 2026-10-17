@@ -119,7 +119,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($clientId === $myClient) $_SESSION['company_name'] = $company;
                 $_SESSION['flash_success'] = 'Account details saved.';
             } catch (Throwable $e) {
-                $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage();
+                $_SESSION['flash_error'] = 'Could not save: ' . user_error_text($e);
             }
         }
         header('Location: /master-admin/trade-account.php?id=' . $clientId);
@@ -136,7 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $pdo->prepare('UPDATE clients SET active = ? WHERE id = ?')->execute([$to, $clientId]);
                 $_SESSION['flash_success'] = $to === 1 ? 'Account activated.' : 'Account deactivated.';
             } catch (Throwable $e) {
-                $_SESSION['flash_error'] = 'Could not update: ' . $e->getMessage();
+                $_SESSION['flash_error'] = 'Could not update: ' . user_error_text($e);
             }
         }
         header('Location: /master-admin/trade-account.php?id=' . $clientId);
@@ -180,7 +180,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         )->execute([$clientId, $mail, $name, password_hash($pw, PASSWORD_DEFAULT)]);
                         $_SESSION['flash_success'] = 'Login added for ' . $mail . '. Use "Send reset link" if you want them to set their own password.';
                     } catch (Throwable $e) {
-                        $_SESSION['flash_error'] = 'Could not add login: ' . $e->getMessage();
+                        $_SESSION['flash_error'] = 'Could not add login: ' . user_error_text($e);
                     }
                 }
             }
@@ -294,7 +294,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         } catch (Throwable $e) {
-            $_SESSION['flash_error'] = 'Action failed: ' . $e->getMessage();
+            $_SESSION['flash_error'] = 'Action failed: ' . user_error_text($e);
         }
         header('Location: ' . $redirect);
         exit;
@@ -470,7 +470,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
         } catch (Throwable $e) {
-            $_SESSION['flash_error'] = 'Could not save discount: ' . $e->getMessage()
+            $_SESSION['flash_error'] = 'Could not save discount: ' . user_error_text($e)
                 . ' (has /setup/migrations/migrate_trade_discounts.php been run?)';
         }
         header('Location: ' . $redirect);
@@ -539,7 +539,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['flash_success'] = $to ? 'Consultant will be emailed on trade-portal orders.' : 'Consultant order emails turned off.';
             }
         } catch (Throwable $e) {
-            $_SESSION['flash_error'] = 'Could not save commission: ' . $e->getMessage()
+            $_SESSION['flash_error'] = 'Could not save commission: ' . user_error_text($e)
                 . ' (has /setup/migrations/migrate_commissions.php been run?)';
         }
         header('Location: ' . $redirect);

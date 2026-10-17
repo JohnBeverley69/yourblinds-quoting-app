@@ -308,7 +308,7 @@ function pu_undo(PDO $pdo, int $clientId, string $scope): array
         $pdo->commit();
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
-        return [false, 'Undo failed: ' . $e->getMessage(), 0];
+        return [false, 'Undo failed: ' . user_error_text($e), 0];
     }
     return [true, (string) $snap['label'], count($rows)];
 }

@@ -67,7 +67,7 @@ if ($action === 'save') {
             $_SESSION['flash_error'] = 'Saved, but check the sender name: ' . $risk;
         }
     } catch (Throwable $e) {
-        $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage() . ' — has migrate_messages.php been run?';
+        $_SESSION['flash_error'] = 'Could not save: ' . user_error_text($e) . ' — has migrate_messages.php been run?';
     }
     header('Location: ' . $back);
     exit;
@@ -101,7 +101,7 @@ if ($action === 'follow_up') {
             ? "Quote follow-up is on: {$days} day" . ($days === 1 ? '' : 's') . " after a quote is sent, {$how}."
             : 'Quote follow-up is off.';
     } catch (Throwable $e) {
-        $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage() . ' — has migrate_messages.php been run?';
+        $_SESSION['flash_error'] = 'Could not save: ' . user_error_text($e) . ' — has migrate_messages.php been run?';
     }
     header('Location: ' . $back);
     exit;

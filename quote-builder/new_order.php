@@ -99,7 +99,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($pdo->inTransaction()) $pdo->rollBack();
             $error = str_contains($e->getMessage(), 'direct_order')
                 ? 'Orders aren\'t switched on yet — run migrate_direct_orders.php.'
-                : 'Could not start the order: ' . $e->getMessage();
+                : 'Could not start the order: ' . user_error_text($e);
         }
     }
 }

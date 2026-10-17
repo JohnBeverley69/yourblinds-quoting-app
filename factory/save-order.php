@@ -127,7 +127,7 @@ if (isset($_POST['del_order'])) {
     }
     try {
         $del = fod_delete_order($pdo, $qid, $MASTER);
-    } catch (Throwable $e) { $fail('Could not delete order: ' . $e->getMessage()); }
+    } catch (Throwable $e) { $fail('Could not delete order: ' . user_error_text($e)); }
     $supplierSends = $del['supplier_sends'];
     $_SESSION['flash_success'] = 'Order deleted.'
         . ($supplierSends
@@ -157,10 +157,10 @@ if (isset($_POST['force_del_order'])) {
     try {
         $res = fod_force_delete_order($pdo, $qid, $MASTER);
     } catch (RuntimeException $e) {
-        $fail($e->getMessage());
+        $fail(user_error_text($e));
     } catch (Throwable $e) {
         error_log('force_del_order ' . $qid . ': ' . $e->getMessage());
-        $fail('Could not force-delete the order — nothing was changed. ' . $e->getMessage());
+        $fail('Could not force-delete the order — nothing was changed. ' . user_error_text($e));
     }
     $d = $res['destroyed'];
     // No order-level audit table exists (catalogue_audit is the product
@@ -221,7 +221,7 @@ if (isset($_POST['del_item'])) {
         qb_reconcile_fascia_groups($pdo, $qid, $clientId, $accountId);
         qb_recompute_totals($qid);
         $pdo->commit();
-    } catch (Throwable $e) { if ($pdo->inTransaction()) $pdo->rollBack(); $fail('Could not delete blind: ' . $e->getMessage()); }
+    } catch (Throwable $e) { if ($pdo->inTransaction()) $pdo->rollBack(); $fail('Could not delete blind: ' . user_error_text($e)); }
     $afterLineChange();
     $_SESSION['flash_success'] = 'Blind deleted — order total updated.';
     if ($delWarn !== '') $_SESSION['flash_error'] = $delWarn;
@@ -254,7 +254,7 @@ if (isset($_POST['add_item'])) {
         qb_reconcile_fascia_groups($pdo, $qid, $clientId, $accountId);
         qb_recompute_totals($qid);
         $pdo->commit();
-    } catch (Throwable $e) { if ($pdo->inTransaction()) $pdo->rollBack(); $fail('Could not add blind: ' . $e->getMessage()); }
+    } catch (Throwable $e) { if ($pdo->inTransaction()) $pdo->rollBack(); $fail('Could not add blind: ' . user_error_text($e)); }
     $afterLineChange();
     $_SESSION['flash_success'] = 'Blind added — edit it below. Order total updated.';
     header('Location: ' . $backEdit); exit;
@@ -438,7 +438,7 @@ try {
     $pdo->commit();
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();
-    $fail('Could not save: ' . $e->getMessage());
+    $fail('Could not save: ' . user_error_text($e));
 }
 
 // Warn (don't block) when a changed line is bought-in and its supplier has

@@ -235,7 +235,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 exit;
             } catch (Throwable $e) {
                 if ($pdo->inTransaction()) $pdo->rollBack();
-                $error = 'Could not create client: ' . $e->getMessage();
+                $error = 'Could not create client: ' . user_error_text($e);
             }
         }
     }

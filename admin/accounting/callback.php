@@ -70,7 +70,7 @@ try {
 } catch (Throwable $e) {
     error_log('Accounting connect failed (client ' . $clientId . ', ' . $providerKey . '): ' . $e->getMessage());
     ac_log($clientId, $providerKey, 'connect', 'failed', $e->getMessage());
-    $_SESSION['flash_error'] = 'Could not complete the ' . $prov->label() . ' connection: ' . $e->getMessage();
+    $_SESSION['flash_error'] = 'Could not complete the ' . $prov->label() . ' connection: ' . user_error_text($e);
 }
 
 header('Location: ' . $back);

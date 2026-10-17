@@ -50,7 +50,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $_SESSION['flash_success'] = 'Bank connection saved.';
         } catch (Throwable $e) {
-            $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage();
+            $_SESSION['flash_error'] = 'Could not save: ' . user_error_text($e);
         }
         header('Location: ' . $back); exit;
     }
@@ -62,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $n = bf_sync($pdo, $factory);
             $_SESSION['flash_success'] = $n === 1 ? '1 new bank line fetched.' : $n . ' new bank lines fetched.';
         } catch (Throwable $e) {
-            $_SESSION['flash_error'] = 'Could not fetch from the bank: ' . $e->getMessage();
+            $_SESSION['flash_error'] = 'Could not fetch from the bank: ' . user_error_text($e);
         }
         header('Location: ' . $back); exit;
     }
@@ -112,7 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             qbo_push_kick($factory);   // send it to QuickBooks now if that's switched on
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            $_SESSION['flash_error'] = 'Could not record the payment: ' . $e->getMessage();
+            $_SESSION['flash_error'] = 'Could not record the payment: ' . user_error_text($e);
         }
         header('Location: ' . $back); exit;
     }
@@ -167,7 +167,7 @@ $savedAcc = (string) (pc_get('LUNCHFLOW_ACCOUNT_ID', '') ?? '');
 $accounts = [];
 $connErr  = null;
 if ($hasKey) {
-    try { $accounts = bf_lf_accounts(); } catch (Throwable $e) { $connErr = $e->getMessage(); }
+    try { $accounts = bf_lf_accounts(); } catch (Throwable $e) { $connErr = user_error_text($e); }
 }
 
 // Fetch automatically when the page is opened, at most every 30 minutes
@@ -175,7 +175,7 @@ if ($hasKey) {
 $lastSync = (int) (pc_get('BANK_LAST_SYNC', '0') ?? 0);
 if ($ready && $hasKey && $connErr === null && time() - $lastSync > 1800) {
     try { bf_sync($pdo, $factory); $lastSync = time(); }
-    catch (Throwable $e) { $flashErr = $flashErr ?? ('Automatic fetch failed: ' . $e->getMessage()); }
+    catch (Throwable $e) { $flashErr = $flashErr ?? ('Automatic fetch failed: ' . user_error_text($e)); }
 }
 
 $rows = []; $counts = ['new' => 0, 'matched' => 0, 'ignored' => 0, 'out' => 0];

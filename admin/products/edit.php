@@ -792,7 +792,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit;
         } catch (Throwable $e) {
             if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
-            $msg = $e->getMessage();
+            $msg = user_error_text($e);
             if (str_contains($msg, 'uniq_product_client_name')) {
                 $error = 'A product with that name already exists.';
             } elseif (str_contains($msg, 'Out of range') || str_contains($msg, '1264')) {

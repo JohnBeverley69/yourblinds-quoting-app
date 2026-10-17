@@ -97,7 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (str_contains($e->getMessage(), 'uniq_product_client_name')) {
                 $error = 'A product with that name already exists.';
             } else {
-                $error = 'Could not add product: ' . $e->getMessage();
+                $error = 'Could not add product: ' . user_error_text($e);
             }
         }
     }

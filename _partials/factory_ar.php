@@ -1167,7 +1167,7 @@ function ar_send_invoice(PDO $pdo, int $factory, int $invId): array
     try {
         $doc = ar_invoice_pdf($pdo, $factory, $invId);
     } catch (Throwable $e) {
-        return ['ok' => false, 'message' => 'Could not build the invoice PDF: ' . $e->getMessage()];
+        return ['ok' => false, 'message' => 'Could not build the invoice PDF: ' . user_error_text($e)];
     }
     if ($doc === null) return ['ok' => false, 'message' => 'Invoice not found, or the PDF engine is unavailable.'];
     $inv = $doc['inv'];
@@ -1203,7 +1203,7 @@ function ar_send_credit_note(PDO $pdo, int $factory, int $cnId): array
     try {
         $doc = ar_credit_note_pdf($pdo, $factory, $cnId);
     } catch (Throwable $e) {
-        return ['ok' => false, 'message' => 'Could not build the credit note PDF: ' . $e->getMessage()];
+        return ['ok' => false, 'message' => 'Could not build the credit note PDF: ' . user_error_text($e)];
     }
     if ($doc === null) return ['ok' => false, 'message' => 'Credit note not found, or the PDF engine is unavailable.'];
     $cn = $doc['cn'];

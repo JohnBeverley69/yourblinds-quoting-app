@@ -46,7 +46,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $src) {
     } catch (RuntimeException $e) {
         rm_discard_photo($photo);   // nothing saved — do not leave the upload on disk
         if ($pdo->inTransaction()) $pdo->rollBack();
-        $error = $e->getMessage();
+        $error = user_error_text($e);
     } catch (Throwable $e) {
         rm_discard_photo($photo);
         if ($pdo->inTransaction()) $pdo->rollBack();

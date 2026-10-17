@@ -55,7 +55,7 @@ if ($isSuper && $_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     } catch (Throwable $e) {
-        $_SESSION['flash_error'] = 'Could not update the scan log: ' . $e->getMessage();
+        $_SESSION['flash_error'] = 'Could not update the scan log: ' . user_error_text($e);
     }
     header('Location: /factory/scan-log.php');
     exit;

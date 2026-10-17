@@ -262,7 +262,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (Throwable $e) {
             $_SESSION['flash_error'] = 'Could not save margins — '
                 . 'has migrate_default_margins.php been run? '
-                . $e->getMessage();
+                . user_error_text($e);
         }
         header('Location: /admin/settings.php');
         exit;
@@ -284,7 +284,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['flash_success'] = 'Default measurement unit saved.';
         } catch (Throwable $e) {
             $_SESSION['flash_error'] = 'Could not save measurement unit — '
-                . 'has migrate_measurement_unit.php been run? ' . $e->getMessage();
+                . 'has migrate_measurement_unit.php been run? ' . user_error_text($e);
         }
         header('Location: /admin/settings.php');
         exit;
@@ -515,7 +515,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $_SESSION['flash_success'] = 'Quote settings saved.';
         } catch (Throwable $e) {
-            $_SESSION['flash_error'] = 'Could not save settings: ' . $e->getMessage();
+            $_SESSION['flash_error'] = 'Could not save settings: ' . user_error_text($e);
         }
         header('Location: /admin/settings.php');
         exit;
@@ -570,7 +570,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$clientId, $terms, $privacy, $acceptEm]);
             $_SESSION['flash_success'] = 'Terms, Privacy Policy and acceptance email saved.';
         } catch (Throwable $e) {
-            $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage()
+            $_SESSION['flash_error'] = 'Could not save: ' . user_error_text($e)
                 . ' — have you run migrate_terms_conditions.php?';
         }
         // Trade T&Cs live in a later column (migrate_trade_terms.php) — saved
@@ -605,7 +605,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             pc_set('QUICKBOOKS_REDIRECT_URI', $qbRedir);
             $_SESSION['flash_success'] = 'QuickBooks app credentials saved.';
         } catch (Throwable $e) {
-            $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage()
+            $_SESSION['flash_error'] = 'Could not save: ' . user_error_text($e)
                 . ' — have you run migrate_platform_config.php?';
         }
         header('Location: /admin/settings.php#accounting');
@@ -635,7 +635,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$clientId, $json]);
             $_SESSION['flash_success'] = 'Status colours saved.';
         } catch (Throwable $e) {
-            $_SESSION['flash_error'] = 'Could not save colours: ' . $e->getMessage()
+            $_SESSION['flash_error'] = 'Could not save colours: ' . user_error_text($e)
                 . ' — have you run migrate_job_status_colours.php?';
         }
         header('Location: /admin/settings.php');
@@ -653,7 +653,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             )->execute([$clientId, $jokeOn]);
             $_SESSION['flash_success'] = $jokeOn ? 'Joke of the day is on.' : 'Joke of the day is off.';
         } catch (Throwable $e) {
-            $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage()
+            $_SESSION['flash_error'] = 'Could not save: ' . user_error_text($e)
                 . ' — have you run migrate_joke_toggle.php?';
         }
         header('Location: /admin/settings.php');
@@ -673,7 +673,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ? 'Calendar will show order value + balance.'
                 : 'Calendar money figures are now hidden.';
         } catch (Throwable $e) {
-            $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage()
+            $_SESSION['flash_error'] = 'Could not save: ' . user_error_text($e)
                 . ' — have you run migrate_calendar_money.php?';
         }
         header('Location: /admin/settings.php');
@@ -693,7 +693,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ? 'Address links will now open in Waze.'
                 : 'Address links will now open in Google Maps.';
         } catch (Throwable $e) {
-            $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage()
+            $_SESSION['flash_error'] = 'Could not save: ' . user_error_text($e)
                 . ' — have you run migrate_map_provider.php?';
         }
         header('Location: /admin/settings.php');
@@ -791,7 +791,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ? 'Booking time slots saved.'
                 : 'Booking time slots are off.';
         } catch (Throwable $e) {
-            $_SESSION['flash_error'] = 'Could not save: ' . $e->getMessage()
+            $_SESSION['flash_error'] = 'Could not save: ' . user_error_text($e)
                 . ' — have you run migrate_ampm_windows_list.php?';
         }
         header('Location: /admin/settings.php');
@@ -879,7 +879,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ? 'Suppliers saved — a rename was skipped because that name is already in your list.'
                 : 'Suppliers saved.';
         } catch (Throwable $e) {
-            $_SESSION['flash_error'] = 'Could not save suppliers: ' . $e->getMessage()
+            $_SESSION['flash_error'] = 'Could not save suppliers: ' . user_error_text($e)
                 . ' — have you run migrate_suppliers.php?';
         }
         header('Location: /admin/settings.php');
