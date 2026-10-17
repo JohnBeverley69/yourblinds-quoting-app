@@ -307,12 +307,22 @@ function paypal_create_plan(string $planCode, string $name, string $description,
         throw new RuntimeException('Cannot create a PayPal plan with zero or negative price.');
     }
 
+    // PayPal caps descriptions — product 256 characters, plan 127 — and answers a
+    // longer one with "400 Request is not well-formed" (John, 2026-10-17: Gold's
+    // description outgrew 127 once the Plan features board rewrote it). Trim to fit.
+    $fit = static function (string $s, int $max): string {
+        $s = trim((string) preg_replace('/\s+/', ' ', $s));
+        return mb_strlen($s) <= $max ? $s : rtrim(mb_substr($s, 0, $max - 1)) . '…';
+    };
+    $prodDesc = $fit($description ?: $name, 256);
+    $planDesc = $fit($description ?: $name, 127);
+
     // 1. Product.
     $prodId = 'yb-' . preg_replace('/[^a-z0-9_-]/i', '', $planCode) . '-' . substr(bin2hex(random_bytes(3)), 0, 6);
     $r = paypal_request('POST', '/v1/catalogs/products', [
         'id'          => $prodId,
         'name'        => $name,
-        'description' => $description ?: $name,
+        'description' => $prodDesc,
         'type'        => 'SERVICE',
         'category'    => 'SOFTWARE',
     ]);
@@ -322,7 +332,7 @@ function paypal_create_plan(string $planCode, string $name, string $description,
     $planPayload = [
         'product_id'   => $productId,
         'name'         => $name,
-        'description'  => $description ?: $name,
+        'description'  => $planDesc,
         'status'       => 'ACTIVE',
         'billing_cycles' => [[
             'frequency'      => ['interval_unit' => 'MONTH', 'interval_count' => 1],
