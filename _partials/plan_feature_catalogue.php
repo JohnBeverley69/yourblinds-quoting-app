@@ -34,7 +34,6 @@ return [
     'supplier_ranges'=> ['Supplier ranges',          'See the supplier ranges available and ask for new ones',                   'free'],
     // ── Calendar and fitting ────────────────────────────────────────────
     'calendar'       => ['Calendar',                 'Measures and fittings, with your own booking slots',                       'free'],
-    'fitters'        => ['Fitters',                  'Fitter logins with their own day of jobs',                                 'gold'],
     // ── Money ───────────────────────────────────────────────────────────
     'payments'       => ['Payments and deposits',    'Take deposits, record payments and send receipts',                         'silver'],
     'invoices'       => ['Invoices',                 'Invoice the customer straight from the job',                               'silver'],
@@ -44,7 +43,10 @@ return [
     // without importing their price lists. (Was two: 'products' + 'price_import'.)
     'products'       => ['Your own products and price lists', 'Add your own products and options, and import their price lists from a spreadsheet, with undo', 'silver'],
     // ── Running the business ────────────────────────────────────────────
-    'team'           => ['Team and permissions',     'Add staff, choose who sees costs and who can order',                       'platinum'],
+    // One box, "Users and permissions" (John, 2026-10-17: fitters are users too;
+    // "team" didn't match the Users page). Was 'fitters' + 'team'; the key stays
+    // 'team'. Adding ANY extra login — office, sales or fitter — needs it.
+    'team'           => ['Users and permissions', 'Add users — office, sales and fitters — and choose who sees costs, who can order and who only sees fittings', 'silver'],
     'messages_log'   => ['Messages log',             'Every text and email sent to a customer, in one place',                    'gold'],
     'work_offline'   => ['Work offline',             'Quote on a tablet with no signal; it sends when you\'re back online',      'platinum'],
     'help'           => ['Help guides and assistant','Animated step-by-step guides and a support assistant',                     'free'],

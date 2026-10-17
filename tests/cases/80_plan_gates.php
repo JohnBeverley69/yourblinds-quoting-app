@@ -30,25 +30,27 @@ test('plan gates: on — a Bronze company is refused a Gold feature, with the pl
               'the Messages menu item should hide for a Bronze company');
 
         $r = as_user('bravo.admin')->get('/admin/products/price-tables-bulk-import.php');
-        check_same(403, $r->status, 'price list import (Platinum) for a Bronze company');
+        check_same(403, $r->status, 'price list import (Silver) for a Bronze company');
 
-        // Gold by comp → Messages opens; Platinum features still don't.
+        // Adding anyone — a fitter too — is "Users and permissions" (Silver): refused on Bronze.
+        foreach (['office', 'fitter'] as $role) {
+            $r = t_submit(as_user('bravo.admin'), '/admin/users.php', ['_action' => 'create', 'first_name' => 'Gate', 'last_name' => 'Test',
+                'username' => 'gate.test.' . $role, 'email' => '', 'password' => 'longenough1', 'roles' => [$role]]);
+            check_contains('Users and permissions is part of the Silver plan', $r->body, "adding a $role on Bronze");
+            check_same(0, (int) t_val('SELECT COUNT(*) FROM client_users WHERE username = ?', ['gate.test.' . $role]), "no $role was added");
+        }
+
+        // Gold by comp → Messages and import open.
         db()->exec("INSERT INTO client_plan_overrides (client_id, plan_code, override_type, notes) VALUES (102, 'gold', 'comp', 'gate test')");
         check(as_user('bravo.admin')->get('/messages/index.php')->status < 400, 'Messages for a Gold company');
         check(as_user('bravo.admin')->get('/admin/products/price-tables-bulk-import.php')->status < 400, 'price list import for a Gold company');
-
-        // Adding staff (Team, Platinum) is refused on Gold; the page itself still opens.
-        $r = t_submit(as_user('bravo.admin'), '/admin/users.php', ['_action' => 'create', 'first_name' => 'Gate', 'last_name' => 'Test',
-            'username' => 'gate.test.office', 'email' => '', 'password' => 'longenough1', 'roles' => ['office']]);
-        check_contains('Team and permissions is part of the Platinum plan', $r->body, 'adding an office person on Gold');
-        check_same(0, (int) t_val("SELECT COUNT(*) FROM client_users WHERE username = 'gate.test.office'"), 'no user was added');
 
         // The main factory and the super-admin are never locked.
         check(plan_feature_allowed(3, 'messages_log') && plan_feature_allowed(3, 'team'), 'the main factory is never locked');
         check(as_user('super')->get('/messages/index.php')->status < 400, 'the super-admin is never locked');
     } finally {
         db()->exec("DELETE FROM client_plan_overrides WHERE client_id = 102 AND notes = 'gate test'");
-        db()->exec("DELETE FROM client_users WHERE username = 'gate.test.office'");
+        db()->exec("DELETE FROM client_users WHERE username IN ('gate.test.office', 'gate.test.fitter')");
         $enforce(false);
     }
 });
