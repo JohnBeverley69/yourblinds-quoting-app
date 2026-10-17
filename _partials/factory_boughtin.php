@@ -171,7 +171,7 @@ function factory_po_extras(PDO $pdo, array $itemIds): array
         } catch (Throwable $e2) { return []; }
     }
     $out = [];
-    foreach ($rows as $ex) $out[(int) $ex['quote_item_id']][] = factory_po_extra_text($ex);
+    foreach ($rows as $ex) if (!extra_is_blank_choice($ex)) $out[(int) $ex['quote_item_id']][] = factory_po_extra_text($ex);
     return $out;
 }
 
