@@ -158,6 +158,34 @@ if (!$backupFresh) {
     exit;
 }
 
+// An extra safety snapshot, on top of the backup rule above: the nightly backup's own dump code, to a .part file that is
+// renamed only once complete. No snapshot = no clear.
+require_once dirname(__DIR__, 2) . '/_partials/db_backup.php';
+@set_time_limit(0);
+@ini_set('memory_limit', '512M');
+$backupDir = dirname(__DIR__, 2) . '/_backups';
+if (!is_dir($backupDir)) {
+    @mkdir($backupDir, 0775, true);
+    @file_put_contents($backupDir . '/.htaccess', "Require all denied\nDeny from all\n");
+    @file_put_contents($backupDir . '/index.html', '');
+}
+$snap = $backupDir . '/pre-clean-slate-' . date('Y-m-d-His') . '.sql';
+$fh   = @fopen($snap . '.part', 'wb');
+try {
+    if (!$fh) throw new RuntimeException('could not open the snapshot file for writing');
+    pe_stream_dump($pdo, $fh);
+    fclose($fh);
+    if (!@rename($snap . '.part', $snap)) throw new RuntimeException('could not finish the snapshot file');
+    $snapSize = (int) @filesize($snap);
+    if ($snapSize < 10240) throw new RuntimeException('the snapshot came out far too small (' . $snapSize . ' bytes)');
+} catch (Throwable $e) {
+    if (is_resource($fh)) fclose($fh);
+    @unlink($snap . '.part');
+    echo "\nREFUSED — the safety snapshot failed, so nothing was cleared: " . $e->getMessage() . "\n";
+    exit;
+}
+echo "\nSafety snapshot saved: _backups/" . basename($snap) . ' (' . number_format($snapSize / 1048576, 2) . " MB).\n";
+
 $done = [];
 $pdo->beginTransaction();
 try {
