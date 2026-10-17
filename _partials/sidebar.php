@@ -665,6 +665,11 @@ foreach ($navSections as $section):
                     <span class="theme-icon" id="ybDensityIcon">↕</span>
                     <span id="ybDensityLabel">Compact mode</span>
                 </button>
+                <button type="button" class="theme-toggle" id="ybTabsToggle"
+                        aria-label="Choose whether links open in a new tab">
+                    <span class="theme-icon" id="ybTabsIcon">&#10697;</span>
+                    <span id="ybTabsLabel">Links: same window</span>
+                </button>
                 <!-- Work offline on this tablet (offline/engine.js). Shown on touch
                      screens, or on a device already set up; the script below unhides it. -->
                 <button type="button" class="theme-toggle" id="ybOfflineToggle" aria-expanded="false"
@@ -842,5 +847,51 @@ foreach ($navSections as $section):
                         + '; path=/; SameSite=Lax';
         paintLabel();
     });
+})();
+(function () {
+    // Links: same window (default) / a new tab for each page (John, 2026-10-17:
+    // "some people prefer it that way"). Per person per device, a cookie like
+    // compact mode. Only ordinary links to another page change; buttons and
+    // forms (Save, Process order…) still finish in the same window, and so do
+    // Back / Cancel links, Sign out and links within the same page.
+    var btn   = document.getElementById('ybTabsToggle');
+    var label = document.getElementById('ybTabsLabel');
+    function on() { return /(?:^|; )yb_newtab=1(?:;|$)/.test(document.cookie); }
+    function paintLabel() {
+        if (!btn || !label) return;
+        var n = on();
+        label.textContent = n ? 'Links: new tabs · go same window' : 'Links: same window · go new tabs';
+        btn.title = n
+            ? 'Each page you open from a link opens in its own tab on this device — click to keep to one window.'
+            : 'Pages open in this same window on this device — click to open each one in a new tab.';
+    }
+    paintLabel();
+    if (btn) btn.addEventListener('click', function () {
+        var d = new Date();
+        d.setTime(d.getTime() + 365 * 24 * 60 * 60 * 1000);
+        document.cookie = 'yb_newtab=' + (on() ? '0' : '1')
+                        + '; expires=' + d.toUTCString() + '; path=/; SameSite=Lax';
+        paintLabel();
+    });
+
+    document.addEventListener('click', function (e) {
+        if (!on() || e.defaultPrevented || e.button !== 0) return;
+        if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;   // the browser's own new-tab clicks
+        var a = e.target.closest ? e.target.closest('a[href]') : null;
+        if (!a || a.target || a.hasAttribute('download') || a.hasAttribute('onclick')) return;
+        if (a.closest('[data-same-window], dialog, .po-back')) return;
+        var raw = a.getAttribute('href') || '';
+        if (raw === '' || raw.charAt(0) === '#' || /^(javascript|mailto|tel):/i.test(raw)) return;
+        var url;
+        try { url = new URL(a.href, location.href); } catch (err) { return; }
+        if (url.origin !== location.origin) return;
+        if (/^\/auth\//.test(url.pathname)) return;                       // sign in / out
+        if (url.pathname === location.pathname && url.search === location.search) return;   // same page
+        var txt = (a.textContent || '').trim();
+        if (/^(←|&larr;|back\b|cancel\b)/i.test(txt)) return;           // going back belongs in this tab
+        if (!navigator.onLine) return;                                    // offline: stay put
+        a.setAttribute('target', '_blank');
+        setTimeout(function () { a.removeAttribute('target'); }, 0);   // so switching back off works on this page
+    }, true);
 })();
 </script>
