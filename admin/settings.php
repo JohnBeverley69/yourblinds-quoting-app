@@ -451,6 +451,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } catch (Throwable $e) {
                 error_log('settings: feature_wt not saved (run migrate_wt_charge.php): ' . $e->getMessage());
             }
+            // How long a sent quote can be accepted for (migrate_quote_valid_days.php).
+            if (isset($_POST['quote_valid_days'])) {
+                try {
+                    $qvd = max(1, min(365, (int) $_POST['quote_valid_days']));
+                    db()->prepare('UPDATE client_settings SET quote_valid_days = ? WHERE client_id = ?')
+                        ->execute([$qvd, $clientId]);
+                } catch (Throwable $e) {
+                    error_log('settings: quote_valid_days not saved (run migrate_quote_valid_days.php): ' . $e->getMessage());
+                }
+            }
             // Auto-place in-house orders on accept (migrate_auto_place_inhouse.php).
             try {
                 db()->prepare('UPDATE client_settings SET auto_place_inhouse = ? WHERE client_id = ?')
@@ -1841,6 +1851,27 @@ $activeNav = 'settings';
                     </label>
                 </fieldset>
                 <?php endif; ?>
+
+                <?php $quoteValidDays = isset($settings['quote_valid_days']) && (int) $settings['quote_valid_days'] > 0 ? (int) $settings['quote_valid_days'] : 30; ?>
+                <fieldset style="border:1px solid #e5e7eb;border-radius:10px;
+                                 padding:0.875rem 1rem;margin:0 0 1rem">
+                    <legend style="padding:0 0.5rem;font-size:0.8125rem;
+                                   font-weight:600;color:#1f3b5b;
+                                   text-transform:uppercase;letter-spacing:0.05em">
+                        How long a quote lasts
+                    </legend>
+                    <label style="display:flex;align-items:center;gap:0.55rem;flex-wrap:wrap;font-size:0.9375rem">
+                        Quotes can be accepted for
+                        <input type="number" name="quote_valid_days" min="1" max="365" step="1"
+                               value="<?= $quoteValidDays ?>" style="width:5.5rem" aria-label="Days a quote can be accepted for">
+                        days after they are sent
+                    </label>
+                    <span class="ui-hint" style="display:block;color:#6b7280;font-size:0.8125rem;margin-top:0.35rem;line-height:1.5">
+                        After that the customer can still open the quote, but it says it has expired instead of
+                        offering <em>Accept</em>. Sending it again, or <em>Renew</em> on the quote, restarts the days.
+                        If your Terms &amp; Conditions say how long a quote is valid for, keep them matching.
+                    </span>
+                </fieldset>
 
                 <?php $autoPlaceInhouse = !isset($settings['auto_place_inhouse']) || !empty($settings['auto_place_inhouse']); ?>
                 <fieldset style="border:1px solid #e5e7eb;border-radius:10px;

@@ -615,7 +615,7 @@ if ($depositStored !== null) {
     <?php elseif ($isExpired): ?>
         <div class="accept-card declined">
             <h2>This quote has expired</h2>
-            <p>Quotes can be accepted for <?= (int) QUOTE_ACCEPT_DAYS ?> days, and this one
+            <p>Quotes can be accepted for <?= quote_valid_days((int) $quote['client_id']) ?> days, and this one
                ran out on <?= e(date('j F Y', (int) quote_accept_deadline($quote))) ?>.
                Prices may have changed since — please contact
                <?= e((string) ($quote['trade_company_name'] ?? 'your supplier')) ?> for an updated quote.</p>
