@@ -80,4 +80,20 @@ return [
         'tier'              => 3,
         'term_months'       => null,
     ],
+    // The premium tier for blinds MANUFACTURERS (John, 2026-10-17): everything
+    // in Platinum plus the factory side — Pipeline, floor and scanning,
+    // worksheets and labels, build rules, production areas, remakes. Subscribing
+    // switches the account's factory side on (billing_grant_factory_side); it is
+    // never switched OFF automatically, because that would hide a working
+    // factory's floor — the super-admin does that on Master Admin → Factories.
+    // £135 is a placeholder: John sets the real price on Master Admin → Pricing.
+    'factory' => [
+        'name'              => 'Factory',
+        'description'       => 'Everything in Platinum, plus the factory side.',
+        'price_gbp_monthly' => 135,
+        'features'          => ['feature_maps', 'feature_postcode_lookup', 'feature_sms', 'feature_online_booking', 'feature_accounts'],
+        'tier'              => 4,
+        'term_months'       => null,
+        'grants_factory'    => true,
+    ],
 ];

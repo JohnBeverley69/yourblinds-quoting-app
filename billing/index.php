@@ -241,6 +241,12 @@ $activeNav = 'billing';
         [data-theme="dark"] .bill-summary.tier-silver   { background: rgba(154,160,166,0.12); }
         [data-theme="dark"] .bill-summary.tier-gold     { background: rgba(212,175,55,0.12); }
         [data-theme="dark"] .bill-summary.tier-platinum { background: rgba(127,143,166,0.14); }
+        /* Factory — the manufacturers' tier: deep slate-blue. */
+        .plan-card.tier-factory { box-shadow: inset 0 4px 0 #1f3b5b; }
+        .plan-card.tier-factory:not(.is-active):not(.is-trial) { background: #eaf0f7; }
+        [data-theme="dark"] .plan-card.tier-factory:not(.is-active):not(.is-trial) { background: rgba(31,59,91,0.25); }
+        .bill-summary.tier-factory { background: #eaf0f7; border-left: 4px solid #1f3b5b; }
+        [data-theme="dark"] .bill-summary.tier-factory { background: rgba(31,59,91,0.25); }
     </style>
 </head>
 <body>
@@ -251,7 +257,7 @@ $activeNav = 'billing';
         <div class="page-header">
             <div>
                 <h1 class="page-title">Billing</h1>
-                <p class="page-subtitle">Your plan tier — Bronze, Silver, Gold or Platinum. Upgrade or downgrade any time.</p>
+                <p class="page-subtitle">Your plan tier — <?= e(billing_join_words(array_values(array_map(static fn ($p) => (string) $p['name'], billing_plans())))) ?>. Upgrade or downgrade any time.</p>
             </div>
         </div>
 
@@ -303,6 +309,8 @@ $activeNav = 'billing';
             <div class="section-header">
                 <h2 class="section-title">Plans</h2>
             </div>
+            <?= billing_listed_css() ?>
+            <?= billing_listed_html('free', false, 'Included free on every plan (Bronze)') ?>
 
             <div class="plan-grid">
                 <?php foreach ($paidPlans as $code => $p):
@@ -354,6 +362,7 @@ $activeNav = 'billing';
                             <?php endif; ?>
                         </div>
                         <div class="p-desc"><?= e($p['description']) ?></div>
+                        <?= billing_listed_html((string) $code, true, 'What this plan adds') ?>
 
                         <?php if ($hasTrial && $trial['expires_at']): ?>
                             <div class="p-meta <?= $trialUrgent ? 'p-trial-urgent' : 'p-trial' ?>">
