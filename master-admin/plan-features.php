@@ -87,9 +87,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 $catValue = json_encode($catLayout);
             }
+            // The order the boxes were left in (top to bottom, column by column) —
+            // the board and the plan lists on Billing / welcome follow it.
+            $postedOrder = json_decode((string) ($_POST['order'] ?? ''), true);
+            $orderValue  = null;
+            if (is_array($postedOrder)) {
+                $orderValue = json_encode(array_values(array_filter($postedOrder,
+                    static fn ($id) => is_string($id) && preg_match('/^[fc]:[a-z0-9_]+$/', $id))));
+            }
         } elseif ($action === 'reset') {
-            $value    = null;   // back to the placement in billing_plans.php
-            $catValue = null;   // and plan_feature_catalogue.php
+            $value      = null;   // back to the placement in billing_plans.php
+            $catValue   = null;   // and plan_feature_catalogue.php
+            $orderValue = null;   // and the standard order
         } else {
             throw new RuntimeException('Unknown action.');
         }
@@ -99,7 +108,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $before = pf_flag_snapshot($cols);
 
         if (!app_setting_set(BILLING_FEATURE_LAYOUT_KEY, $value)
-            || ($action === 'reset' || $catValue !== null) && !app_setting_set(BILLING_CATALOGUE_KEY, $catValue)) {
+            || ($action === 'reset' || $catValue !== null) && !app_setting_set(BILLING_CATALOGUE_KEY, $catValue)
+            || ($action === 'reset' || $orderValue !== null) && !app_setting_set(BILLING_FEATURE_ORDER_KEY, $orderValue)) {
             throw new RuntimeException('Could not save — is the app_settings table there?');
         }
         billing_plans(true);   // re-read the new layout for the sync below
@@ -135,8 +145,24 @@ foreach ($flags as $flag => $_label) {
         if (in_array($flag, $p['features'] ?? [], true)) { $placed[$flag] = (string) $code; break; }
     }
 }
-$catalogue = billing_catalogue();   // the LISTED features, with where each sits now
+$catalogue = billing_catalogue();   // the LISTED features, with where each sits now (in the saved order)
 $isCustom  = billing_feature_layout() !== [] || (string) (app_setting_get(BILLING_CATALOGUE_KEY, '') ?? '') !== '';
+
+// Every box on the board, switches and listed alike, in the saved order
+// (unsaved ones keep their natural place after it).
+$chips = [];
+foreach ($placed as $flag => $at) {
+    $chips[] = ['id' => 'f:' . $flag, 'flag' => $flag, 'cat' => null, 'at' => $at,
+                'label' => (string) $flags[$flag], 'desc' => (string) (billing_feature_blurbs()[$flag] ?? $flags[$flag])];
+}
+foreach ($catalogue as $key => $f) {
+    $chips[] = ['id' => 'c:' . $key, 'flag' => null, 'cat' => $key, 'at' => $f['code'],
+                'label' => $f['label'], 'desc' => $f['desc']];
+}
+$pos = billing_feature_order();
+foreach ($chips as $i => &$c) $c['n'] = $pos[$c['id']] ?? (100000 + $i);
+unset($c);
+usort($chips, static fn ($a, $b) => $a['n'] <=> $b['n']);
 
 $columns = [];
 foreach ($plans as $code => $p) {
@@ -191,6 +217,8 @@ $activeNav = 'plan-features';
             color: var(--text-muted); cursor: pointer;
         }
         .pf-empty { font-size: 0.8125rem; color: var(--text-faint); text-align: center; padding: 1rem 0.25rem; }
+        /* On a computer you drag; the "Move to" box is for phones and tablets. */
+        @media (pointer: fine) { .pf-chip select { display: none; } .pf-chip { padding: 0.4rem 0.6rem; } }
         .pf-group { font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
                     color: var(--text-faint); margin: 0.25rem 0 0; }
         .pf-actions { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; margin-top: 1rem; }
@@ -273,6 +301,7 @@ $activeNav = 'plan-features';
                 <input type="hidden" name="action" value="save">
                 <input type="hidden" name="layout" id="pf-layout" value="">
                 <input type="hidden" name="catalogue" id="pf-catalogue" value="">
+                <input type="hidden" name="order" id="pf-order" value="">
 
                 <div class="pf-board">
                     <?php $prevName = null; foreach ($columns as $code => $col): ?>
@@ -280,26 +309,15 @@ $activeNav = 'plan-features';
                             <h3><?= e($col['name']) ?></h3>
                             <div class="pf-sub"><?= e($col['sub']) ?></div>
                             <div class="pf-drop">
-                                <?php foreach ($placed as $flag => $at): if ($at !== (string) $code) continue; ?>
-                                    <div class="pf-chip is-switch" draggable="true" data-flag="<?= e($flag) ?>" data-start="<?= e($at) ?>"
-                                         title="A real switch: it turns on and off with the plan">
+                                <?php foreach ($chips as $c): if ($c['at'] !== (string) $code) continue; ?>
+                                    <div class="pf-chip" draggable="true" data-id="<?= e($c['id']) ?>"
+                                         <?= $c['flag'] !== null ? 'data-flag="' . e($c['flag']) . '"' : 'data-cat="' . e($c['cat']) . '"' ?>
+                                         data-start="<?= e($c['at']) ?>" title="<?= e($c['desc']) ?>">
                                         <span class="pf-grip" aria-hidden="true">⠿</span>
-                                        <span class="pf-label"><?= e((string) $flags[$flag]) ?></span>
-                                        <select aria-label="Move <?= e((string) $flags[$flag]) ?> to">
+                                        <span class="pf-label"><?= e($c['label']) ?></span>
+                                        <select aria-label="Move <?= e($c['label']) ?> to">
                                             <?php foreach ($columns as $c2 => $col2): ?>
-                                                <option value="<?= e((string) $c2) ?>"<?= (string) $c2 === $at ? ' selected' : '' ?>><?= e($col2['name']) ?></option>
-                                            <?php endforeach; ?>
-                                        </select>
-                                    </div>
-                                <?php endforeach; ?>
-                                <?php foreach ($catalogue as $key => $f): if ($f['code'] !== (string) $code) continue; ?>
-                                    <div class="pf-chip is-listed" draggable="true" data-cat="<?= e($key) ?>" data-start="<?= e($f['code']) ?>"
-                                         title="<?= e($f['desc']) ?>">
-                                        <span class="pf-grip" aria-hidden="true">⠿</span>
-                                        <span class="pf-label"><?= e($f['label']) ?></span>
-                                        <select aria-label="Move <?= e($f['label']) ?> to">
-                                            <?php foreach ($columns as $c2 => $col2): ?>
-                                                <option value="<?= e((string) $c2) ?>"<?= (string) $c2 === $f['code'] ? ' selected' : '' ?>><?= e($col2['name']) ?></option>
+                                                <option value="<?= e((string) $c2) ?>"<?= (string) $c2 === $c['at'] ? ' selected' : '' ?>><?= e($col2['name']) ?></option>
                                             <?php endforeach; ?>
                                         </select>
                                     </div>
@@ -358,22 +376,39 @@ $activeNav = 'plan-features';
                 if (moved) changed = true;
             });
         });
-        dirty.classList.toggle('is-on', changed);
         // Kept current here, not on submit: the confirm box sends the form
         // with form.submit(), which fires no submit event.
-        var layout = {}, catalogue = {};
+        var layout = {}, catalogue = {}, order = [];
         board.querySelectorAll('.pf-chip').forEach(function (chip) {
             var tier = chip.closest('.pf-col').getAttribute('data-tier');
-            if (chip.hasAttribute('data-flag')) layout[chip.getAttribute('data-flag')] = tier;   // ⚡ switches
-            else catalogue[chip.getAttribute('data-cat')] = tier;                                // listed only
+            if (chip.hasAttribute('data-flag')) layout[chip.getAttribute('data-flag')] = tier;   // always switch
+            else catalogue[chip.getAttribute('data-cat')] = tier;                                // switch while enforcing
+            order.push(chip.getAttribute('data-id'));
         });
+        var orderJson = JSON.stringify(order);
+        if (startOrder === null) startOrder = orderJson;
+        dirty.classList.toggle('is-on', changed || orderJson !== startOrder);
         document.getElementById('pf-layout').value = JSON.stringify(layout);
         document.getElementById('pf-catalogue').value = JSON.stringify(catalogue);
+        document.getElementById('pf-order').value = orderJson;
     }
+    var startOrder = null;
 
     function moveTo(chip, tier) {
         var drop = colOf(tier);
         if (drop) { drop.insertBefore(chip, drop.querySelector('.pf-empty')); refresh(); }
+    }
+
+    // Where in a column the dragged box should sit: before the first box whose
+    // middle is below the pointer, else at the end.
+    function placeAt(drop, y) {
+        var before = drop.querySelector('.pf-empty');
+        var chips = drop.querySelectorAll('.pf-chip:not(.is-dragging)');
+        for (var i = 0; i < chips.length; i++) {
+            var r = chips[i].getBoundingClientRect();
+            if (y < r.top + r.height / 2) { before = chips[i]; break; }
+        }
+        if (drag.nextSibling !== before) drop.insertBefore(drag, before);
     }
 
     board.addEventListener('dragstart', function (e) {
@@ -388,6 +423,7 @@ $activeNav = 'plan-features';
         if (drag) drag.classList.remove('is-dragging');
         drag = null;
         board.querySelectorAll('.pf-col.is-over').forEach(function (c) { c.classList.remove('is-over'); });
+        refresh();   // a box let go between columns stays where it slid to
     });
     board.querySelectorAll('.pf-col').forEach(function (col) {
         col.addEventListener('dragover', function (e) {
@@ -395,6 +431,7 @@ $activeNav = 'plan-features';
             e.preventDefault();
             e.dataTransfer.dropEffect = 'move';
             col.classList.add('is-over');
+            placeAt(col.querySelector('.pf-drop'), e.clientY);   // the box slides into place as you drag
         });
         col.addEventListener('dragleave', function (e) {
             if (!col.contains(e.relatedTarget)) col.classList.remove('is-over');
@@ -403,7 +440,8 @@ $activeNav = 'plan-features';
             if (!drag) return;
             e.preventDefault();
             col.classList.remove('is-over');
-            moveTo(drag, col.getAttribute('data-tier'));
+            placeAt(col.querySelector('.pf-drop'), e.clientY);
+            refresh();
         });
     });
     board.addEventListener('change', function (e) {

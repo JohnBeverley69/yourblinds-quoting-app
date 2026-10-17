@@ -137,3 +137,16 @@ test('saving switches companies on and off; reset puts it back', function () use
     check_same(0, $flag(102, 'feature_postcode_lookup'), 'Bravo postcode lookup after Reset');
     check_same(0, $flag(101, 'feature_accounts'), 'Alpha Accounts after Reset');
 });
+
+test('the board order is saved, and the plan lists follow it', function () {
+    $super = as_user('super');
+    $r = t_submit($super, '/master-admin/plan-features.php', ['action' => 'save',
+        'layout'    => json_encode([]),
+        'catalogue' => json_encode([]),
+        'order'     => json_encode(['c:calendar', 'c:instaprice'])]);
+    check($r->status < 400, 'saving the order failed (HTTP ' . $r->status . ')');
+    $keys = array_keys(billing_catalogue());
+    check_same(['calendar', 'instaprice'], array_slice($keys, 0, 2), 'the first two listed features follow the saved order');
+    t_submit($super, '/master-admin/plan-features.php', ['action' => 'reset']);
+    check_same([], billing_feature_order(), 'order cleared by Reset');
+});

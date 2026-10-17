@@ -155,7 +155,25 @@ function billing_catalogue(): array
         if ($code !== '' && !isset($plans[$code])) $code = isset($plans[$std]) ? $std : '';
         $out[$key] = ['label' => $label, 'desc' => $desc, 'code' => $code];
     }
+    // The order John left the boxes in on the board (unsaved ones keep their place after).
+    $pos = billing_feature_order();
+    $nat = array_flip(array_keys($out));
+    uksort($out, static fn ($a, $b) => ($pos['c:' . $a] ?? 100000 + $nat[$a]) <=> ($pos['c:' . $b] ?? 100000 + $nat[$b]));
     return $out;
+}
+
+/** app_settings key holding the order of the boxes on the Plan features board. */
+const BILLING_FEATURE_ORDER_KEY = 'plan_feature_order';
+
+/** Box id ('f:<flag>' switch, 'c:<key>' listed) => position, from the saved board order. */
+function billing_feature_order(): array
+{
+    try {
+        $st = db()->prepare('SELECT setting_value FROM app_settings WHERE setting_key = ? LIMIT 1');
+        $st->execute([BILLING_FEATURE_ORDER_KEY]);
+        $list = json_decode((string) ($st->fetchColumn() ?: ''), true);
+    } catch (Throwable $e) { return []; }
+    return is_array($list) ? array_flip(array_values(array_filter($list, 'is_string'))) : [];
 }
 
 /**
