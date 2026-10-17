@@ -31,7 +31,7 @@ $st->execute([$num]);
 $q = $st->fetch(PDO::FETCH_ASSOC);
 if (!$q) { echo "No order '$num'. Use ?order=ABC-2026-0001\n"; exit; }
 $portal = (int) $q['client_id'] !== $factory;
-echo $q['quote_number'] . ' — ' . ($portal ? "placed on the account's portal (billed at TRADE)" : 'raised by the factory (billed at SELL)') . "\n";
+echo $q['quote_number'] . ' [status: ' . $q['status'] . '] — ' . ($portal ? "placed on the account's portal (billed at TRADE)" : 'raised by the factory (billed at SELL)') . "\n";
 echo 'Order subtotal on the quote (the account\'s own price): ' . $money($q['subtotal']) . "\n\n";
 
 $items = $pdo->prepare(

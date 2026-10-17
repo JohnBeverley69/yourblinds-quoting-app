@@ -212,6 +212,8 @@ $fmtExtraSpec = static function (array $ex): string {
 $groups   = [];   // name => ['items'=>[], 'qty'=>int]
 $mfgItems = [];   // manufacturing lines (auto-routed to the factory)
 $mfgQty   = 0;
+$mfgByFactory = [];   // factory id => its lines (an order can mix two factories)
+$allFactories = qb_factory_client_ids(db());
 foreach ($lines as $ln) {
     // A FACTORY-OWNED product with no external supplier routes straight to our
     // manufacturing queue, whoever placed the order: a tenant buying our
@@ -226,8 +228,13 @@ foreach ($lines as $ln) {
     // wrongly demands a shipping address. Match blank / "In House" / "In-House".
     $noSupplier = $sup === '' || strtolower(preg_replace('/[\s\-]+/', '', $sup)) === 'inhouse';
     $prodOwner = (int) ($ln['product_source'] ?? 0) ?: (int) ($ln['product_client'] ?? 0);
-    $isMfg     = $noSupplier && $factoryId > 0 && $prodOwner === $factoryId;
+    // Made by ANY factory, not just the one the order is booked to: a
+    // white-label factory's order can mix the main factory's catalogue with
+    // products it makes itself ("In House"), and its own lines go to its own
+    // floor — they're never a supplier to email (Tyler Smyth, TYL-2026-0006).
+    $isMfg     = $noSupplier && in_array($prodOwner, $allFactories, true);
     if ($isMfg) {
+        $mfgByFactory[$prodOwner][] = $ln;
         $mfgItems[] = $ln;
         $mfgQty    += (int) ($ln['quantity'] ?? 1);
         continue;
@@ -236,6 +243,18 @@ foreach ($lines as $ln) {
     $groups[$sup]['qty']     = ($groups[$sup]['qty'] ?? 0) + (int) ($ln['quantity'] ?? 1);
 }
 $hasManufacturing = $mfgItems !== [];
+// Booked factory first, then any other (e.g. the white-label factory's own workshop).
+uksort($mfgByFactory, static fn ($a, $b) => ($b === $factoryId) <=> ($a === $factoryId) ?: $a <=> $b);
+$mfgLabels = [];
+foreach (array_keys($mfgByFactory) as $fid) {
+    if ($fid === $clientId) { $mfgLabels[$fid] = 'Your own workshop'; continue; }
+    $mfgLabels[$fid] = $fid === $factoryId ? $factoryLabel : 'manufacturing';
+    try {
+        $s = db()->prepare('SELECT company_name FROM clients WHERE id = ? LIMIT 1');
+        $s->execute([$fid]);
+        $mfgLabels[$fid] = trim((string) $s->fetchColumn()) ?: $mfgLabels[$fid];
+    } catch (Throwable $e) { /* keep fallback */ }
+}
 // In House first, then named suppliers, then unassigned ('') last.
 uksort($groups, static function ($a, $b) {
     if (($a === '') !== ($b === '')) return $a === '' ? 1 : -1;   // unassigned last
@@ -430,6 +449,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             error_log('Auto-advance to ordered failed: ' . $e->getMessage());
         }
     }
+    // What the order really is now — so the message never claims "placed"
+    // when it isn't (TYL-2026-0006 stayed Accepted after Place order).
+    $nowStatus = (string) $quote['status'];
+    try {
+        $ns = db()->prepare('SELECT status FROM quotes WHERE id = ? LIMIT 1');
+        $ns->execute([$quoteId]);
+        $nowStatus = (string) ($ns->fetchColumn() ?: $nowStatus);
+    } catch (Throwable $e) { /* keep loaded status */ }
     // Phase 0: sending POs / placing the order changes bought-in + status — roll it up.
     require_once __DIR__ . '/../_partials/order_stage.php';
     recompute_order_stage(db(), $quoteId);
@@ -443,8 +470,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $okParts[] = 'Order sent to ' . implode(', ', $sentTo) . '.';
     }
     if ($hasManufacturing && $advancedToOrdered) {
-        $okParts[] = $mfgQty . ' blind' . ($mfgQty === 1 ? '' : 's') . ' placed with '
-                   . $factoryLabel . ' manufacturing.';
+        foreach ($mfgByFactory as $fid => $list) {
+            $n = array_sum(array_map(static fn ($l) => (int) ($l['quantity'] ?? 1), $list));
+            $okParts[] = $n . ' blind' . ($n === 1 ? '' : 's') . ' placed with '
+                       . ($fid === $clientId ? 'your own workshop.' : $mfgLabels[$fid] . ' manufacturing.');
+        }
     }
 
     if ($okParts && !$failed) {
@@ -455,10 +485,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } elseif ($failed) {
         qb_flash_redirect($backToQuote, 'error',
             'Nothing was sent (failed for ' . implode(', ', $failed) . ').');
-    } elseif ($hasManufacturing) {
+    } elseif ($hasManufacturing && $nowStatus !== 'accepted') {
         // Manufacturing lines but no status change (already placed) and no emails.
         qb_flash_redirect($backToQuote, 'success',
             'This order is already placed with ' . $factoryLabel . ' manufacturing.');
+    } elseif ($hasManufacturing) {
+        qb_flash_redirect($backToQuote, 'error',
+            'The order could NOT be placed — it is still Accepted. Please try again, and tell us if it keeps happening.');
     } else {
         qb_flash_redirect($backToQuote, 'error', 'Nothing was sent.');
     }
@@ -535,22 +568,28 @@ foreach ($groups as $name => $g) { if ($isSendable((string) $name)) $sendableCou
                     <p class="sup-meta">This order has no line items.</p>
                 <?php endif; ?>
 
-                <?php if ($hasManufacturing): ?>
+                <?php foreach ($mfgByFactory as $mfgFid => $mfgList):
+                    $mfgOwn = $mfgFid === $clientId; ?>
                     <div class="sup-group mfg-group">
                         <div class="sup-head">
-                            <span class="sup-name">🏭 <?= e($factoryLabel) ?> — manufacturing</span>
-                            <span class="sup-meta"><?= count($mfgItems) ?> line<?= count($mfgItems) === 1 ? '' : 's' ?> · auto-routed</span>
+                            <span class="sup-name">🏭 <?= e($mfgLabels[$mfgFid]) ?> — manufacturing</span>
+                            <span class="sup-meta"><?= count($mfgList) ?> line<?= count($mfgList) === 1 ? '' : 's' ?> · auto-routed</span>
                         </div>
                         <div class="mfg-note">
-                            These are your products from the <strong><?= e($factoryLabel) ?></strong> catalogue — they go
-                            <strong>straight to manufacturing</strong> when you place the order. No supplier email needed.
+                            <?php if ($mfgOwn): ?>
+                                You make these yourself — they go <strong>straight to your own factory floor</strong>
+                                when you place the order. No supplier email needed.
+                            <?php else: ?>
+                                These are your products from the <strong><?= e($mfgLabels[$mfgFid]) ?></strong> catalogue — they go
+                                <strong>straight to manufacturing</strong> when you place the order. No supplier email needed.
+                            <?php endif; ?>
                         </div>
                         <?php
                             // Delivery-charge rule for the account this order is for,
                             // so a charge on the invoice is never a surprise.
                             require_once __DIR__ . '/../_partials/delivery_charges.php';
                             $dcAcc = (int) ($quote['account_client_id'] ?? 0) ?: $clientId;
-                            if ($dcAcc !== $factoryId && dc_ready(db())):
+                            if (!$mfgOwn && $dcAcc !== $mfgFid && dc_ready(db())):
                                 $dcT = dc_account_terms(db(), $dcAcc);
                         ?>
                             <div class="mfg-note" style="margin-top:0.4rem">
@@ -562,7 +601,7 @@ foreach ($groups as $name => $g) { if ($isSendable((string) $name)) $sendableCou
                                 <th>Product</th><th>Fabric / colour</th><th>Size</th><th>Qty</th><th>Room</th>
                             </tr></thead>
                             <tbody>
-                                <?php foreach ($mfgItems as $it):
+                                <?php foreach ($mfgList as $it):
                                     $fab = implode(' / ', array_filter([
                                         (string) $it['fabric_name_snapshot'],
                                         (string) $it['fabric_colour_snapshot'],
@@ -585,7 +624,7 @@ foreach ($groups as $name => $g) { if ($isSendable((string) $name)) $sendableCou
                             </tbody>
                         </table>
                     </div>
-                <?php endif; ?>
+                <?php endforeach; ?>
 
                 <?php foreach ($groups as $name => $g):
                     $name        = (string) $name;
