@@ -317,9 +317,7 @@ try {
     // placement — reopening re-arms it, so a re-placed order is re-notified).
     if ($target === 'ordered') {
         require_once __DIR__ . '/../_partials/factory_notify.php';
-        factory_notify_new_order($pdo, $quoteId);
-        require_once __DIR__ . '/../_partials/factory_boughtin.php';
-        factory_autosend_suppliers($pdo, $quoteId);
+        factory_notify_new_order($pdo, $quoteId);
         // (Re)placed: if the order is already on the floor, bring its blind jobs
         // in line with the current lines/units so nothing added is left off.
         bj_resync_order_all($pdo, $quoteId);

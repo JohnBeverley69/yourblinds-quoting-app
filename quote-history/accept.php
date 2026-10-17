@@ -201,9 +201,7 @@ if ($action === 'accept') {
                     // Auto-placed straight to the factory on the customer's accept
                     // → email the factory that a new order has landed (once).
                     require_once __DIR__ . '/../_partials/factory_notify.php';
-                    factory_notify_new_order($pdo, $acQuote);
-                    require_once __DIR__ . '/../_partials/factory_boughtin.php';
-                    factory_autosend_suppliers($pdo, $acQuote);
+                    factory_notify_new_order($pdo, $acQuote);
                     // (Re)placed: an order already on the floor gets its blind
                     // jobs brought in line with the current lines/units.
                     require_once __DIR__ . '/../_partials/blind_jobs.php';

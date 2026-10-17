@@ -437,9 +437,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 dd_stamp_order(db(), $quoteId);
                 // Placed → email the factory a new order has landed (once).
                 require_once __DIR__ . '/../_partials/factory_notify.php';
-                factory_notify_new_order(db(), $quoteId);
-                require_once __DIR__ . '/../_partials/factory_boughtin.php';
-                factory_autosend_suppliers(db(), $quoteId);
+                factory_notify_new_order(db(), $quoteId);
                 // (Re)placed: an order already on the floor gets its blind jobs
                 // brought in line with the current lines/units.
                 require_once __DIR__ . '/../_partials/order_stage.php';
