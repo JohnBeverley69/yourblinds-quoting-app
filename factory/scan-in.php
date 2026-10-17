@@ -146,6 +146,23 @@ if ($area !== null) {
         $log('wrong_area', 'route belongs to another area', $code, $parsed, $source);
         $reply(409, 'WRONG AREA (' . $area['name'] . ')');
     }
+    // An area key only ever finishes ITS factory's blinds. The area check above
+    // lets a blind with no area through (unmapped stream, a whole-blind scan of
+    // a split blind), which without this let one factory's bench key move — and
+    // read — another factory's blinds. Owner as bj_job_owner_cond().
+    try {
+        $ow = $pdo->prepare('SELECT COALESCE(NULLIF(p.source_client_id, 0), p.client_id)
+                               FROM quote_items qi JOIN products p ON p.id = qi.product_id
+                              WHERE qi.id = ? LIMIT 1');
+        $ow->execute([$itemId]);
+        $owner = $ow->fetchColumn();
+    } catch (Throwable $e) {
+        $owner = false;
+    }
+    if ($owner !== false && (int) $owner !== (int) $area['client_id']) {
+        $log('wrong_area', 'blind belongs to another factory', $code, $parsed, $source);
+        $reply(409, 'WRONG AREA (' . $area['name'] . ')');
+    }
 }
 
 // De-dupe: the same code landing again within 10s is a double pull, not a second
