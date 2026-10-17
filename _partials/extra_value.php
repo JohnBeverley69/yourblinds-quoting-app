@@ -21,16 +21,18 @@ if (!function_exists('extra_value_suffix')) {
 }
 
 /*
- * An option left on "None" or "Select" says nothing, so paperwork leaves it
- * off: quotes, invoices, the online quote and purchase orders. Matches the
- * whole choice label only ("None", "- Select -", "Please select…"), not a
- * choice that merely contains the word ("No Motor", "Selected Colour").
+ * An option left on "None" or "Select", or any choice starting with the word
+ * "No" ("No Motor", "No Pelmet"), says nothing, so paperwork leaves it off:
+ * quotes, invoices, the online quote and purchase orders. "No" must be a
+ * whole word, so "Nordic", "Noir" or "Normal" still print, as does
+ * "Selected Colour".
  */
 if (!function_exists('extra_is_blank_choice')) {
     function extra_is_blank_choice(array $ex): bool
     {
         $c = trim((string) ($ex['choice_label_snapshot'] ?? ''));
         if ($c === '') return false;
+        if (preg_match('/^[\W_]*no(?![\p{L}\p{N}])/iu', $c)) return true;   // "No", "No Motor", "No - Standard"
         return (bool) preg_match('/^[\s\-\x{2013}\x{2014}._*()\[\]]*(none|(please\s+)?select)[\s\-\x{2013}\x{2014}._*()\[\]\x{2026}]*$/iu', $c);
     }
 }
