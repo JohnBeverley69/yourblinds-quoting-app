@@ -543,9 +543,16 @@ window.addEventListener('pageshow', function (e) {
                     // > fitter, etc.), so a fitter who also had sales
                     // ticked showed up as "sales" — confusing. Joining
                     // the full set is more honest.
-                    $roleLabel = !empty($user['roles']) && is_array($user['roles'])
-                        ? implode(', ', $user['roles'])
-                        : (string) ($user['role'] ?? '');
+                    $_ybRoles = !empty($user['roles']) && is_array($user['roles'])
+                        ? $user['roles'] : [(string) ($user['role'] ?? '')];
+                    // A 'factory' role does nothing on an account that isn't a factory
+                    // (requireFactory checks the account too), so don't claim it — a
+                    // leftover from when ABC Blinds was briefly a test factory read
+                    // "admin, factory" (John, 2026-10-17).
+                    if (!(function_exists('is_factory_client') && is_factory_client((int) ($user['client_id'] ?? 0)))) {
+                        $_ybRoles = array_values(array_diff($_ybRoles, ['factory']));
+                    }
+                    $roleLabel = implode(', ', array_filter($_ybRoles, 'strlen'));
                 ?>
                 <?= e($user['company_name']) ?> &middot; <?= e($roleLabel) ?>
             </div>
