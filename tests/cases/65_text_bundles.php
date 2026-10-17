@@ -78,3 +78,34 @@ test('the super-admin can add free texts to a client', function () use ($alpha) 
     check_same($before + 10, sms_bundle_balance($alpha), 'balance after Add texts');
     check_same('added by YourBlinds', (string) t_val("SELECT note FROM sms_bundles WHERE client_id = ? ORDER BY id DESC LIMIT 1", [$alpha]), 'note');
 });
+
+test('running low / texts stopped: the admins are emailed once, and again after a new bundle', function () use ($alpha) {
+    db()->prepare('UPDATE client_settings SET sms_low_warned_at = NULL, sms_out_warned_at = NULL WHERE client_id = ?')->execute([$alpha]);
+    // Each email is logged on the Messages page (sent, or failed where no mailer is installed).
+    // Counted from here (the earlier blocked-send test already sent one).
+    $count = static fn (string $kind): int => (int) t_val("SELECT COUNT(*) FROM messages WHERE client_id = ? AND channel = 'email' AND kind = ?", [$alpha, $kind]);
+    $base  = ['texts_out' => $count('texts_out'), 'texts_low' => $count('texts_low')];
+    $mails = static fn (string $kind): int => $count($kind) - $base[$kind];
+    check((int) t_val("SELECT COUNT(*) FROM client_users WHERE client_id = ? AND role = 'admin' AND active = 1 AND email LIKE '%@%'", [$alpha]) > 0,
+          'the test company needs an admin with an email');
+
+    sms_credit_notice($alpha, 'out');
+    check_same(1, $mails('texts_out'), '"texts have stopped" emails after the first warning');
+    sms_credit_notice($alpha, 'out');
+    check_same(1, $mails('texts_out'), '"texts have stopped" emails after a second warning in the same month');
+    sms_credit_notice($alpha, 'low');
+    sms_credit_notice($alpha, 'low');
+    check_same(1, $mails('texts_low'), '"running low" emails after two warnings in the same month');
+
+    // Buying a bundle resets the warning.
+    db()->prepare("INSERT INTO sms_bundles (client_id, texts, price, status, paid_at) VALUES (?, 5, 2.40, 'paid', DATE_ADD(NOW(), INTERVAL 1 MINUTE))")->execute([$alpha]);
+    sms_credit_notice($alpha, 'out');
+    check_same(2, $mails('texts_out'), '"texts have stopped" emails after a new bundle ran out');
+
+    // A text blocked for running out sends the email by itself.
+    db()->prepare('UPDATE client_settings SET sms_out_warned_at = NULL WHERE client_id = ?')->execute([$alpha]);
+    sms_settings($alpha, true);
+    $tooLong = str_repeat('x', (sms_texts_left($alpha) + 2) * 153);   // more texts' worth than are left
+    sms_send($alpha, '07700 900123', $tooLong, ['kind' => 'test']);
+    check_same(3, $mails('texts_out'), '"texts have stopped" emails after a text was blocked');
+});
