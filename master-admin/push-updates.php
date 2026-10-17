@@ -74,6 +74,7 @@ function pu_blank_summary(): array {
         'choices_removed' => 0, 'systems_removed' => 0, 'fabrics_removed' => 0,
         'extras_removed' => 0, 'price_tables_removed' => 0,
         'price_tables_added' => 0, 'price_table_cells' => 0, 'width_table_cells' => 0,
+        'products_hidden' => 0,
         'errors' => [],
     ];
 }
@@ -444,6 +445,9 @@ $activeNav = 'push-updates';
                             </div>
                         <?php else: ?>
                             <div class="sb-stats">
+                                <?php if ((int) ($s['products_hidden'] ?? 0) > 0): ?>
+                                <span title="You deleted these products; the account's copies are now Inactive (old quotes still open)"><strong><?= (int) $s['products_hidden'] ?></strong> deleted products hidden</span>
+                                <?php endif; ?>
                                 <span><strong><?= (int) $s['products_added']     ?></strong> products added</span>
                                 <span><strong><?= (int) $s['products_updated']   ?></strong> products refreshed</span>
                                 <span><strong><?= (int) $s['systems_added']      ?></strong> systems added</span>
@@ -626,6 +630,7 @@ $activeNav = 'push-updates';
                             var s = r.summary;
                             var bits = [
                                 [s.products_added,     'products added'],
+                                [s.products_hidden,    'deleted products hidden'],
                                 [s.products_updated,   'products refreshed'],
                                 [s.systems_added,      'systems added'],
                                 [s.fabrics_added,      'fabrics added'],

@@ -71,6 +71,7 @@ function push_catalogue_to_client(
         'price_tables_added'     => 0,
         'price_table_cells'      => 0,
         'width_table_cells'      => 0,
+        'products_hidden'        => 0,
         'errors'                 => [],
     ];
 
@@ -125,7 +126,38 @@ function push_catalogue_to_client(
         }
     }
 
+    $summary['products_hidden'] = pp_hide_deleted_copies($pdo, $sourceClientId, $targetClientId);
+
     return $summary;
+}
+
+/**
+ * The account's copies of products the source has since DELETED are switched to
+ * Inactive (John, 2026-10-17). Not deleted: removing a product would take every
+ * quote and order that used it with it, so an inactive copy keeps old paperwork
+ * opening while it drops out of quoting. If the product is ever restored on the
+ * source, the copy can simply be switched back on. Copies are found by their
+ * source markers, so the account's OWN products are never touched. Returns how
+ * many were hidden this time (already-inactive ones aren't counted again).
+ */
+function pp_hide_deleted_copies(PDO $pdo, int $sourceClientId, int $targetClientId): int
+{
+    if (!pp_has_src_col($pdo, 'products', 'source_product_id')) return 0;
+    try {
+        $st = $pdo->prepare(
+            'UPDATE products t
+                SET t.active = 0
+              WHERE t.client_id = ? AND t.source_client_id = ? AND t.active = 1
+                AND t.source_product_id IS NOT NULL AND t.source_product_id > 0
+                AND NOT EXISTS (SELECT 1 FROM (SELECT id FROM products WHERE client_id = ?) s
+                                 WHERE s.id = t.source_product_id)'
+        );
+        $st->execute([$targetClientId, $sourceClientId, $sourceClientId]);
+        return $st->rowCount();
+    } catch (Throwable $e) {
+        error_log('pp_hide_deleted_copies failed for client ' . $targetClientId . ': ' . $e->getMessage());
+        return 0;
+    }
 }
 
 /**
@@ -185,11 +217,28 @@ function push_one_product(
     }
     if ($tgtPid === null) {
         $tgtPid = pp_find_product_by_name($pdo, $targetClientId, (string) $sourceProduct['name']);
+        // Our own copy of a product the source has since DELETED (hidden by
+        // pp_hide_deleted_copies) and now re-created under the same name: take it
+        // over again — re-point its source marker at the new product, and the
+        // refresh below brings it back up to date and active. Never an account's
+        // own product (no source marker), never a copy of a product that still exists.
         if ($tgtPid !== null && $hasSourceCols) {
-            throw new RuntimeException(
-                'The account already has its own product called "' . $sourceProduct['name']
-                . '" — not overwritten. Rename theirs (or delete it) and push again.'
+            $orphan = $pdo->prepare(
+                'SELECT 1 FROM products t
+                  WHERE t.id = ? AND t.source_client_id = ? AND t.source_product_id > 0
+                    AND NOT EXISTS (SELECT 1 FROM (SELECT id FROM products WHERE client_id = ?) s
+                                     WHERE s.id = t.source_product_id)'
             );
+            $orphan->execute([$tgtPid, $sourceClientId, $sourceClientId]);
+            if ($orphan->fetchColumn()) {
+                $pdo->prepare('UPDATE products SET source_product_id = ? WHERE id = ? AND client_id = ?')
+                    ->execute([$sourceProductId, $tgtPid, $targetClientId]);
+            } else {
+                throw new RuntimeException(
+                    'The account already has its own product called "' . $sourceProduct['name']
+                    . '" — not overwritten. Rename theirs (or delete it) and push again.'
+                );
+            }
         }
     }
     if ($tgtPid === null) {
