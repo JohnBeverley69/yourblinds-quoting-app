@@ -372,3 +372,38 @@ test('a duplicated real product prices exactly like the original (Forest Wood, R
         check_same(t_show($orig), t_show($dup), "$name — duplicate vs original");
     }
 });
+
+test('a product deleted from the catalogue is HIDDEN on the account at the next push, and comes back if re-created', function () {
+    $mk = static fn () => cp_insert('products', ['client_id' => 3, 'name' => 'Bev ZZ Hide Probe', 'active' => 1, 'price_source' => 'own',
+        'category_id' => null, 'requires_option' => 0, 'width_only' => 0, 'price_per_slat' => 0, 'price_per_sqm' => 0]);
+    $copy = static fn () => db()->query("SELECT id, active FROM products WHERE client_id = 101 AND name = 'Bev ZZ Hide Probe'")->fetchAll(PDO::FETCH_ASSOC);
+
+    $pid = $mk();
+    $sum = push_catalogue_to_client(db(), 3, 101, 'Bev ZZ Hide Probe');
+    check(empty($sum['errors']), 'first push errors: ' . t_show($sum['errors']));
+    $first = $copy();
+    check_same(1, count($first), 'copies on the account after the first push');
+    check_same(1, (int) $first[0]['active'], 'the copy starts active');
+
+    db()->prepare('DELETE FROM products WHERE id = ?')->execute([$pid]);   // deleted on the catalogue
+    $sum = push_catalogue_to_client(db(), 3, 101, 'Bev ZZ Hide Probe');
+    $after = $copy();
+    check_same(1, count($after), 'the copy is kept, not deleted (old quotes still open)');
+    check_same(0, (int) $after[0]['active'], 'the copy is now Inactive');
+    check((int) $sum['products_hidden'] >= 1, 'the push reports it hid a deleted product');
+
+    // An account's OWN product is never touched by this.
+    $own = cp_insert('products', ['client_id' => 101, 'name' => 'Alpha Own Hide Check', 'active' => 1, 'price_source' => 'own',
+        'category_id' => null, 'requires_option' => 0, 'width_only' => 0, 'price_per_slat' => 0, 'price_per_sqm' => 0]);
+    push_catalogue_to_client(db(), 3, 101, 'Bev ZZ Hide Probe');
+    check_same(1, (int) t_val('SELECT active FROM products WHERE id = ?', [$own]), "the account's own product stays active");
+
+    // Re-created under the same name → the old copy is taken over again, not refused.
+    $mk();
+    $sum = push_catalogue_to_client(db(), 3, 101, 'Bev ZZ Hide Probe');
+    check(empty($sum['errors']), 're-create push errors: ' . t_show($sum['errors']));
+    $back = $copy();
+    check_same(1, count($back), 'still one copy after re-creating it');
+    check_same(1, (int) $back[0]['active'], 'the copy is active again');
+    check_same((int) $first[0]['id'], (int) $back[0]['id'], 'it is the same copy, re-linked');
+});
