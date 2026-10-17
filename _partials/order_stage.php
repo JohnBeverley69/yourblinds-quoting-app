@@ -293,8 +293,34 @@ function os_paperwork_missing_banner(PDO $pdo, int $factory, string $back): stri
 }
 
 /**
+ * Is "auto-invoice when dispatched" on for THIS factory? Per factory (John's
+ * rule: no crossover between factories), stored as app_settings key
+ * `auto_invoice_on_dispatch.<factory id>`. The main factory falls back to the
+ * old installation-wide key so its existing choice carries over; any other
+ * factory defaults OFF and never inherits Beverley's setting.
+ */
+function os_auto_invoice_on(int $factory): bool
+{
+    require_once __DIR__ . '/app_settings.php';
+    if (!function_exists('app_setting_get') || $factory <= 0) return false;
+    $v = app_setting_get('auto_invoice_on_dispatch.' . $factory, null);
+    if ($v === null && function_exists('factory_client_id') && $factory === (int) factory_client_id()) {
+        $v = app_setting_get('auto_invoice_on_dispatch', '0');
+    }
+    return $v === '1';
+}
+
+/** Switch "auto-invoice when dispatched" for one factory. True on success. */
+function os_auto_invoice_set(int $factory, bool $on): bool
+{
+    require_once __DIR__ . '/app_settings.php';
+    if (!function_exists('app_setting_set') || $factory <= 0) return false;
+    return app_setting_set('auto_invoice_on_dispatch.' . $factory, $on ? '1' : '0');
+}
+
+/**
  * Phase 2 billing rule: when an order is dispatched, raise + send its invoice —
- * but ONLY when the installation setting `auto_invoice_on_dispatch` is ON (it
+ * but ONLY when the factory's setting `auto_invoice_on_dispatch` is ON (it
  * ships OFF, so dispatch just marks the order ready to invoice). Idempotent: an
  * order that already has a non-void invoice is skipped. Best-effort — never
  * blocks a dispatch. Call it AFTER the order has been marked dispatched.
@@ -302,10 +328,8 @@ function os_paperwork_missing_banner(PDO $pdo, int $factory, string $back): stri
 function os_auto_invoice_on_dispatch(PDO $pdo, int $quoteId, ?int $factory = null, ?int $userId = null): void
 {
     try {
-        require_once __DIR__ . '/app_settings.php';
-        if (!function_exists('app_setting_on') || !app_setting_on('auto_invoice_on_dispatch')) return;
-
         $factory = $factory ?? os_factory_id();
+        if (!os_auto_invoice_on($factory)) return;   // this factory's own setting
         require_once __DIR__ . '/factory_ar.php';
         if (!function_exists('ar_create_invoice')) return;
 

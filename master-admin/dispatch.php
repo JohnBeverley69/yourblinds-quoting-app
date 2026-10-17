@@ -426,7 +426,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     // Shown when they come back to the tray (the PDF is this response).
     $_SESSION['flash_success'] = $dispatched . ' order' . ($dispatched === 1 ? '' : 's')
-        . ' printed and dispatched.' . (app_setting_on('auto_invoice_on_dispatch')
+        . ' printed and dispatched.' . (os_auto_invoice_on($factory)
             ? ' Auto-invoice is on, so their invoices were raised (and emailed where the account has an address) — check Invoices.'
             : ' They are now under To invoice.');
     $problems = [];

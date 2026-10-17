@@ -19,6 +19,7 @@ requireFactoryAccounts();   // main factory only — see factory_accounts_user()
 $user    = current_user();
 $pdo     = db();
 $factory = ar_factory_id();
+require_once __DIR__ . '/../_partials/order_stage.php';   // os_auto_invoice_on / _set (per factory)
 
 $dnReady  = ar_table_ready($pdo, 'factory_ar_delivery_notes');
 $invReady = ar_table_ready($pdo, 'factory_ar_invoices');
@@ -303,7 +304,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'auto_dispatch_mode') {
         $on = (string) ($_POST['on'] ?? '') === '1';
-        $ok = app_setting_set('auto_invoice_on_dispatch', $on ? '1' : '0');
+        $ok = os_auto_invoice_set($factory, $on);   // this factory only
         $_SESSION[$ok ? 'flash_success' : 'flash_error'] = $ok
             ? ($on
                 ? 'Auto-invoice ON: dispatching an order now raises & sends its invoice automatically.'
@@ -521,7 +522,7 @@ $invEditable = static function (array $iv) use ($creditedBy): bool {
 // confidence in it.
 $autoInvoice = app_setting_get('wholesale_dn_auto_invoice', '0') === '1';
 // Phase 2: auto-invoice when an order is dispatched (any path). Default OFF.
-$autoInvoiceDispatch = app_setting_get('auto_invoice_on_dispatch', '0') === '1';
+$autoInvoiceDispatch = os_auto_invoice_on($factory);   // per factory
 
 /**
  * The live (non-void) invoice covering an order, or null. Void invoices remain
