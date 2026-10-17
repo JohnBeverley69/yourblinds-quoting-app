@@ -75,7 +75,7 @@ $smsHint     = 'color:#6b7280;font-size:0.875rem;margin:0 0 1rem;max-width:44rem
                 <?php if (($smsRisk = sms_sender_risk($smsSender)) !== null): ?>
                     <div class="alert alert-error" role="alert" style="margin-top:0.5rem;font-size:0.8125rem"><?= e($smsRisk) ?></div>
                 <?php else: ?>
-                    <div style="color:#6b7280;font-size:0.8125rem;margin-top:0.35rem">Use a recognisable name with no single letters or gaps, e.g. &ldquo;BevBlinds&rdquo;. Networks may block names like &ldquo;T S Blinds&rdquo;.</div>
+                    <div style="color:#6b7280;font-size:0.8125rem;margin-top:0.35rem">Use a recognisable name, e.g. &ldquo;BevBlinds&rdquo;. The networks block names that look like a bank or big brand (&ldquo;TSBlinds&rdquo; reads as TSB) and often initials with gaps.</div>
                 <?php endif; ?>
             </div>
 
