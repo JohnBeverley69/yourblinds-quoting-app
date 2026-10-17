@@ -33,11 +33,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $ready) {
         } elseif ($action === 'delete' && $id > 0) {
             $row = $pdo->prepare('SELECT file_path FROM supplier_requests WHERE id = ?');
             $row->execute([$id]);
-            $fp = (string) ($row->fetchColumn() ?: '');
+            $paths = [(string) ($row->fetchColumn() ?: '')];
+            try {
+                $fr = $pdo->prepare('SELECT file_path FROM supplier_request_files WHERE request_id = ?');
+                $fr->execute([$id]);
+                $paths = array_merge($paths, $fr->fetchAll(PDO::FETCH_COLUMN));
+                $pdo->prepare('DELETE FROM supplier_request_files WHERE request_id = ?')->execute([$id]);
+            } catch (Throwable $e) { /* files table not there yet */ }
             $pdo->prepare('DELETE FROM supplier_requests WHERE id = ?')->execute([$id]);
-            // Best-effort remove the attachment.
-            if ($fp !== '' && strpos($fp, 'uploads/supplier-requests/') === 0) {
-                @unlink(__DIR__ . '/../' . $fp);
+            // Best-effort remove the attachments.
+            foreach ($paths as $fp) {
+                $fp = (string) $fp;
+                if ($fp !== '' && strpos($fp, 'uploads/supplier-requests/') === 0 && strpos($fp, '..') === false) {
+                    @unlink(__DIR__ . '/../' . $fp);
+                }
             }
             $_SESSION['flash_success'] = 'Request removed.';
         }
@@ -50,23 +59,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $ready) {
 
 $requests = [];
 $tally    = [];
+$files    = [];
 if ($ready) {
-    $hasEmail = false;
+    // Columns added by later migrations — select NULL until they're run.
+    $cols = [];
     try {
-        $hasEmail = (bool) $pdo->query(
-            "SELECT 1 FROM information_schema.COLUMNS
-              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'supplier_requests'
-                AND COLUMN_NAME = 'email' LIMIT 1"
-        )->fetchColumn();
-    } catch (Throwable $e) { /* pre-migration → no email column */ }
+        $cols = $pdo->query(
+            "SELECT COLUMN_NAME FROM information_schema.COLUMNS
+              WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'supplier_requests'"
+        )->fetchAll(PDO::FETCH_COLUMN);
+    } catch (Throwable $e) { /* probe failed → treat as absent */ }
+    $opt = '';
+    foreach (['email', 'requester_name', 'supplier_contact', 'supplier_email', 'supplier_phone', 'account_number'] as $c) {
+        $opt .= in_array($c, $cols, true) ? "r.$c, " : "NULL AS $c, ";
+    }
 
     $requests = $pdo->query(
         'SELECT r.id, r.supplier_name, r.website, r.notes, r.file_name, r.file_path,
-                r.status, r.created_at, ' . ($hasEmail ? 'r.email,' : 'NULL AS email,') . ' c.company_name
+                r.status, r.created_at, ' . $opt . ' c.company_name
            FROM supplier_requests r
       LEFT JOIN clients c ON c.id = r.client_id
        ORDER BY (r.status = "open") DESC, r.created_at DESC'
     )->fetchAll(PDO::FETCH_ASSOC);
+
+    // Attachments — any number per request (migrate_supplier_request_contact.php).
+    try {
+        foreach ($pdo->query('SELECT id, request_id, file_name, file_size FROM supplier_request_files ORDER BY id')->fetchAll(PDO::FETCH_ASSOC) as $f) {
+            $files[(int) $f['request_id']][] = $f;
+        }
+    } catch (Throwable $e) { /* table not there yet */ }
 
     // Demand tally: open requests grouped by supplier name (case-insensitive).
     // MIN(supplier_name) rather than the bare column: grouping by
@@ -75,8 +96,8 @@ if ($ready) {
     // leaves ONLY_FULL_GROUP_BY off. That mode is on by default in MySQL 5.7+
     // and 8 and db.php never issues a SET sql_mode, so a server or Cloudways
     // default change would make this ERROR 1055 at execute time — and nothing
-    // catches it here, unlike the ready-check at :19 and the hasEmail probe at
-    // :55, so the whole screen would 500. Verified the page loads today.
+    // catches it here, unlike the ready-check and the column probe above, so
+    // the whole screen would 500. Verified the page loads today.
     $tally = $pdo->query(
         'SELECT MIN(supplier_name) AS supplier_name, COUNT(*) AS n
            FROM supplier_requests WHERE status = "open"
@@ -108,7 +129,7 @@ $activeNav = 'supplier-requests';
                 <h1 class="page-title">Supplier requests</h1>
                 <p class="page-subtitle">
                     <a href="/master-admin/index.php">&larr; Master Admin</a>
-                    &middot; what clients are asking to be added to the library.
+                    &middot; suppliers companies have asked for on their Supplier catalogues page.
                 </p>
             </div>
         </div>
@@ -148,7 +169,7 @@ $activeNav = 'supplier-requests';
             <?php else: ?>
                 <div class="table-wrap">
                     <table class="table">
-                        <thead><tr><th>Supplier</th><th>From</th><th>Notes</th><th>Price list</th><th>When</th><th></th></tr></thead>
+                        <thead><tr><th>Supplier</th><th>From</th><th>Notes</th><th>Files</th><th>When</th><th></th></tr></thead>
                         <tbody>
                             <?php foreach ($requests as $r): $open = (string) $r['status'] === 'open'; ?>
                                 <tr<?= $open ? '' : ' style="opacity:.6"' ?>>
@@ -157,10 +178,23 @@ $activeNav = 'supplier-requests';
                                         <?php if (!empty($r['website'])): ?>
                                             <div style="font-size:.8125rem"><a href="<?= e((strpos((string) $r['website'], 'http') === 0 ? '' : 'https://') . (string) $r['website']) ?>" target="_blank" rel="noopener"><?= e((string) $r['website']) ?></a></div>
                                         <?php endif; ?>
+                                        <?php if (!empty($r['supplier_contact']) || !empty($r['supplier_email']) || !empty($r['supplier_phone'])): ?>
+                                            <div style="font-size:.8125rem;color:var(--text-muted)">
+                                                <?= e((string) ($r['supplier_contact'] ?? '')) ?>
+                                                <?php if (!empty($r['supplier_email'])): ?> <a href="mailto:<?= e((string) $r['supplier_email']) ?>"><?= e((string) $r['supplier_email']) ?></a><?php endif; ?>
+                                                <?php if (!empty($r['supplier_phone'])): ?> &middot; <?= e((string) $r['supplier_phone']) ?><?php endif; ?>
+                                            </div>
+                                        <?php endif; ?>
+                                        <?php if (!empty($r['account_number'])): ?>
+                                            <div style="font-size:.8125rem;color:var(--text-muted)">Their account no. <?= e((string) $r['account_number']) ?></div>
+                                        <?php endif; ?>
                                         <?php if (!$open): ?><span style="font-size:.6875rem;color:var(--text-faint);text-transform:uppercase">handled</span><?php endif; ?>
                                     </td>
                                     <td>
                                         <?= e((string) ($r['company_name'] ?? '—')) ?>
+                                        <?php if (!empty($r['requester_name'])): ?>
+                                            <div style="font-size:.8125rem"><?= e((string) $r['requester_name']) ?></div>
+                                        <?php endif; ?>
                                         <?php if (!empty($r['email'])): ?>
                                             <div style="font-size:.8125rem"><a href="mailto:<?= e((string) $r['email']) ?>"><?= e((string) $r['email']) ?></a></div>
                                         <?php endif; ?>
@@ -168,8 +202,13 @@ $activeNav = 'supplier-requests';
                                     <td style="color:var(--text-muted);font-size:.875rem;max-width:18rem"><?= e((string) ($r['notes'] ?? '')) ?></td>
                                     <td>
                                         <?php if (!empty($r['file_path'])): ?>
-                                            <a href="/master-admin/supplier-request-file.php?id=<?= (int) $r['id'] ?>">&#128229; <?= e((string) ($r['file_name'] ?? 'download')) ?></a>
-                                        <?php else: ?>
+                                            <div><a href="/master-admin/supplier-request-file.php?id=<?= (int) $r['id'] ?>">&#128229; <?= e((string) ($r['file_name'] ?? 'download')) ?></a></div>
+                                        <?php endif; ?>
+                                        <?php foreach ($files[(int) $r['id']] ?? [] as $f): ?>
+                                            <div style="font-size:.875rem"><a href="/master-admin/supplier-request-file.php?file=<?= (int) $f['id'] ?>">&#128229; <?= e((string) $f['file_name']) ?></a>
+                                                <span style="color:var(--text-faint);font-size:.75rem"><?= e(number_format(((int) $f['file_size']) / 1048576, 1)) ?>&nbsp;MB</span></div>
+                                        <?php endforeach; ?>
+                                        <?php if (empty($r['file_path']) && empty($files[(int) $r['id']])): ?>
                                             <span style="color:var(--text-faint)">&mdash;</span>
                                         <?php endif; ?>
                                     </td>

@@ -2,91 +2,91 @@
 declare(strict_types=1);
 
 /**
- * Supplier price-list library — client page.
+ * Supplier catalogues — client page (sidebar: "Supplier catalogues").
  *
- * A tenant admin enables the suppliers they use; enabling copies that
- * supplier's catalogue (products, systems, fabrics, price tables) from the
- * master library into their own account, keeping their own markup and their own
- * products untouched (the existing push engine). The free "Beverley Blinds
- * Trade" supplier is the "blank account -> full catalogue" demo.
+ * Shows the supplier ranges we hold on the master catalogue and which of them
+ * are already in this account, and lets the company ask for a supplier: who
+ * the supplier is, their contact, and any price lists / option sheets / EDI
+ * files they have. Requests land in master-admin/supplier-requests.php and are
+ * emailed to the team. Demand-driven: we build the suppliers people ask for
+ * rather than every supplier we can think of.
+ *
+ * Ranges are NOT switched on from here — the self-serve "Add to my account"
+ * of the old Price-List Library (retired 2026-07-10 with the Platinum tier)
+ * stays off. A range reaches an account through Push updates; from here the
+ * company asks for it.
  */
 
 require __DIR__ . '/../bootstrap.php';
 require __DIR__ . '/../auth/middleware.php';
+require_once __DIR__ . '/../_partials/library.php';
 
 requireAdmin();
 
-// ── Feature retired ──────────────────────────────────────────────────────
-// The Supplier Price-List Library (catalogue distribution) has been
-// withdrawn. The page is kept on disk so the route doesn't 404 and the
-// change is easily reversible, but it no longer functions. This is a
-// DIFFERENT feature from the Fabric Library (master-admin), which is
-// unaffected.
-http_response_code(410);
-$retiredHeading = 'Supplier catalogues unavailable';
-$retiredMessage = 'The Supplier Price-List Library has been retired and is no longer available.';
-require __DIR__ . '/../_partials/feature_retired.php';
-exit;
-
-require_once __DIR__ . '/../_partials/library.php';
-
 $user     = current_user();
 $clientId = (int) $user['client_id'];
-$isAdmin  = true;
 $master   = library_master_client_id();
 $isMaster = ($master > 0 && $master === $clientId);
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    csrf_check();
-    $key       = (string) ($_POST['supplier_key'] ?? '');
-    $suppliers = library_suppliers();
-
-    if (!isset($suppliers[$key])) {
-        $_SESSION['flash_error'] = 'Unknown supplier.';
-    } else {
-        $sup = $suppliers[$key];
-        if (empty($sup['free']) && !library_has_addon($clientId)) {
-            $_SESSION['flash_error'] = $sup['name'] . ' needs the Price-list library add-on. See Billing to enable it.';
-        } elseif ($master <= 0 || $isMaster) {
-            $_SESSION['flash_error'] = $isMaster
-                ? 'This account is the library source, so it can\'t add suppliers to itself.'
-                : 'The library isn\'t set up yet — no master catalogue found.';
-        } else {
-            require_once __DIR__ . '/../_partials/catalogue_push.php';
-            try {
-                $summary = push_catalogue_to_client(db(), $master, $clientId, (string) $sup['prefix'], (string) ($sup['name'] ?? ''));
-                db()->prepare(
-                    'INSERT INTO client_library_suppliers (client_id, supplier_key, last_imported_at)
-                     VALUES (?, ?, NOW())
-                     ON DUPLICATE KEY UPDATE last_imported_at = NOW()'
-                )->execute([$clientId, $key]);
-
-                $added   = (int) ($summary['products_added']   ?? 0);
-                $updated = (int) ($summary['products_updated'] ?? 0);
-                $cells   = (int) ($summary['price_table_cells'] ?? 0);
-                $_SESSION['flash_success'] = sprintf(
-                    '%s added — %d product%s added, %d updated, %s price cells. Your prices use your own markup.',
-                    $sup['name'], $added, $added === 1 ? '' : 's', $updated, number_format($cells)
-                );
-            } catch (Throwable $e) {
-                error_log('[YourBlinds] library enable failed: ' . $e->getMessage());
-                $_SESSION['flash_error'] = 'Could not add that supplier. Please try again.';
-            }
-        }
-    }
-    header('Location: /library/index.php');
-    exit;
-}
+$pdo      = db();
 
 $suppliers = library_suppliers();
-$enabled   = library_client_enabled($clientId);
-$hasAddon  = library_has_addon($clientId);
+
+// Which ranges are already in this account: products copied from the master
+// (source_client_id) whose name carries the supplier's prefix.
+$inAccount = [];
+if ($master > 0 && !$isMaster) {
+    try {
+        $st = $pdo->prepare(
+            "SELECT COUNT(*) FROM products
+              WHERE client_id = ? AND source_client_id = ? AND active = 1
+                AND name LIKE ? ESCAPE '\\\\'"
+        );
+        foreach ($suppliers as $key => $sup) {
+            $prefix = trim((string) $sup['prefix']);
+            if ($prefix === '') continue;
+            $st->execute([$clientId, $master, addcslashes($prefix, '%_\\') . ' %']);
+            $inAccount[$key] = (int) $st->fetchColumn();
+        }
+    } catch (Throwable $e) { /* pre-migration — show none as in account */ }
+}
+
+// This company's own requests, newest first.
+$myRequests = [];
+$filesByReq = [];
+try {
+    $st = $pdo->prepare(
+        'SELECT id, supplier_name, file_name, status, created_at
+           FROM supplier_requests WHERE client_id = ?
+       ORDER BY created_at DESC, id DESC LIMIT 50'
+    );
+    $st->execute([$clientId]);
+    $myRequests = $st->fetchAll(PDO::FETCH_ASSOC);
+    if ($myRequests) {
+        $ids = array_map(static fn ($r) => (int) $r['id'], $myRequests);
+        $in  = implode(',', array_fill(0, count($ids), '?'));
+        $fs  = $pdo->prepare("SELECT request_id, COUNT(*) AS n FROM supplier_request_files WHERE request_id IN ($in) GROUP BY request_id");
+        $fs->execute($ids);
+        foreach ($fs->fetchAll(PDO::FETCH_ASSOC) as $f) $filesByReq[(int) $f['request_id']] = (int) $f['n'];
+    }
+} catch (Throwable $e) { /* table or files table not there yet */ }
+
+// Prefill: "Ask for this range" passes ?supplier=Name#request.
+$prefill = mb_substr(trim((string) ($_GET['supplier'] ?? '')), 0, 160);
+
+// The signed-in person's own name + email, as the default "your details".
+$myName  = (string) ($user['full_name'] ?? '');
+$myEmail = '';
+try {
+    $es = $pdo->prepare('SELECT email FROM users WHERE id = ? LIMIT 1');
+    $es->execute([(int) ($user['user_id'] ?? 0)]);
+    $myEmail = (string) ($es->fetchColumn() ?: '');
+} catch (Throwable $e) { /* leave blank */ }
 
 $flashMsg = $_SESSION['flash_success'] ?? null;
 $flashErr = $_SESSION['flash_error']   ?? null;
 unset($_SESSION['flash_success'], $_SESSION['flash_error']);
 
-$activeNav = 'price-library';
+$activeNav = 'supplier-catalogues';
 ?><!doctype html>
 <html lang="en">
 <head>
@@ -104,8 +104,8 @@ $activeNav = 'price-library';
             <div>
                 <h1 class="page-title">Supplier catalogues</h1>
                 <p class="page-subtitle">
-                    Switch on the suppliers you use and their products &mdash; fully priced &mdash; drop
-                    straight into your account. We keep the prices up to date; you set your own margin.
+                    Supplier price lists, ready priced, with the supplier's own options.
+                    Don't see one you buy from? <a href="#request">Request a supplier</a>.
                 </p>
             </div>
         </div>
@@ -119,105 +119,153 @@ $activeNav = 'price-library';
 
         <?php if ($isMaster): ?>
             <section class="section">
-                <p style="color:var(--text-secondary)">
-                    This account is the <strong>library source</strong>. Manage the master catalogues here;
-                    other tenants enable them from their own Supplier catalogues page.
+                <p style="color:var(--text-secondary);margin:0">
+                    This account holds the <strong>master catalogue</strong>. Supplier ranges are managed in
+                    <a href="/master-admin/master-catalogue.php">Master Catalogue</a>, and what companies ask for is in
+                    <a href="/master-admin/supplier-requests.php">Supplier requests</a>.
                 </p>
             </section>
-        <?php else: ?>
-            <?php foreach ($suppliers as $key => $sup): ?>
-                <?php
-                    $isOn   = isset($enabled[$key]);
-                    $locked = empty($sup['free']) && !$hasAddon;
-                    $last   = $isOn && !empty($enabled[$key]['last_imported_at'])
-                            ? date('j M Y', strtotime((string) $enabled[$key]['last_imported_at'])) : '';
-                ?>
-                <section class="section" style="<?= $isOn ? 'border-left:4px solid var(--brand)' : '' ?>">
-                    <div style="display:flex;justify-content:space-between;gap:1rem;flex-wrap:wrap;align-items:flex-start">
-                        <div style="max-width:42rem">
-                            <h2 class="section-title" style="margin:0 0 0.25rem">
-                                <?= e((string) $sup['name']) ?>
-                                <?php if (!empty($sup['free'])): ?>
-                                    <span style="font-size:0.75rem;font-weight:600;color:var(--alert-success-text);margin-left:0.4rem">FREE</span>
-                                <?php endif; ?>
-                                <?php if ($isOn): ?>
-                                    <span style="font-size:0.75rem;font-weight:600;color:var(--brand);margin-left:0.4rem">&check; ENABLED</span>
-                                <?php endif; ?>
-                            </h2>
-                            <p style="color:var(--text-secondary);font-size:0.9375rem;margin:0">
-                                <?= e((string) ($sup['blurb'] ?? '')) ?>
-                            </p>
-                            <?php if ($last !== ''): ?>
-                                <p style="color:var(--text-faint);font-size:0.8125rem;margin:0.375rem 0 0">Last updated from the library: <?= e($last) ?></p>
-                            <?php endif; ?>
-                        </div>
-                        <div style="flex-shrink:0">
-                            <?php if ($locked): ?>
-                                <a href="/billing/index.php" class="btn btn-secondary">Unlock with the add-on</a>
-                            <?php else: ?>
-                                <form method="post" action="/library/index.php" style="margin:0"
-                                      data-confirm="<?= $isOn
-                                          ? 'Update your ' . e((string) $sup['name']) . ' products to the latest library prices? Your own markup and your own products are kept.'
-                                          : 'Add ' . e((string) $sup['name']) . '\'s full catalogue to your account?' ?>">
-                                    <?= csrf_field() ?>
-                                    <input type="hidden" name="supplier_key" value="<?= e($key) ?>">
-                                    <button type="submit" class="btn btn-primary">
-                                        <?= $isOn ? 'Update from library' : 'Add to my account' ?>
-                                    </button>
-                                </form>
-                            <?php endif; ?>
-                        </div>
-                    </div>
-                </section>
-            <?php endforeach; ?>
+        <?php endif; ?>
 
-            <p style="color:var(--text-faint);font-size:0.8125rem;margin:0.5rem 0 0;max-width:46rem">
-                More suppliers are added to the library over time. Adding a supplier never touches the
-                products you've built yourself, and only ever updates prices &mdash; your markup stays as you set it.
+        <section class="section">
+            <h2 class="section-title" style="margin:0 0 0.75rem">Supplier ranges</h2>
+            <?php if (!$suppliers): ?>
+                <p style="color:var(--text-faint);margin:0">No supplier ranges yet &mdash; request the ones you use below.</p>
+            <?php else: ?>
+                <div class="table-wrap">
+                    <table class="table">
+                        <thead><tr><th>Supplier</th><th>In your account</th><th></th></tr></thead>
+                        <tbody>
+                        <?php foreach ($suppliers as $key => $sup): $n = $inAccount[$key] ?? 0; ?>
+                            <tr>
+                                <td>
+                                    <strong><?= e((string) $sup['name']) ?></strong>
+                                    <?php if ((string) $sup['blurb'] !== ''): ?>
+                                        <div style="font-size:.8125rem;color:var(--text-muted)"><?= e((string) $sup['blurb']) ?></div>
+                                    <?php endif; ?>
+                                </td>
+                                <td>
+                                    <?php if ($isMaster): ?>
+                                        <span style="color:var(--text-faint)">&mdash;</span>
+                                    <?php elseif ($n > 0): ?>
+                                        &check; <?= $n ?> product<?= $n === 1 ? '' : 's' ?>
+                                    <?php else: ?>
+                                        <span style="color:var(--text-faint)">Not yet</span>
+                                    <?php endif; ?>
+                                </td>
+                                <td style="text-align:right;white-space:nowrap">
+                                    <?php if (!$isMaster && $n === 0): ?>
+                                        <a href="/library/index.php?supplier=<?= e(rawurlencode((string) $sup['name'])) ?>#request">Ask for this range</a>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        </section>
+
+        <section class="section" id="request" style="background:var(--bg-subtle)">
+            <h2 class="section-title" style="margin:0 0 0.25rem">Request a supplier</h2>
+            <p style="color:var(--text-secondary);font-size:0.9375rem;margin:0 0 0.875rem;max-width:46rem">
+                Tell us who the supplier is and we'll look at adding their range. If you have their
+                price list, option sheets or EDI files, attach them &mdash; it gets them on much faster.
             </p>
+            <form method="post" action="/library/request-supplier.php" enctype="multipart/form-data" class="form" style="max-width:46rem">
+                <?= csrf_field() ?>
+                <h3 style="font-size:.9375rem;margin:.25rem 0 .5rem">The supplier</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Supplier company <span class="required">*</span></label>
+                        <input type="text" name="supplier_name" class="form-control" maxlength="160" required
+                               value="<?= e($prefill) ?>" placeholder="e.g. Louvolite">
+                    </div>
+                    <div class="form-group">
+                        <label>Website</label>
+                        <input type="text" name="website" class="form-control" maxlength="255" placeholder="e.g. louvolite.com">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Contact name</label>
+                        <input type="text" name="supplier_contact" class="form-control" maxlength="160" placeholder="Your rep or account manager">
+                    </div>
+                    <div class="form-group">
+                        <label>Contact email</label>
+                        <input type="email" name="supplier_email" class="form-control" maxlength="255">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Contact phone</label>
+                        <input type="text" name="supplier_phone" class="form-control" maxlength="60">
+                    </div>
+                    <div class="form-group">
+                        <label>Your account number with them</label>
+                        <input type="text" name="account_number" class="form-control" maxlength="80">
+                    </div>
+                </div>
 
-            <!-- Request a supplier (demand-driven). Optional price-list upload speeds it up. -->
-            <section class="section" style="margin-top:1rem;background:var(--bg-subtle);">
-                <h2 class="section-title" style="margin:0 0 0.25rem">Don't see your supplier?</h2>
-                <p style="color:var(--text-secondary);font-size:0.9375rem;margin:0 0 0.875rem;max-width:46rem">
-                    Request it and we'll look at adding it to the library. If you have their current
-                    price list, attach it &mdash; that helps us add it faster.
-                </p>
-                <form method="post" action="/library/request-supplier.php" enctype="multipart/form-data" class="form" style="max-width:40rem">
-                    <?= csrf_field() ?>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label>Supplier name <span class="required">*</span></label>
-                            <input type="text" name="supplier_name" class="form-control" maxlength="160" required
-                                   placeholder="e.g. Louvolite">
-                        </div>
-                        <div class="form-group">
-                            <label>Website <span style="color:var(--text-faint);font-weight:400">(optional)</span></label>
-                            <input type="text" name="website" class="form-control" maxlength="255"
-                                   placeholder="e.g. louvolite.com">
-                        </div>
+                <h3 style="font-size:.9375rem;margin:.75rem 0 .5rem">Your details</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Your name <span class="required">*</span></label>
+                        <input type="text" name="requester_name" class="form-control" maxlength="160" required value="<?= e($myName) ?>">
                     </div>
-                    <div class="form-row full">
-                        <div class="form-group">
-                            <label>Notes <span style="color:var(--text-faint);font-weight:400">(optional)</span></label>
-                            <input type="text" name="notes" class="form-control" maxlength="500"
-                                   placeholder="Which products / ranges you'd like, anything useful">
-                        </div>
+                    <div class="form-group">
+                        <label>Your email <span class="required">*</span></label>
+                        <input type="email" name="requester_email" class="form-control" maxlength="255" required value="<?= e($myEmail) ?>">
                     </div>
-                    <div class="form-row full">
-                        <div class="form-group">
-                            <label>Price list <span style="color:var(--text-faint);font-weight:400">(optional &mdash; Excel, CSV or PDF)</span></label>
-                            <input type="file" name="price_list" class="form-control" accept=".xlsx,.xlsm,.xls,.csv,.ods,.pdf" style="max-width:24rem">
-                        </div>
+                </div>
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label>Company</label>
+                        <input type="text" class="form-control" value="<?= e((string) ($user['company_name'] ?? '')) ?>" disabled>
                     </div>
-                    <div class="form-actions">
-                        <button type="submit" class="btn btn-primary">Request supplier</button>
+                </div>
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label>Notes</label>
+                        <textarea name="notes" class="form-control" rows="3" maxlength="2000"
+                                  placeholder="Which products or ranges you buy from them, anything useful"></textarea>
                     </div>
-                </form>
+                </div>
+                <div class="form-row full">
+                    <div class="form-group">
+                        <label>Files <span style="color:var(--text-faint);font-weight:400">(optional &mdash; price lists, option sheets, EDI files: Excel, CSV, PDF or ZIP, up to 10 files, 20 MB each)</span></label>
+                        <input type="file" name="files[]" multiple class="form-control"
+                               accept=".xlsx,.xlsm,.xls,.csv,.ods,.pdf,.txt,.zip" style="max-width:28rem">
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Send request</button>
+                </div>
+            </form>
+        </section>
+
+        <?php if ($myRequests): ?>
+            <section class="section">
+                <h2 class="section-title" style="margin:0 0 0.75rem">Your requests</h2>
+                <div class="table-wrap">
+                    <table class="table">
+                        <thead><tr><th>Supplier</th><th>Files</th><th>Sent</th><th>Status</th></tr></thead>
+                        <tbody>
+                        <?php foreach ($myRequests as $r):
+                            $nf = ($filesByReq[(int) $r['id']] ?? 0) + (!empty($r['file_name']) ? 1 : 0); ?>
+                            <tr>
+                                <td><?= e((string) $r['supplier_name']) ?></td>
+                                <td><?= $nf > 0 ? $nf : '&mdash;' ?></td>
+                                <td style="white-space:nowrap"><?= e(date('j M Y', strtotime((string) $r['created_at']))) ?></td>
+                                <td><?= (string) $r['status'] === 'open' ? 'With us' : 'Done' ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
             </section>
         <?php endif; ?>
     </main>
 </div>
-<?php require __DIR__ . '/../_partials/confirm_modal.php'; ?>
 </body>
 </html>

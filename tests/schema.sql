@@ -1915,11 +1915,29 @@ CREATE TABLE `supplier_orders` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `supplier_request_files` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `request_id` int(11) NOT NULL,
+  `file_name` varchar(255) NOT NULL,
+  `file_path` varchar(255) NOT NULL,
+  `file_size` int(11) NOT NULL DEFAULT 0,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
+  PRIMARY KEY (`id`),
+  KEY `idx_request` (`request_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `supplier_requests` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `client_id` int(11) NOT NULL,
   `email` varchar(255) DEFAULT NULL,
+  `requester_name` varchar(160) DEFAULT NULL,
   `supplier_name` varchar(160) NOT NULL,
+  `supplier_contact` varchar(160) DEFAULT NULL,
+  `supplier_email` varchar(255) DEFAULT NULL,
+  `supplier_phone` varchar(60) DEFAULT NULL,
+  `account_number` varchar(80) DEFAULT NULL,
   `website` varchar(255) DEFAULT NULL,
   `notes` text DEFAULT NULL,
   `file_name` varchar(255) DEFAULT NULL,
