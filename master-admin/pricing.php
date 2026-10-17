@@ -82,6 +82,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $oldPrice = (float) $old['price_gbp_monthly'];
                 $oldId    = (string) ($old['paypal_plan_id'] ?? '');
 
+                // The PayPal Plan ID box only counts if it was actually EDITED on
+                // this page. Otherwise keep what's stored: a page left open from
+                // before a Create/Re-create used to save its stale id back over the
+                // new one (Gold went back to its 22 Sep plan — John, 2026-10-17).
+                $idWas = trim((string) ($_POST['paypal_plan_id_was'] ?? ''));
+                if (isset($_POST['paypal_plan_id_was']) && ($paypalId ?? '') === $idWas) {
+                    $paypalId = $oldId !== '' ? $oldId : null;
+                }
+
                 // UPSERT — the migration seeds rows for every plan in
                 // the registry, but be tolerant of brand-new plans.
                 $pdo->prepare(
@@ -507,6 +516,7 @@ $activeNav = 'pricing';
                             <input id="ppid-<?= e($code) ?>" name="paypal_plan_id" type="text"
                                    value="<?= e($ppId) ?>"
                                    placeholder="P-XXXXXXXXX (auto-filled if you create below)">
+                            <input type="hidden" name="paypal_plan_id_was" value="<?= e($ppId) ?>">
                         </div>
                         <?php endif; ?>
 
