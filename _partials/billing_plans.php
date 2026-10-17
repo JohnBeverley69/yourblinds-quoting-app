@@ -26,6 +26,12 @@ declare(strict_types=1);
  *                       is enforced app-side (commitment_end_at + a cancel guard).
  *                       No current tier uses one.
  *
+ * Which tier each feature sits on can be overridden on
+ * /master-admin/plan-features.php (drag and drop) — saved in app_settings and
+ * applied by billing_apply_feature_layout(). The 'features' lists below are
+ * the STANDARD layout ("Reset to standard tiers" returns to them), and once a
+ * layout is saved the descriptions are rebuilt from the features.
+ *
  * To change a tier's price: edit it on /master-admin/pricing.php, then click
  * "Create on PayPal" (or update the PayPal plan). To add a tier: add an entry
  * here, run /migrate_billing_tiers.php to seed its price, create its PayPal plan.

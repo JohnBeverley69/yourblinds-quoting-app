@@ -29,8 +29,8 @@ $plans       = billing_plans();
 // can still be toggled here but aren't subscribable via PayPal yet.
 // Adding a new paid feature is two steps:
 //   1. Add the column + label to _partials/feature_flags.php
-//   2. Add (or extend) a plan in _partials/billing_plans.php listing
-//      the new flag in its 'features' array
+//   2. Put it on a tier — drag it there on /master-admin/plan-features.php
+//      (or list it in _partials/billing_plans.php 'features')
 // The new feature then shows up here AND on the tenant Billing page.
 $flagPricing = [];   // ['feature_accounts' => ['plan' => 'accounts', 'price' => 10.00], ...]
 foreach ($flags as $col => $_label) {

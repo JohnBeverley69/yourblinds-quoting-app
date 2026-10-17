@@ -37,12 +37,21 @@ if (!function_exists('hw_say')) {
 // time (the narration can hold a scene longer);  tier — optional plan tag;
 // mock  — the animated screen. Animation classes (a-fade, a-type, …) take
 // their start time from --d, so each mock reads like a little timeline.
+//
+// Feature tier tags follow Master Admin → Plan features via $hwTier; where the
+// billing helpers aren't loaded (tools/tour_voice.php) the fallback is used.
+// Tags aren't narrated, so a change never orphans a clip.
+$hwTier = static function (string $flag, string $format, string $fallback): string {
+    if (!function_exists('billing_feature_tier_names')) return $fallback;
+    try { $names = billing_feature_tier_names($flag); } catch (Throwable $e) { return $fallback; }
+    return $names === '' ? '' : sprintf($format, $names);
+};
 return [
     [
         'nav'   => 'Book it', 'icon' => '📞', 'secs' => 9,
         'title' => 'The phone rings. Booked in seconds.',
         'body'  => 'One quick form does the lot. Type the customer\'s name, pop in the postcode and, on our Silver and Gold packages, the address fills itself in. Then book it your way: give the customer an exact time, or a time slot like morning, afternoon or evening, set up just the way you like them. Your choice. Make YourBlinds work the way you want to work. Choose who\'s going, click Book appointment, and the customer record is created as you book. Booking by time slot? Your customer gets a confirmation email with their slot. And the double-booking guard makes sure nobody is ever sent to two places at the same time.',
-        'tier'  => 'Postcode finder on Silver & Gold',
+        'tier'  => $hwTier('feature_postcode_lookup', 'Postcode finder on %s', 'Postcode finder on Silver & Gold'),
         'mock'  => <<<'HTML'
 <div class="hw-win"><div class="hw-bar"><i></i><i></i><i></i><span>New appointment</span></div>
   <div class="hw-body hw-form">
@@ -134,7 +143,7 @@ HTML,
         'nav'   => 'Route', 'icon' => '🗺️', 'secs' => 8,
         'title' => 'Hit the road with your day mapped out.',
         'body'  => 'Open your run and the whole day is on one map, with directions from home, through every visit, and back again. One tap hands the address to Google Maps or Waze, so you\'re never fumbling with postcodes at the kerb.',
-        'tier'  => 'Silver',
+        'tier'  => $hwTier('feature_maps', '%s', 'Silver'),
         'mock'  => <<<'HTML'
 <div class="hw-win"><div class="hw-bar"><i></i><i></i><i></i><span>Today&rsquo;s run</span></div>
   <div class="hw-body hw-map">
