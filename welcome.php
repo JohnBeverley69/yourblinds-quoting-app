@@ -184,8 +184,8 @@ function wl_price(array $plan): string
                         <?= e($price) ?><?php if (!$isFree): ?><span class="per"> /month</span><?php endif; ?>
                     </div>
                     <div class="wl-tier-vat"><?= $isFree ? '' : '+ VAT' ?></div>
-                    <p class="wl-tier-desc"><?= e((string) ($plan['description'] ?? '')) ?></p>
-                    <?= billing_listed_html((string) $code, !$isFree, $isFree ? "What's included" : 'What this plan adds') ?>
+                    <p class="wl-tier-desc"><?= e(billing_plan_heading((string) $code)) ?></p>
+                    <?= billing_listed_html((string) $code, !$isFree, $isFree ? "What's included" : 'What this plan adds', true) ?>
                     <?php if ($signupsClosed): ?>
                         <span class="wl-btn wl-btn-ghost">Sign-ups paused</span>
                     <?php elseif ($loggedIn && ((current_user()['role'] ?? '') === 'admin')): ?>

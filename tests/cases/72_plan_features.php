@@ -130,7 +130,8 @@ test('saving switches companies on and off; reset puts it back', function () use
     check_same(1, $flag(102, 'feature_postcode_lookup'), 'Bravo (Bronze) postcode lookup after moving it to Bronze');
     check_same(1, $flag(101, 'feature_accounts'), 'Alpha (Silver) Accounts after moving it to Silver');
     check_same(0, $flag(102, 'feature_accounts'), 'Bravo (Bronze) got Accounts');
-    check_contains('Also includes Postcode lookup', (new YbHttp())->get('/welcome.php')->body, 'welcome page Bronze card');
+    billing_plans(true);   // the save happened over HTTP — re-read the layout here
+    check(in_array('Postcode lookup', array_column(billing_plan_listed('free'), 'label'), true), 'Bronze card lists Postcode lookup once moved there');
 
     t_submit($super, '/master-admin/plan-features.php', ['action' => 'reset']);
     check_same([], billing_feature_layout(), 'layout after Reset');
@@ -149,4 +150,14 @@ test('the board order is saved, and the plan lists follow it', function () {
     check_same(['calendar', 'instaprice'], array_slice($keys, 0, 2), 'the first two listed features follow the saved order');
     t_submit($super, '/master-admin/plan-features.php', ['action' => 'reset']);
     check_same([], billing_feature_order(), 'order cleared by Reset');
+});
+
+test('a plan card lists EVERY box the board puts on that tier — switches and listed — under one heading', function () {
+    billing_plans(true);   // earlier tests changed the layout over HTTP
+    $silver = array_column(billing_plan_listed('silver', true), 'label');
+    check(in_array('Maps', $silver, true), 'Silver card lists Maps (an original switch): ' . implode(', ', $silver));
+    check(in_array('Sign on your device', $silver, true), 'Silver card lists Sign on your device (listed)');
+    check(!in_array('Accounts', $silver, true), 'Accounts is Gold, not Silver');
+    check_same('Everything in Silver, plus:', billing_plan_heading('gold'), 'Gold heading');
+    check_contains('Everything in Bronze, plus:', (new YbHttp())->get('/welcome.php')->body, 'welcome page Silver card heading');
 });
