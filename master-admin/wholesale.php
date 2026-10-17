@@ -48,6 +48,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $order = $q->fetch(PDO::FETCH_ASSOC);
             if (!$order) throw new RuntimeException('Order not found, not placed, or not a trade-account order.');
 
+            // One live delivery note per order per factory, unless the deliberate
+            // "+ Duplicate delivery note" button sent it (duplicate=1). Stops a
+            // stale "Raise delivery note" button (or a double-click / second tab)
+            // making a second note for an order that already has one.
+            if (empty($_POST['duplicate'])) {
+                $ex = $pdo->prepare(
+                    "SELECT dn_number FROM factory_ar_delivery_notes
+                      WHERE source_quote_id = ? AND factory_client_id = ? AND status <> 'cancelled'
+                   ORDER BY id DESC LIMIT 1"
+                );
+                $ex->execute([$qid, $factory]);
+                $have = $ex->fetchColumn();
+                if ($have !== false) {
+                    throw new RuntimeException('order ' . ($order['quote_number'] ?: ('#' . $qid)) . ' already has delivery note ' . $have . '. Use "+ Duplicate delivery note" under the order if you really need another.');
+                }
+            }
+
             $dn = ar_create_delivery_note($pdo, $factory, $qid, (int) $order['account_id'], (int) ($user['user_id'] ?? 0), false);
             $_SESSION['flash_success'] = 'Delivery note ' . $dn['number'] . ' created (draft). View/print it below, then mark it dispatched.';
         } catch (Throwable $e) {
@@ -408,8 +425,16 @@ $fTo      = trim((string) ($_GET['to'] ?? ''));
 $accounts = ar_account_options($pdo, $factory);
 $orders   = ar_placed_orders($pdo, $factory, $fAccount, $fFrom !== '' ? $fFrom : null, $fTo !== '' ? $fTo : null);
 
+// Documents are loaded for the orders actually listed above, never "the newest
+// 100 platform-wide". That old cap meant that once the factory had raised more
+// than 100 notes / invoices, older orders on this page lost their documents: the
+// wrong stage pill, no Void / credit / Send / Edit, and a "Raise delivery note"
+// button that made a duplicate note. Everything stays scoped to this factory.
+$orderIds = array_values(array_unique(array_filter(array_map(static fn ($o) => (int) $o['id'], $orders))));
+$inList   = static fn (array $ids): string => implode(',', array_fill(0, count($ids), '?'));
+
 $notes = [];
-if ($dnReady) {
+if ($dnReady && $orderIds) {
     try {
         $ns = $pdo->prepare(
             "SELECT dn.*, c.company_name AS account_name, q.quote_number AS order_number
@@ -417,33 +442,36 @@ if ($dnReady) {
                JOIN clients c  ON c.id = dn.account_client_id
           LEFT JOIN quotes q   ON q.id = dn.source_quote_id
               WHERE dn.factory_client_id = ?
-           ORDER BY dn.id DESC LIMIT 100"
+                AND dn.source_quote_id IN (" . $inList($orderIds) . ")
+           ORDER BY dn.id DESC"
         );
-        $ns->execute([$factory]);
+        $ns->execute(array_merge([$factory], $orderIds));
         $notes = $ns->fetchAll(PDO::FETCH_ASSOC);
     } catch (Throwable $e) { /* leave empty */ }
 }
 
 $invoices = [];
-if ($invReady) {
+if ($invReady && $orderIds) {
     try {
         $is = $pdo->prepare(
             "SELECT i.*, c.company_name AS account_name,
                     io.quote_id AS order_quote_id, q.quote_number AS order_number
                FROM factory_ar_invoices i
                JOIN clients c ON c.id = i.account_client_id
-          LEFT JOIN factory_ar_invoice_orders io ON io.invoice_id = i.id
+               JOIN factory_ar_invoice_orders io ON io.invoice_id = i.id
           LEFT JOIN quotes q ON q.id = io.quote_id
               WHERE i.factory_client_id = ?
-           ORDER BY i.id DESC LIMIT 100"
+                AND io.quote_id IN (" . $inList($orderIds) . ")
+           ORDER BY i.id DESC"
         );
-        $is->execute([$factory]);
+        $is->execute(array_merge([$factory], $orderIds));
         $invoices = $is->fetchAll(PDO::FETCH_ASSOC);
     } catch (Throwable $e) { /* leave empty */ }
 }
 
 $creditNotes = [];
-if ($cnReady) {
+$invoiceIds  = array_values(array_unique(array_map(static fn ($i) => (int) $i['id'], $invoices)));
+if ($cnReady && $invoiceIds) {
     try {
         $cs = $pdo->prepare(
             "SELECT cn.*, c.company_name AS account_name, i.inv_number AS against_number
@@ -451,9 +479,10 @@ if ($cnReady) {
                JOIN clients c ON c.id = cn.account_client_id
           LEFT JOIN factory_ar_invoices i ON i.id = cn.against_invoice_id
               WHERE cn.factory_client_id = ?
-           ORDER BY cn.id DESC LIMIT 100"
+                AND cn.against_invoice_id IN (" . $inList($invoiceIds) . ")
+           ORDER BY cn.id DESC"
         );
-        $cs->execute([$factory]);
+        $cs->execute(array_merge([$factory], $invoiceIds));
         $creditNotes = $cs->fetchAll(PDO::FETCH_ASSOC);
     } catch (Throwable $e) { /* leave empty */ }
 }
@@ -960,6 +989,7 @@ $activeNav = 'wholesale';
                                                     <?= csrf_field() ?>
                                                     <input type="hidden" name="_action" value="dn_raise">
                                                     <input type="hidden" name="quote_id" value="<?= $qid ?>">
+                                                    <input type="hidden" name="duplicate" value="1">
                                                     <button type="submit" class="wh-act">+ Duplicate delivery note</button>
                                                 </form>
                                                 <span class="wh-muted">(reprints don't re-invoice)</span>
