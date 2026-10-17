@@ -48,7 +48,13 @@ function op_order_factories(PDO $pdo, int $quoteId): array
         );
         $st->execute([$quoteId]);
         $owners = array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN));
-    } catch (Throwable $e) { return []; }
+    } catch (Throwable $e) {
+        // Never silent: callers (due dates, factory notifications, the order stage)
+        // then do nothing for this order, so the failure must show in the log
+        // (outside review 2026-10-17).
+        error_log('[YourBlinds] op_order_factories failed for quote ' . $quoteId . ': ' . $e->getMessage());
+        return [];
+    }
     if (!function_exists('qb_factory_client_ids')) require_once __DIR__ . '/../quote-builder/_helpers.php';
     $factories = qb_factory_client_ids($pdo);
     $main = function_exists('factory_client_id') ? (int) factory_client_id() : 0;
