@@ -16,7 +16,9 @@ https://yourblinds.uk.
 
 - **PHP 8.2**, as the live server and CI use. Extensions needed: `pdo_mysql`,
   `mysqli` (tests), `mbstring`, `gd`, `zip`, `intl`.
-- **MySQL 8.0** (MariaDB 10.6+ also works).
+- **MySQL 8.0.** Live backups use MySQL 8's `utf8mb4_0900_ai_ci` collation, so they
+  restore only onto MySQL 8. MariaDB (e.g. XAMPP) refuses them unless that
+  collation is first swapped for `utf8mb4_unicode_ci`.
 - **Composer**, for dompdf, PHPMailer and PhpSpreadsheet. Run `composer install` to
   fill `vendor/`, which isn't in git.
 - **For full features, set in `.env`:** SMTP for email (AuthSMTP), PayPal, The SMS
@@ -99,6 +101,10 @@ the schema and the settings together.
      snapshot first.
   3. Run the migrations, because the backup may predate the code.
   4. Run `/system_check.php`.
+- **Last drill (2026-10-17):** a real live backup (110 tables, 100 MB) restored in
+  77 seconds onto a scratch database; every migration then ran clean; all 56
+  companies and 1,020 products were there; every saved quote line re-priced to the
+  penny with the current engine.
 - **Not in the database:** uploaded files (logos, choice images) in `uploads/`.
   Back these up separately.
 
