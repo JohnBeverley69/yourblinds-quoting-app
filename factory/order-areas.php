@@ -52,7 +52,7 @@ try {
 $rows = [];
 $meta = null;
 if ($order > 0) {
-    $dueSel = $hasDue ? 'q.due_date' : 'NULL AS due_date';
+    $dueSel = $hasDue ? op_due_sql($pdo, (int) $MASTER) . ' AS due_date' : 'NULL AS due_date';   // this factory's own date
     $areaSel = $hasArea ? 'bj.area_id' : 'NULL AS area_id';
     $st = $pdo->prepare(
         "SELECT bj.id, bj.unit_no, bj.product_id, bj.status, $areaSel,

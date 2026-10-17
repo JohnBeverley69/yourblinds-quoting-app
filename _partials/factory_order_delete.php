@@ -100,9 +100,10 @@ function fod_floor_progress_reason(PDO $pdo, int $quoteId): string
     if ($quoteId <= 0) return '';
     // factory_jobs: the order-level tracker.
     try {
-        $s = $pdo->prepare('SELECT status FROM factory_jobs WHERE quote_id = ? LIMIT 1');
+        // Any factory's part (an order can be made by two).
+        $s = $pdo->prepare("SELECT 1 FROM factory_jobs WHERE quote_id = ? AND status IN ('in_production', 'made', 'dispatched') LIMIT 1");
         $s->execute([$quoteId]);
-        if (in_array((string) ($s->fetchColumn() ?: ''), ['in_production', 'made', 'dispatched'], true)) {
+        if ($s->fetchColumn()) {
             return 'it has already been started on the floor';
         }
     } catch (Throwable $e) { /* not migrated */ }

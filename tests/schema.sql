@@ -886,6 +886,7 @@ CREATE TABLE `factory_blind_streams` (
 CREATE TABLE `factory_jobs` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
   `quote_id` int(11) NOT NULL,
+  `factory_client_id` int(11) NOT NULL DEFAULT 0,
   `status` varchar(20) NOT NULL DEFAULT 'received',
   `received_at` datetime DEFAULT NULL,
   `received_by` int(11) DEFAULT NULL,
@@ -894,7 +895,7 @@ CREATE TABLE `factory_jobs` (
   `status_at` datetime DEFAULT NULL,
   `status_by` int(11) DEFAULT NULL,
   PRIMARY KEY (`id`),
-  UNIQUE KEY `uq_factory_jobs_quote` (`quote_id`),
+  UNIQUE KEY `uq_factory_jobs_quote_factory` (`quote_id`,`factory_client_id`),
   KEY `idx_factory_jobs_status` (`status`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -1203,6 +1204,20 @@ CREATE TABLE `online_bookings` (
   KEY `idx_ob_client_time` (`client_id`,`created_at`),
   KEY `idx_ob_ip_time` (`ip_address`,`created_at`),
   KEY `idx_ob_appt` (`appointment_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `order_factory_parts` (
+  `quote_id` int(11) NOT NULL,
+  `factory_client_id` int(11) NOT NULL,
+  `fulfilment_stage` varchar(20) DEFAULT NULL,
+  `due_date` date DEFAULT NULL,
+  `notified_at` datetime DEFAULT NULL,
+  `created_at` datetime NOT NULL DEFAULT current_timestamp(),
+  `updated_at` datetime NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp(),
+  PRIMARY KEY (`quote_id`,`factory_client_id`),
+  KEY `idx_ofp_factory` (`factory_client_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;

@@ -50,9 +50,7 @@ $billedIds = [];
 if ($oids) {
     $ph = implode(',', array_fill(0, count($oids), '?'));
     try {
-        $s = $pdo->prepare("SELECT id, fulfilment_stage FROM quotes WHERE id IN ($ph)");
-        $s->execute($oids);
-        foreach ($s->fetchAll(PDO::FETCH_ASSOC) as $r) $stageBy[(int) $r['id']] = $r['fulfilment_stage'];
+        $stageBy = op_stages_for($pdo, $oids, $factory);   // this factory's own part
     } catch (Throwable $e) { /* pre-migration — no stage */ }
     try {
         $bi = $pdo->prepare(

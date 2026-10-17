@@ -52,6 +52,8 @@ if (!$showLanes) {
 
 $pdo    = db();
 $MASTER = current_factory_id();
+require_once __DIR__ . '/../quote-builder/_helpers.php';   // qb_factory_client_ids
+$factoryIds = qb_factory_client_ids($pdo);
 
 $PLACED   = ['ordered', 'fitted', 'invoiced', 'paid'];
 $inPlaced = "'" . implode("','", $PLACED) . "'";
@@ -76,7 +78,16 @@ $statusAtSel = $hasStages ? 'fj.status_at' : 'NULL';
 $fjSelect = $hasFactoryJobs
     ? ", fj.status AS factory_status, fj.received_at, $statusAtSel AS status_at"
     : ', NULL AS factory_status, NULL AS received_at, NULL AS status_at';
-$fjJoin  = $hasFactoryJobs ? 'LEFT JOIN factory_jobs fj ON fj.quote_id = q.id' : '';
+// This factory's own row — factory_jobs is one row per order AND factory, so a
+// mixed order's other factory's status never shows (or doubles the row) here.
+$fjPerFactory = false;
+if ($hasFactoryJobs) {
+    try { $pdo->query('SELECT factory_client_id FROM factory_jobs LIMIT 0'); $fjPerFactory = true; }
+    catch (Throwable $e) { /* not migrated yet */ }
+}
+$fjJoin  = $hasFactoryJobs
+    ? 'LEFT JOIN factory_jobs fj ON fj.quote_id = q.id' . ($fjPerFactory ? ' AND fj.factory_client_id = ' . (int) $MASTER : '')
+    : '';
 $fjGroup = $hasFactoryJobs
     ? ($hasStages ? ', fj.status, fj.received_at, fj.status_at' : ', fj.status, fj.received_at')
     : '';
@@ -207,12 +218,8 @@ if (!empty($ids)) {
 require_once __DIR__ . '/../_partials/order_stage.php';
 $stageBy = [];
 if (!empty($ids)) {
-    try {
-        $sph = implode(',', array_fill(0, count($ids), '?'));
-        $sSt = $pdo->prepare("SELECT id, fulfilment_stage FROM quotes WHERE id IN ($sph)");
-        $sSt->execute($ids);
-        foreach ($sSt->fetchAll(PDO::FETCH_ASSOC) as $r) $stageBy[(int) $r['id']] = $r['fulfilment_stage'];
-    } catch (Throwable $e) { $stageBy = []; }
+    // This factory's own part's stage (a mixed order's other factory has its own).
+    try { $stageBy = op_stages_for($pdo, $ids, $MASTER); } catch (Throwable $e) { $stageBy = []; }
 }
 
 // Per-factory order colour-coding — tint each row by its state (configurable in
@@ -541,6 +548,12 @@ require __DIR__ . '/../_partials/factory_head.php';
             // just labelled "Beverley Blinds Trade" (the owning tenant).
             $accCompany = trim((string) ($o['account_company'] ?? ''));
             $accContact = trim((string) ($o['account_contact'] ?? ''));
+            // Another factory's order is THAT factory's, even when it keyed it in
+            // for one of its own trade customers: we make for, deliver to and bill
+            // the factory, and never name its customer (John, 2026-10-17).
+            if ((int) ($o['client_id'] ?? 0) !== $MASTER && in_array((int) ($o['client_id'] ?? 0), $factoryIds, true)) {
+                $accCompany = ''; $accContact = '';
+            }
             $endCustName = trim((string) ($o['end_customer_name'] ?? ''));
             // Who we're MAKING FOR: the trade account, else the tenant whose
             // order it is. A tenant's own customer used to win over the tenant,

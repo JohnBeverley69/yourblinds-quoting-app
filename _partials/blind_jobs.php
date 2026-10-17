@@ -542,23 +542,15 @@ function bj_resync_order(PDO $pdo, int $quoteId, int $master): array
         $cnt->execute([$quoteId, $master, $master]);
         $hasJobs = ((int) $cnt->fetchColumn()) > 0;
 
+        // $master's own production status (factory_jobs is per order AND factory).
         $fj = '';
         try {
-            $s = $pdo->prepare('SELECT status FROM factory_jobs WHERE quote_id = ? LIMIT 1');
-            $s->execute([$quoteId]);
+            $s = $pdo->prepare('SELECT status FROM factory_jobs WHERE quote_id = ? AND factory_client_id = ? LIMIT 1');
+            $s->execute([$quoteId, $master]);
             $fj = (string) ($s->fetchColumn() ?: '');
         } catch (Throwable $e) { $fj = ''; }
 
-        if (!$hasJobs) {
-            if (!in_array($fj, ['in_production', 'made'], true)) return $out;
-            // factory_jobs is one row per order, shared by every factory on it,
-            // so another factory having started its part says nothing about
-            // ours: someone else's blinds on the floor and none of ours means
-            // ours haven't been started — they wait for our own Process order.
-            $oth = $pdo->prepare('SELECT COUNT(*) FROM factory_blind_jobs j WHERE j.quote_id = ? AND NOT (' . bj_job_owner_cond('j') . ')');
-            $oth->execute([$quoteId, $master, $master]);
-            if ((int) $oth->fetchColumn() > 0) return $out;
-        }
+        if (!$hasJobs && !in_array($fj, ['in_production', 'made'], true)) return $out;
 
         // The in-house lines as they stand now (same selection as bj_release_order).
         require_once __DIR__ . '/bought_in.php';
@@ -596,12 +588,12 @@ function bj_resync_order(PDO $pdo, int $quoteId, int $master): array
             try {
                 $pdo->prepare(
                     "UPDATE factory_jobs SET status = 'in_production', status_at = NOW()
-                      WHERE quote_id = ? AND status = 'made'"
-                )->execute([$quoteId]);
+                      WHERE quote_id = ? AND factory_client_id = ? AND status = 'made'"
+                )->execute([$quoteId, $master]);
             } catch (Throwable $e) { /* factory_jobs optional */ }
         } elseif ($out['removed'] > 0) {
             // Removing the last unfinished blinds may have finished the order.
-            bj_maybe_complete_order($pdo, $quoteId);
+            bj_maybe_complete_order($pdo, $quoteId, $master);
         }
     } catch (Throwable $e) {
         error_log('bj_resync_order failed for quote ' . $quoteId . ': ' . $e->getMessage());
@@ -851,25 +843,34 @@ function bj_recompute_job(PDO $pdo, int $jobId): void
 }
 
 /**
- * When every blind on an order has finished all its streams, nudge the order to
- * "made" — but only from "in_production", so a manual dispatch or a step-back
- * isn't clobbered.
+ * When every blind a factory has on an order has finished all its streams,
+ * nudge THAT factory's part to "made" — but only from "in_production", so a
+ * manual dispatch or a step-back isn't clobbered. Each factory on a mixed
+ * order completes on its own blinds. $factory null = check every factory.
  */
-function bj_maybe_complete_order(PDO $pdo, int $quoteId): void
+function bj_maybe_complete_order(PDO $pdo, int $quoteId, ?int $factory = null): void
 {
     $st = $pdo->prepare(
-        "SELECT COUNT(*) AS total, SUM(status = 'complete') AS done_cnt
-           FROM factory_blind_jobs WHERE quote_id = ?"
+        "SELECT COALESCE(NULLIF(p.source_client_id,0), p.client_id) AS owner,
+                COUNT(*) AS total, SUM(j.status = 'complete') AS done_cnt
+           FROM factory_blind_jobs j
+           JOIN quote_items qi ON qi.id = j.quote_item_id
+           JOIN products p ON p.id = qi.product_id
+          WHERE j.quote_id = ?
+       GROUP BY owner"
     );
     $st->execute([$quoteId]);
-    $r = $st->fetch(PDO::FETCH_ASSOC) ?: ['total' => 0, 'done_cnt' => 0];
-    if ((int) $r['total'] > 0 && (int) $r['total'] === (int) $r['done_cnt']) {
-        try {
-            $pdo->prepare(
-                "UPDATE factory_jobs SET status = 'made', status_at = NOW()
-                  WHERE quote_id = ? AND status = 'in_production'"
-            )->execute([$quoteId]);
-        } catch (Throwable $e) { /* factory_jobs optional — ignore */ }
+    foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
+        $owner = (int) $r['owner'];
+        if ($factory !== null && $owner !== $factory) continue;
+        if ((int) $r['total'] > 0 && (int) $r['total'] === (int) $r['done_cnt']) {
+            try {
+                $pdo->prepare(
+                    "UPDATE factory_jobs SET status = 'made', status_at = NOW()
+                      WHERE quote_id = ? AND factory_client_id = ? AND status = 'in_production'"
+                )->execute([$quoteId, $owner]);
+            } catch (Throwable $e) { /* factory_jobs optional — ignore */ }
+        }
     }
 }
 

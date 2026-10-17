@@ -75,10 +75,11 @@ function ot_order_tracks(PDO $pdo, array $quoteIds, int $factoryId): array
     $processedAt = []; $fjStatus = [];
     try {
         try {
+            // This factory's own part (factory_jobs is per order AND factory).
+            $fj = $pdo->prepare("SELECT quote_id, status, COALESCE(received_at, status_at) AS at FROM factory_jobs WHERE quote_id IN ($ph) AND factory_client_id = ?");
+            $fj->execute([...$quoteIds, $factoryId]);
+        } catch (Throwable $e) {   // factory_client_id not migrated yet
             $fj = $pdo->prepare("SELECT quote_id, status, COALESCE(received_at, status_at) AS at FROM factory_jobs WHERE quote_id IN ($ph)");
-            $fj->execute($quoteIds);
-        } catch (Throwable $e) {   // status_at not migrated
-            $fj = $pdo->prepare("SELECT quote_id, status, received_at AS at FROM factory_jobs WHERE quote_id IN ($ph)");
             $fj->execute($quoteIds);
         }
         foreach ($fj->fetchAll(PDO::FETCH_ASSOC) as $r) {
@@ -259,6 +260,20 @@ function ot_order_tracks(PDO $pdo, array $quoteIds, int $factoryId): array
         }
         $o['ready_units'] = $ready;
     }
+    unset($o);
+
+    // The other factory's part of OUR order (a white-label factory's own order
+    // carrying the main factory's blinds): we buy it from them. Read-only —
+    // its stage is theirs, from their part (order_parts.php).
+    require_once __DIR__ . '/order_parts.php';
+    foreach (op_partner_parts($pdo, $quoteIds, $factoryId) as $q => $parts) {
+        if (!isset($out[$q])) continue;
+        $out[$q]['partners'] = $parts;
+        foreach ($parts as $name => $p) {
+            if ($p['stage'] !== 'dispatched') $out[$q]['waiting_on'][] = $name . ' (' . strtolower(op_partner_stage_label($p['stage'])) . ')';
+        }
+    }
+    foreach ($out as &$o) $o['partners'] = $o['partners'] ?? [];
     unset($o);
     return $out;
 }

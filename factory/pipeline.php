@@ -112,11 +112,8 @@ if ($ids) {
         $st->execute([...$ids, $factory]);
         foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $l) $linesBy[(int) $l['quote_id']][] = $l;
     } catch (Throwable $e) { /* no lines shown */ }
-    try {
-        $st = $pdo->prepare("SELECT id, due_date FROM quotes WHERE id IN ($ph)");
-        $st->execute($ids);
-        foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $d) $dueBy[(int) $d['id']] = (string) ($d['due_date'] ?? '');
-    } catch (Throwable $e) { /* pre due-date schema */ }
+    // This factory's own due date (a mixed order's other factory has its own).
+    $dueBy = op_due_for($pdo, $ids, $factory);
 }
 
 // An order's PARTS while it's being made (John, 2026-10-12): the blinds we make
@@ -458,6 +455,14 @@ $activeNav = 'factory-pipeline';
                   <?php foreach ($cardLines as $l): [$st, $tone] = $lineStatus($r, $l); ?>
                     <li><span class="what"><?= e((string) $l['product_name_snapshot']) ?> &times; <?= (int) $l['quantity'] ?></span>
                         <?php if ($st !== ''): ?><span class="<?= e($tone) ?>"><?= e($st) ?></span><?php endif; ?></li>
+                  <?php endforeach; ?>
+                </ul>
+              <?php endif; ?>
+              <?php if ($tk && !empty($tk['partners']) && $part !== 'buy' && $r['stage'] !== 'dispatched'): ?>
+                <ul class="pl-lines" title="Another factory makes these for this order — its progress, read-only">
+                  <?php foreach ($tk['partners'] as $pName => $pp): ?>
+                    <li><span class="what">Buy: <?= e($pName) ?> &times; <?= (int) $pp['units'] ?></span>
+                        <span class="<?= $pp['stage'] === 'dispatched' ? 'ok' : 'muted' ?>"><?= e(op_partner_stage_label((string) $pp['stage'])) ?></span></li>
                   <?php endforeach; ?>
                 </ul>
               <?php endif; ?>

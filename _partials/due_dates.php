@@ -16,6 +16,8 @@ declare(strict_types=1);
  * Pure function library — safe to require anywhere after bootstrap.
  */
 
+require_once __DIR__ . '/order_parts.php';   // per-factory due dates (op_*)
+
 if (!defined('DD_DEFAULT_LEAD_DAYS')) {
     define('DD_DEFAULT_LEAD_DAYS', 10);   // used for a product with no time set
 }
@@ -99,9 +101,37 @@ function dd_order_lead_days(PDO $pdo, int $quoteId, int $master): ?int
  *
  * Returns the date stamped (Y-m-d), or null if nothing was written.
  */
-function dd_stamp_order(PDO $pdo, int $quoteId, int $master): ?string
+function dd_stamp_order(PDO $pdo, int $quoteId, ?int $master = null): ?string
 {
     if (!dd_ready($pdo)) return null;
+
+    // Per factory: each factory that makes part of the order gets its own date
+    // from its own production times (order_parts.php); the quote carries the
+    // latest. $master limits it to one factory; null = every making factory.
+    require_once __DIR__ . '/order_parts.php';
+    if (op_ready($pdo)) {
+        $stamped = false;
+        $st = $pdo->prepare('SELECT due_date FROM quotes WHERE id = ? LIMIT 1');
+        $st->execute([$quoteId]);
+        $quoteDue = (string) ($st->fetchColumn() ?: '');
+        foreach (op_order_factories($pdo, $quoteId) as $f) {
+            if ($master !== null && $f !== $master) continue;
+            $part = op_part($pdo, $quoteId, $f);
+            if ($part !== null && !empty($part['due_date'])) continue;   // never re-stamp
+            if ($part === null && $quoteDue !== '') {
+                // A date promised before parts existed (or typed on a remake)
+                // stays the promise — it is never moved by a re-place.
+                op_set_part($pdo, $quoteId, $f, ['due_date' => $quoteDue]);
+                continue;
+            }
+            $lead = dd_order_lead_days($pdo, $quoteId, $f);
+            if ($lead === null) continue;
+            op_set_part($pdo, $quoteId, $f, ['due_date' => dd_add_working_days(new DateTimeImmutable('today'), $lead)->format('Y-m-d')]);
+            $stamped = true;
+        }
+        return $stamped ? op_rollup_due($pdo, $quoteId) : null;
+    }
+    $master = $master ?? (function_exists('qb_order_factory_id') ? qb_order_factory_id($pdo, $quoteId) : 0);
 
     $st = $pdo->prepare('SELECT due_date FROM quotes WHERE id = ? LIMIT 1');
     $st->execute([$quoteId]);
@@ -117,10 +147,24 @@ function dd_stamp_order(PDO $pdo, int $quoteId, int $master): ?string
     return $due;
 }
 
-/** Human override of one order's due date. '' clears it back to none. */
-function dd_set_due(PDO $pdo, int $quoteId, string $date): void
+/**
+ * Human override of one order's due date. '' clears it back to none.
+ * $factory: set that factory's own date (its part of the order); the quote
+ * then carries the latest part's date for the customer.
+ */
+function dd_set_due(PDO $pdo, int $quoteId, string $date, ?int $factory = null): void
 {
     $date = trim($date);
+    require_once __DIR__ . '/order_parts.php';
+    if ($factory !== null && op_ready($pdo)) {
+        if ($date !== '') {
+            $d = DateTimeImmutable::createFromFormat('Y-m-d', $date);
+            if (!$d || $d->format('Y-m-d') !== $date) return;   // ignore junk
+        }
+        op_set_part($pdo, $quoteId, $factory, ['due_date' => $date !== '' ? $date : null]);
+        op_rollup_due($pdo, $quoteId);
+        return;
+    }
     if ($date === '') {
         $pdo->prepare('UPDATE quotes SET due_date = NULL WHERE id = ?')->execute([$quoteId]);
         return;

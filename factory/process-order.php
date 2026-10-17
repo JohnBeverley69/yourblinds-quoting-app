@@ -64,8 +64,9 @@ try { $pdo->query("SELECT GET_LOCK(" . $pdo->quote($lockName) . ", 15)"); } catc
 
 $fjStatus = '';
 try {
-    $s = $pdo->prepare('SELECT status FROM factory_jobs WHERE quote_id = ? LIMIT 1');
-    $s->execute([$quoteId]);
+    // This factory's own part (a mixed order's other factory has its own row).
+    $s = $pdo->prepare('SELECT status FROM factory_jobs WHERE quote_id = ? AND factory_client_id = ? LIMIT 1');
+    $s->execute([$quoteId, $factoryId]);
     $fjStatus = (string) ($s->fetchColumn() ?: '');
 } catch (Throwable $e) { $fail('Could not read the order — have the factory_jobs migrations been run?'); }
 
@@ -90,15 +91,15 @@ if ($supplier === '') {
     $target = $mk->fetchColumn() ? 'in_production' : 'received';
     try {
         $pdo->prepare(
-            "INSERT INTO factory_jobs (quote_id, status, status_at, status_by, received_at, received_by)
-             VALUES (?, ?, NOW(), ?, NOW(), ?)
+            "INSERT INTO factory_jobs (quote_id, factory_client_id, status, status_at, status_by, received_at, received_by)
+             VALUES (?, ?, ?, NOW(), ?, NOW(), ?)
              ON DUPLICATE KEY UPDATE
                  status      = VALUES(status),
                  status_at   = NOW(),
                  status_by   = VALUES(status_by),
                  received_at = COALESCE(received_at, VALUES(received_at)),
                  received_by = COALESCE(received_by, VALUES(received_by))"
-        )->execute([$quoteId, $target, $userId ?: null, $userId ?: null]);
+        )->execute([$quoteId, $factoryId, $target, $userId ?: null, $userId ?: null]);
     } catch (Throwable $e) {
         $fail('Could not process the order: ' . $e->getMessage() . ' — have the factory_jobs migrations been run?');
     }

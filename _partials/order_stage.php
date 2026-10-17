@@ -22,6 +22,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/bought_in.php';
 require_once __DIR__ . '/blind_jobs.php';
 require_once __DIR__ . '/factory_boughtin.php';
+require_once __DIR__ . '/order_parts.php';
 
 /** An order only has a fulfilment stage once it's placed. */
 function os_placed_statuses(): array { return ['ordered', 'fitted', 'invoiced', 'paid']; }
@@ -52,7 +53,7 @@ function os_stage_label(?string $s): string
  * '' for no stage (not placed / not a factory order). Colours match the
  * factory's own Incoming Orders stage pills.
  */
-function os_factory_progress_pill(?string $stage): string
+function os_factory_progress_pill(?string $stage, bool $partDispatched = false): string
 {
     if ($stage === null || $stage === '' || !in_array($stage, os_stages(), true)) return '';
     $cols = [
@@ -63,6 +64,8 @@ function os_factory_progress_pill(?string $stage): string
     ];
     [$fg, $bg] = $cols[$stage];
     $label = $stage === 'ready' ? 'Ready to dispatch' : os_stage_label($stage);
+    // Made by two factories and one has sent its part (order_parts.php).
+    if ($partDispatched && $stage !== 'dispatched') $label = 'Part dispatched';
     return '<span class="factory-progress-pill" title="Progress at the factory making this order"'
          . ' style="display:inline-block;font-size:0.6875rem;font-weight:700;border-radius:999px;padding:0.0625rem 0.5rem;'
          . 'white-space:nowrap;color:' . $fg . ';background:' . $bg . '">'
@@ -81,22 +84,28 @@ function recompute_order_stage(PDO $pdo, int $quoteId): ?string
 {
     try {
         if ($quoteId <= 0) return null;
-        $factory = os_factory_id();
 
         $q = $pdo->prepare('SELECT status FROM quotes WHERE id = ? LIMIT 1');
         $q->execute([$quoteId]);
         $status = (string) ($q->fetchColumn() ?: '');
         $placed = in_array($status, os_placed_statuses(), true);
 
-        // Must contain at least one factory-owned line to be a factory order.
-        $fc = $pdo->prepare(
-            'SELECT COUNT(*) FROM quote_items qi JOIN products p ON p.id = qi.product_id
-              WHERE qi.quote_id = ? AND COALESCE(NULLIF(p.source_client_id,0), p.client_id) = ?'
-        );
-        $fc->execute([$quoteId, $factory]);
-        $isFactoryOrder = ((int) $fc->fetchColumn()) > 0;
-
-        $stage = ($placed && $isFactoryOrder) ? os_derive_stage($pdo, $quoteId, $factory) : null;
+        // Every factory that makes a line gets its OWN stage on its own part
+        // (order_parts.php) — derived from its own factory_jobs row, floor jobs,
+        // bought-in and delivery notes, whoever's request this is. The quote
+        // carries the customer-facing roll-up: the least advanced part.
+        $factories = op_order_factories($pdo, $quoteId);
+        if (!$factories) {
+            try { $pdo->prepare('UPDATE quotes SET fulfilment_stage = NULL WHERE id = ?')->execute([$quoteId]); }
+            catch (Throwable $e) { /* column absent pre-migration — ignore */ }
+            return null;
+        }
+        $stage = null;
+        foreach ($factories as $factory) {
+            $own = $placed ? os_derive_stage($pdo, $quoteId, $factory) : null;
+            op_set_part($pdo, $quoteId, $factory, ['fulfilment_stage' => $own]);
+            if ($own !== null && ($stage === null || op_stage_rank($own) < op_stage_rank($stage))) $stage = $own;
+        }
 
         try {
             $pdo->prepare('UPDATE quotes SET fulfilment_stage = ? WHERE id = ?')->execute([$stage, $quoteId]);
@@ -112,14 +121,8 @@ function recompute_order_stage(PDO $pdo, int $quoteId): ?string
 /** The derivation. Assumes a placed factory order. */
 function os_derive_stage(PDO $pdo, int $quoteId, int $factory): string
 {
-    // Order-level factory status: (none) / new / received / in_production / made / dispatched.
-    $fj = 'new';
-    try {
-        $s = $pdo->prepare('SELECT status FROM factory_jobs WHERE quote_id = ? LIMIT 1');
-        $s->execute([$quoteId]);
-        $v = $s->fetchColumn();
-        if ($v !== false && $v !== null && $v !== '') $fj = (string) $v;
-    } catch (Throwable $e) { /* table absent — treat as new */ }
+    // This factory's status on the order: (none) / new / received / in_production / made / dispatched.
+    $fj = op_fj_status($pdo, $quoteId, $factory) ?: 'new';
 
     // A dispatched delivery note counts as dispatched too.
     $dnDispatched = false;
@@ -150,15 +153,9 @@ function os_is_ready(PDO $pdo, int $quoteId, ?int $factory = null): bool
     try {
         $factory = $factory ?? os_factory_id();
 
-        $fj = 'new';
-        try {
-            $s = $pdo->prepare('SELECT status FROM factory_jobs WHERE quote_id = ? LIMIT 1');
-            $s->execute([$quoteId]);
-            $v = $s->fetchColumn();
-            if ($v !== false && $v !== null && $v !== '') $fj = (string) $v;
-        } catch (Throwable $e) { /* treat as new */ }
+        $fj = op_fj_status($pdo, $quoteId, $factory) ?: 'new';
 
-        $prog         = bj_order_progress($pdo, [$quoteId], $factory)[$quoteId] ?? ['total' => 0, 'done' => 0];
+        $prog        = bj_order_progress($pdo, [$quoteId], $factory)[$quoteId] ?? ['total' => 0, 'done' => 0];
         $floorTotal   = (int) $prog['total'];
         $floorDone    = (int) $prog['done'];
         $inhouseLines = os_inhouse_line_count($pdo, $quoteId, $factory);
@@ -178,6 +175,10 @@ function os_is_ready(PDO $pdo, int $quoteId, ?int $factory = null): bool
         // Real work started, so a fresh Confirmed order can't read as Ready.
         $workStarted = ($floorTotal > 0) || in_array($fj, ['received', 'in_production', 'made', 'dispatched'], true) || $biOrdered;
 
+        // Our own order carrying another factory's blinds (bought from them):
+        // not ready to go out until they've dispatched their part to us.
+        if ($inhouseComplete && $biComplete && $workStarted && op_waiting_on_partner($pdo, $quoteId, $factory)) return false;
+
         return $inhouseComplete && $biComplete && $workStarted;
     } catch (Throwable $e) { return false; }
 }
@@ -187,14 +188,14 @@ function os_is_ready(PDO $pdo, int $quoteId, ?int $factory = null): bool
  * a delivery note is dispatched from wholesale, so the factory queue reflects it.
  * Best-effort — a missing factory_jobs table is not fatal.
  */
-function os_set_factory_dispatched(PDO $pdo, int $quoteId, ?int $userId = null): void
+function os_set_factory_dispatched(PDO $pdo, int $quoteId, ?int $userId = null, ?int $factory = null): void
 {
     try {
         $pdo->prepare(
-            "INSERT INTO factory_jobs (quote_id, status, status_at, status_by)
-             VALUES (?, 'dispatched', NOW(), ?)
+            "INSERT INTO factory_jobs (quote_id, factory_client_id, status, status_at, status_by)
+             VALUES (?, ?, 'dispatched', NOW(), ?)
              ON DUPLICATE KEY UPDATE status = 'dispatched', status_at = NOW(), status_by = VALUES(status_by)"
-        )->execute([$quoteId, $userId ?: null]);
+        )->execute([$quoteId, $factory ?? os_factory_id(), $userId ?: null]);
     } catch (Throwable $e) { /* factory_jobs absent — ignore */ }
 }
 
@@ -229,10 +230,9 @@ function os_mark_dispatched_dn(PDO $pdo, int $quoteId, ?int $factory = null, ?in
             return '';
         }
 
-        $q = $pdo->prepare('SELECT account_client_id, client_id FROM quotes WHERE id = ? LIMIT 1');
-        $q->execute([$quoteId]);
-        $r   = $q->fetch(PDO::FETCH_ASSOC) ?: [];
-        $acc = (int) ($r['account_client_id'] ?? 0) ?: (int) ($r['client_id'] ?? 0);
+        // Who it is billed and delivered to — a white-label factory's order goes to
+        // that factory, never its own customer (ar_account_expr).
+        $acc = ar_order_account_id($pdo, $quoteId);
         ar_create_delivery_note($pdo, $factory, $quoteId, $acc, (int) $userId, true);
         return '';
     } catch (Throwable $e) {
@@ -249,7 +249,7 @@ function os_mark_dispatched_dn(PDO $pdo, int $quoteId, ?int $factory = null, ?in
  * nothing will print and the order never reaches "To invoice". Shown with a
  * Retry on the Pipeline and the Dispatch tray. Derived live, so it clears itself
  * the moment the note exists. Rows: id, quote_number, status_at.
- * factory_jobs is keyed per quote, so ownership is the factory-owned-line test.
+ * factory_jobs is one row per (quote, factory), so it's this factory's own row.
  */
 function os_paperwork_missing(PDO $pdo, int $factory): array
 {
@@ -259,9 +259,7 @@ function os_paperwork_missing(PDO $pdo, int $factory): array
             "SELECT q.id, q.quote_number, fj.status_at
                FROM factory_jobs fj
                JOIN quotes q ON q.id = fj.quote_id
-              WHERE fj.status = 'dispatched' AND q.status IN ($in)
-                AND EXISTS (SELECT 1 FROM quote_items qi JOIN products p ON p.id = qi.product_id
-                             WHERE qi.quote_id = q.id AND COALESCE(NULLIF(p.source_client_id,0), p.client_id) = ?)
+              WHERE fj.status = 'dispatched' AND q.status IN ($in) AND fj.factory_client_id = ?
                 AND NOT EXISTS (SELECT 1 FROM factory_ar_delivery_notes d
                                  WHERE d.source_quote_id = q.id AND d.factory_client_id = ? AND d.status = 'dispatched')
            ORDER BY fj.status_at DESC
@@ -314,10 +312,9 @@ function os_auto_invoice_on_dispatch(PDO $pdo, int $quoteId, ?int $factory = nul
         // Already invoiced (non-void)? Don't double-invoice.
         if (function_exists('ar_factory_order_invoice_number') && ar_factory_order_invoice_number($pdo, $factory, $quoteId) !== '') return;
 
-        $q = $pdo->prepare('SELECT account_client_id, client_id FROM quotes WHERE id = ? LIMIT 1');
-        $q->execute([$quoteId]);
-        $r   = $q->fetch(PDO::FETCH_ASSOC) ?: [];
-        $acc = (int) ($r['account_client_id'] ?? 0) ?: (int) ($r['client_id'] ?? 0);
+        // Who it is billed and delivered to — a white-label factory's order goes to
+        // that factory, never its own customer (ar_account_expr).
+        $acc = ar_order_account_id($pdo, $quoteId);
         // The factory's own one-off sale resolves to the factory itself — there
         // is no account to bill, so there is nothing to auto-invoice. Returning
         // rather than letting ar_create_invoice() refuse keeps a routine
@@ -364,9 +361,10 @@ function os_line_edit_lock(PDO $pdo, int $quoteId): string
     } catch (Throwable $e) { /* not migrated */ }
 
     try {
-        $s = $pdo->prepare('SELECT status FROM factory_jobs WHERE quote_id = ? LIMIT 1');
+        // Any factory having dispatched its part locks the order's lines.
+        $s = $pdo->prepare("SELECT 1 FROM factory_jobs WHERE quote_id = ? AND status = 'dispatched' LIMIT 1");
         $s->execute([$quoteId]);
-        if ((string) ($s->fetchColumn() ?: '') === 'dispatched') return 'it has been dispatched';
+        if ($s->fetchColumn()) return 'it has been dispatched';
     } catch (Throwable $e) { /* not migrated */ }
 
     try {

@@ -55,9 +55,7 @@ function fx_poll_version(PDO $pdo, string $what, int $master): string
         try {
             $fj = $pdo->prepare(
                 "SELECT COALESCE(MAX(UNIX_TIMESTAMP(fj.status_at)),0) FROM factory_jobs fj
-                  WHERE EXISTS (SELECT 1 FROM quote_items qi JOIN products p ON p.id = qi.product_id
-                                 WHERE qi.quote_id = fj.quote_id
-                                   AND COALESCE(NULLIF(p.source_client_id,0), p.client_id) = ?)"
+                  WHERE fj.factory_client_id = ?"
             );
             $fj->execute([$master]);
             $t = (int) $fj->fetchColumn();

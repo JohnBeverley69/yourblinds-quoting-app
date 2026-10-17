@@ -86,8 +86,10 @@ if ($ready) {
     $where = "WHERE COALESCE(NULLIF(p.source_client_id,0), p.client_id) = {$MASTER}";
     if (!$showMade) $where .= " AND bj.status IN ('queued','in_progress')";
     // Soonest-due first, undated last — the order a workshop actually works to.
-    $dueSel   = $hasDue ? 'q.due_date' : 'NULL AS due_date';
-    $dueOrder = $hasDue ? 'q.due_date IS NULL, q.due_date,' : '';
+    // This factory's own due date (a mixed order's other factory has its own).
+    $dueX     = $hasDue ? op_due_sql($pdo, (int) $MASTER) : '';
+    $dueSel   = $hasDue ? "$dueX AS due_date" : 'NULL AS due_date';
+    $dueOrder = $hasDue ? "$dueX IS NULL, $dueX," : '';
     $st = $pdo->query(
         "SELECT bj.id, bj.quote_id, bj.quote_item_id, bj.unit_no, bj.product_id, " . ($hasAreaCol ? 'bj.area_id' : 'NULL AS area_id') . ", bj.status,
                 q.quote_number, q.created_at, $dueSel, c.company_name AS tenant,

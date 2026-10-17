@@ -39,6 +39,11 @@ require_once __DIR__ . '/../_partials/order_stage.php';
 require_once __DIR__ . '/../_partials/factory_order_delete.php';   // fod_delete_block_reason / fod_force_delete_preview
 $notPlaced = $order && !in_array((string) ($order['status'] ?? ''), os_placed_statuses(), true);
 if ($notPlaced) $order = null;
+// The due date shown and edited here is this factory's own (a mixed order's
+// other factory has its own; the customer sees the later of the two).
+if ($order && array_key_exists('due_date', $order)) {
+    $order['due_date'] = op_due_for($pdo, [(int) $order['id']], $MASTER)[(int) $order['id']] ?? $order['due_date'];
+}
 
 // Dispatched / invoiced: the blinds are locked (references stay editable).
 $lineLock = $order ? os_line_edit_lock($pdo, (int) $order['id']) : '';

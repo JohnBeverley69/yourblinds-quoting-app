@@ -811,10 +811,10 @@ function qb_factory_has_received(PDO $pdo, int $quoteId): bool
 {
     if ($quoteId <= 0) return false;
     try {
-        $s = $pdo->prepare('SELECT status FROM factory_jobs WHERE quote_id = ? LIMIT 1');
+        // Any factory's part (an order can be made by two).
+        $s = $pdo->prepare("SELECT 1 FROM factory_jobs WHERE quote_id = ? AND status IN ('received', 'in_production', 'made', 'dispatched') LIMIT 1");
         $s->execute([$quoteId]);
-        $st = (string) ($s->fetchColumn() ?: '');
-        if (in_array($st, ['received', 'in_production', 'made', 'dispatched'], true)) return true;
+        if ($s->fetchColumn()) return true;
     } catch (Throwable $e) { /* factory_jobs absent */ }
     try {
         $b = $pdo->prepare('SELECT 1 FROM factory_blind_jobs WHERE quote_id = ? LIMIT 1');
