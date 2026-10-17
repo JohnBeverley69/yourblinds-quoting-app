@@ -121,3 +121,18 @@ test('plan gates: the core boxes lock too when moved up a tier (calendar, custom
         $enforce(false);
     }
 });
+
+test('plan gates: "See the plans" never sends a non-admin to Billing (admin-only — it said 403)', function () use ($enforce) {
+    $enforce(true);
+    try {
+        db()->exec("DELETE FROM client_plan_overrides WHERE client_id IN (101, 102) AND plan_code IN ('gold', 'platinum', 'factory')");
+        $admin = as_user('bravo.admin')->get('/messages/index.php')->body;
+        check_contains('href="/billing/index.php"', $admin, 'an admin is sent to Billing');
+        $staff = as_user('alpha.sales')->get('/messages/index.php');
+        check_same(403, $staff->status, 'Messages for a non-Gold company');
+        check_contains('href="/welcome.php#plans"', $staff->body, 'a non-admin is sent to the public plans');
+        check_not_contains('href="/billing/index.php"', $staff->body, 'a non-admin is never sent to Billing');
+    } finally {
+        $enforce(false);
+    }
+});
