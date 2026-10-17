@@ -138,7 +138,10 @@ if (!$signupsClosed && $_SERVER['REQUEST_METHOD'] === 'POST') {
                         if ($giveTrial && function_exists('billing_paid_plans')) {
                             trial_record((int) $newClientId, $form['email'], $ip);
                             $trialExpiry = date('Y-m-d', strtotime('+' . SIGNUP_TRIAL_DAYS . ' days'));
-                            foreach (array_keys(billing_paid_plans()) as $planCode) {
+                            foreach (billing_paid_plans() as $planCode => $trialPlan) {
+                                // Never the Factory tier: it switches the factory side on for
+                                // good (billing_grant_factory_side), which a free trial must not.
+                                if (!empty($trialPlan['grants_factory'])) continue;
                                 try {
                                     db()->prepare(
                                         "INSERT INTO client_plan_overrides

@@ -119,7 +119,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $trialExpiry = date('Y-m-d', strtotime('+' . NEW_CLIENT_TRIAL_DAYS . ' days'));
                 $paidPlans   = billing_paid_plans();
                 $trialsAdded = 0;
-                foreach (array_keys($paidPlans) as $planCode) {
+                foreach ($paidPlans as $planCode => $trialPlan) {
+                    // Not the Factory tier: that switches the factory side on for good;
+                    // Master Admin → Factories is where a company is made a factory.
+                    if (!empty($trialPlan['grants_factory'])) continue;
                     try {
                         $pdo->prepare(
                             "INSERT INTO client_plan_overrides
