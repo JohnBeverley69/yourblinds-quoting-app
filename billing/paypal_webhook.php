@@ -165,6 +165,50 @@ if (preg_match('/^client:(\d+)\|plan:([a-z0-9_]+)$/i', $customId, $m)) {
     $customPlan   = 'accounts';
 }
 
+// ── One-off payments (text bundles, billing/texts.php) ─────────────────
+// These aren't subscriptions, so they were logged as "no matching tenant".
+// The bundle is normally marked paid when the buyer comes back from PayPal;
+// PAYMENT.CAPTURE.COMPLETED is the backup for a buyer who paid but never
+// came back. Refunds are only noted: taking texts back is a manual decision.
+if (str_starts_with($type, 'CHECKOUT.ORDER.') || str_starts_with($type, 'PAYMENT.CAPTURE.')) {
+    $orderId = str_starts_with($type, 'CHECKOUT.ORDER.')
+        ? (string) ($resource['id'] ?? '')
+        : (string) ($resource['supplementary_data']['related_ids']['order_id'] ?? '');
+    $bundle = null;
+    if ($orderId !== '') {
+        try {
+            $st = db()->prepare('SELECT * FROM sms_bundles WHERE paypal_order_id = ? LIMIT 1');
+            $st->execute([$orderId]);
+            $bundle = $st->fetch() ?: null;
+        } catch (Throwable $e) { $bundle = null; }   // no bundles table yet
+    }
+    $outcome = $bundle ? 'bundle_order_seen' : 'one_off_not_ours';
+    if ($bundle && $type === 'PAYMENT.CAPTURE.COMPLETED') {
+        $okAmount = ($resource['amount']['currency_code'] ?? '') === 'GBP'
+                 && abs((float) ($resource['amount']['value'] ?? 0) - (float) $bundle['price']) < 0.005;
+        if ($bundle['status'] === 'paid') {
+            $outcome = 'bundle_already_paid';
+        } elseif ($bundle['status'] === 'pending' && $okAmount) {
+            db()->prepare("UPDATE sms_bundles SET status = 'paid', paid_at = NOW(), paypal_capture_id = ?
+                            WHERE id = ? AND status = 'pending'")
+                ->execute([(string) ($resource['id'] ?? ''), (int) $bundle['id']]);
+            $outcome = 'bundle_paid_by_webhook';
+        } else {
+            $outcome = $okAmount ? 'bundle_not_pending' : 'bundle_amount_mismatch';
+            error_log('PayPal webhook: bundle ' . $bundle['id'] . ' capture ' . $outcome);
+        }
+    }
+    $pwl_log($type, $eventId ?: null, $orderId ?: null, $bundle ? (int) $bundle['client_id'] : null,
+             $bundle ? 'text_bundle' : null, true, (bool) $bundle, $outcome, $payload);
+    http_response_code(200);
+    exit('OK');
+}
+if (str_starts_with($type, 'PAYMENT.REFUND.')) {
+    $pwl_log($type, $eventId ?: null, null, null, null, true, false, 'refund_noted', $payload);
+    http_response_code(200);
+    exit('OK');
+}
+
 if ($subId === '' && $customId === '') {
     error_log('PayPal webhook had no usable subscription id (event: ' . $type . ')');
     $pwl_log($type, $eventId ?: null, null, null, null, true, false, 'no_subscription_id', $payload);
