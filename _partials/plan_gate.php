@@ -85,15 +85,22 @@ function plan_require_feature(int $clientId, string $key, ?string $fallback = nu
         exit;
     }
     $msg = plan_feature_message($key);
+    // Billing is admin-only (requireAdmin), so a non-admin is sent to the public
+    // plans list instead — never to a page that would say 403 (John, 2026-10-17).
+    $u = function_exists('current_user') ? current_user() : null;
+    $isAdmin = is_array($u) && ($u['role'] ?? '') === 'admin';
+    $how  = $isAdmin
+        ? 'You can upgrade on the <strong>Billing</strong> page, and it switches on straight away.'
+        : 'Ask your company\'s admin to upgrade on the <strong>Billing</strong> page; it switches on straight away.';
+    $href = $isAdmin ? '/billing/index.php' : '/welcome.php#plans';
     http_response_code(403);
     header('Content-Type: text/html; charset=utf-8');
     echo '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
        . '<title>Upgrade to use this</title>'
        . '<body style="font-family:system-ui,sans-serif;max-width:560px;margin:4rem auto;padding:0 16px;color:#1f2937">'
        . '<h1 style="font-size:1.35rem">' . htmlspecialchars($msg, ENT_QUOTES, 'UTF-8') . '</h1>'
-       . '<p style="color:#4b5563;line-height:1.5">Your company\'s plan doesn\'t include it yet. An admin can upgrade on the '
-       . '<strong>Billing</strong> page, and it switches on straight away.</p>'
-       . '<p><a href="/billing/index.php" style="display:inline-block;background:#1f3b5b;color:#fff;padding:.6rem 1rem;border-radius:8px;text-decoration:none;font-weight:600">See the plans</a>'
+       . '<p style="color:#4b5563;line-height:1.5">Your company\'s plan doesn\'t include it yet. ' . $how . '</p>'
+       . '<p><a href="' . $href . '" style="display:inline-block;background:#1f3b5b;color:#fff;padding:.6rem 1rem;border-radius:8px;text-decoration:none;font-weight:600">See the plans</a>'
        . ' &nbsp; <a href="javascript:history.back()">Go back</a></p></body>';
     exit;
 }

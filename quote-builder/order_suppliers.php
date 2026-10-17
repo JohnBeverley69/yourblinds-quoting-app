@@ -673,8 +673,9 @@ foreach ($groups as $name => $g) { if ($isSendable((string) $name)) $sendableCou
                             </div>
                         <?php elseif (!$supplierOrdersOk): ?>
                             <div class="sup-warn">
-                                <?= e(plan_feature_message('supplier_orders')) ?> Upgrade on the
-                                <a href="/billing/index.php">Billing</a> page to email <strong><?= e($name) ?></strong> this order.
+                                <?= e(plan_feature_message('supplier_orders')) ?>
+                                <?= $isAdmin ? 'Upgrade on the <a href="/billing/index.php">Billing</a> page' : 'Ask your admin to upgrade' ?>
+                                to email <strong><?= e($name) ?></strong> this order.
                             </div>
                         <?php elseif (!$sendable): ?>
                             <div class="sup-warn">

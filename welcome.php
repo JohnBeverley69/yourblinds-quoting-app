@@ -165,7 +165,7 @@ function wl_price(array $plan): string
             </div>
         </section>
 
-        <h2 class="wl-section-title">Simple, honest pricing</h2>
+        <h2 class="wl-section-title" id="plans">Simple, honest pricing</h2>
         <p class="wl-section-sub">Start free. Add features as you grow. Cancel any time.</p>
 
         <?= billing_listed_css() ?>
@@ -188,8 +188,10 @@ function wl_price(array $plan): string
                     <?= billing_listed_html((string) $code, !$isFree, $isFree ? "What's included" : 'What this plan adds') ?>
                     <?php if ($signupsClosed): ?>
                         <span class="wl-btn wl-btn-ghost">Sign-ups paused</span>
-                    <?php elseif ($loggedIn): ?>
+                    <?php elseif ($loggedIn && ((current_user()['role'] ?? '') === 'admin')): ?>
                         <a class="wl-btn wl-btn-ghost" href="/billing/index.php">Manage plan</a>
+                    <?php elseif ($loggedIn): ?>
+                        <span class="wl-btn wl-btn-ghost" title="Billing is for your company's admin">Ask your admin to change plan</span>
                     <?php elseif ($isFree): ?>
                         <a class="wl-btn wl-btn-primary" href="/auth/signup.php">Start free &rarr;</a>
                     <?php else: ?>
