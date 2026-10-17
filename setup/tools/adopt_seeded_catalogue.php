@@ -12,8 +12,8 @@ declare(strict_types=1);
  * The new-company copy now runs the push itself (seed_client_from_template.php).
  * This mends the ones made before.
  *
- * For one company it marks each product whose name EXACTLY matches a ready
- * factory product as that product's copy, then runs the push over it. The push
+ * For one company it marks each product whose name EXACTLY matches a factory
+ * product (active or not) as that product's copy, then runs the push over it. The push
  * links up its systems, fabrics, options and price tables, and brings it in
  * line with the factory, including trade prices on supplier price lists.
  * Products with no matching name are the company's own and are left alone.
@@ -32,7 +32,6 @@ if (PHP_SAPI !== 'cli') {
     header('Content-Type: text/plain; charset=utf-8');
 }
 require_once dirname(__DIR__, 2) . '/_partials/catalogue_push.php';
-require_once dirname(__DIR__, 2) . '/_partials/product_readiness.php';
 ini_set('display_errors', '1');
 error_reporting(E_ALL);
 
@@ -42,20 +41,19 @@ $facId    = (int) (function_exists('factory_client_id') ? factory_client_id() : 
 $clientId = (int) ($_GET['client'] ?? 0);
 $apply    = !empty($_GET['apply']);
 
-// The factory's ready products, by exact name, with the columns the push reads.
+// The factory's products, by exact name — active or not: an inactive copy
+// still takes pushes, so it's up to date if it's ever switched on — with the columns the push reads.
 $flagCols = [];
 foreach (['requires_option', 'width_only', 'price_per_slat', 'price_per_sqm',
           'min_area_m2', 'show_colour_field', 'band_label', 'band_start_first', 'line_charge'] as $col) {
     if (pp_column_exists($pdo, 'products', $col)) $flagCols[] = $col;
 }
-$ready = [];
-foreach (pr_products($facId) as $p) if (pr_is_ready($p)) $ready[(int) $p['id']] = true;
 $st = $pdo->prepare('SELECT ' . implode(', ', array_merge(['id', 'name', 'option_label', 'sort_order', 'active'], $flagCols))
                   . ' FROM products WHERE client_id = ?');
 $st->execute([$facId]);
 $master = [];   // name => row
 foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
-    if (isset($ready[(int) $r['id']])) $master[(string) $r['name']] = $r;
+    $master[(string) $r['name']] = $r;
 }
 
 if ($clientId <= 0) {
@@ -91,7 +89,7 @@ $stamp = $pdo->prepare('UPDATE products SET source_client_id = ?, source_product
 $done = 0; $left = 0; $failed = 0;
 foreach ($own->fetchAll(PDO::FETCH_ASSOC) as $p) {
     $m = $master[(string) $p['name']] ?? null;
-    if ($m === null) { echo "LEFT    {$p['name']} — no ready factory product of that name (the company's own)\n"; $left++; continue; }
+    if ($m === null) { echo "LEFT    {$p['name']} — no factory product of that name (the company's own)\n"; $left++; continue; }
     if (!$apply) { echo "WOULD   {$p['name']} → factory #{$m['id']}, then push\n"; $done++; continue; }
 
     $sum = array_fill_keys(['products_added', 'products_updated', 'systems_added', 'systems_removed',
