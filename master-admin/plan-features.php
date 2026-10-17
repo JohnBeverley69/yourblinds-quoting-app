@@ -191,10 +191,6 @@ $activeNav = 'plan-features';
             color: var(--text-muted); cursor: pointer;
         }
         .pf-empty { font-size: 0.8125rem; color: var(--text-faint); text-align: center; padding: 1rem 0.25rem; }
-        .pf-tag { font-size: 0.6875rem; font-weight: 700; border-radius: 4px; padding: 0.05rem 0.35rem; }
-        .pf-chip.is-switch .pf-tag { background: #fef3c7; color: #92400e; }
-        .pf-chip.is-listed { font-weight: 500; font-size: 0.875rem; padding: 0.375rem 0.5rem; border-style: dashed; }
-        .pf-chip.is-listed .pf-tag { background: var(--bg-subtle-2, #eef1f6); color: var(--text-muted); }
         .pf-group { font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
                     color: var(--text-faint); margin: 0.25rem 0 0; }
         .pf-actions { display: flex; gap: 0.75rem; align-items: center; flex-wrap: wrap; margin-top: 1rem; }
@@ -265,11 +261,10 @@ $activeNav = 'plan-features';
                 Drag each feature onto the <strong>lowest tier</strong> that should have it — every tier above
                 includes it too (<?= e(implode(' → ', $tierNames)) ?>). Anything on <strong>Bronze</strong> is free
                 for every company. On a phone, use the little <em>Move to</em> box on each one.
-                <br>There are two kinds of box. <strong>⚡ Switch</strong> boxes really turn on and off: when you
-                save, every company's switches change to match straight away, so moving one up a tier takes it away
-                from anyone on the tier below (comps and trials count as being on that tier).
-                <strong>Listed</strong> boxes (dashed) only change what each plan <em>says</em> it includes on the
-                Billing and welcome pages; nothing is switched on or off by them. Hover over one to see its description.
+                <br>When you save, every company's features change to match (comps and trials count as being on that
+                tier), and the Billing and welcome pages describe each plan from this board. Maps, Postcode lookup,
+                Texts, Online booking and Accounts always switch; the rest switch only while
+                <strong>enforcement</strong> (above) is on. Hover over a box to see its description.
             </p>
 
             <form method="post" id="pf-form"
@@ -290,7 +285,6 @@ $activeNav = 'plan-features';
                                          title="A real switch: it turns on and off with the plan">
                                         <span class="pf-grip" aria-hidden="true">⠿</span>
                                         <span class="pf-label"><?= e((string) $flags[$flag]) ?></span>
-                                        <span class="pf-tag">⚡ Switch</span>
                                         <select aria-label="Move <?= e((string) $flags[$flag]) ?> to">
                                             <?php foreach ($columns as $c2 => $col2): ?>
                                                 <option value="<?= e((string) $c2) ?>"<?= (string) $c2 === $at ? ' selected' : '' ?>><?= e($col2['name']) ?></option>
@@ -303,7 +297,6 @@ $activeNav = 'plan-features';
                                          title="<?= e($f['desc']) ?>">
                                         <span class="pf-grip" aria-hidden="true">⠿</span>
                                         <span class="pf-label"><?= e($f['label']) ?></span>
-                                        <span class="pf-tag">Listed</span>
                                         <select aria-label="Move <?= e($f['label']) ?> to">
                                             <?php foreach ($columns as $c2 => $col2): ?>
                                                 <option value="<?= e((string) $c2) ?>"<?= (string) $c2 === $f['code'] ? ' selected' : '' ?>><?= e($col2['name']) ?></option>

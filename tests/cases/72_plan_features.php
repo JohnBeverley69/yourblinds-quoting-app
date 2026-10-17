@@ -94,7 +94,7 @@ test('Listed features: every one is on a tier, and the board saves where they go
     check(in_array('InstaPrice', $bronze, true) && !in_array('Factory Pipeline', $bronze, true), 'Bronze list: ' . implode(', ', $bronze));
 
     $super = as_user('super');
-    check_contains('Listed', $super->get('/master-admin/plan-features.php')->body, 'the board shows listed boxes');
+    check_contains('data-cat="instaprice"', $super->get('/master-admin/plan-features.php')->body, 'the board shows the feature boxes');
     $r = t_submit($super, '/master-admin/plan-features.php', ['action' => 'save',
         'layout'    => json_encode([]),
         'catalogue' => json_encode(['calendar' => 'silver'])]);
