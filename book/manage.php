@@ -130,16 +130,30 @@ if ($b === null) {
                         <div class="day-name"><?= e($d['label']) ?></div>
                         <?php foreach ($d['slots'] as $k => $label): ?>
                             <label class="slot" style="margin:0;font-weight:400">
-                                <input type="radio" name="pick" value="<?= e($d['date'] . '|' . $k) ?>" required>
+                                <input type="radio" name="pick" value="<?= e($d['date'] . '|' . $k) ?>" required
+                                       data-when="<?= e($d['label'] . ', ' . $label) ?>">
                                 <span><?= e($label) ?></span>
                             </label>
                         <?php endforeach; ?>
                     </div>
                 <?php endforeach; ?>
                 </div>
-                <button class="btn" type="submit">Move my appointment</button>
+                <button class="btn" type="submit" id="move-btn">Move my appointment</button>
                 <a href="<?= e($self) ?>" style="margin-left:12px">Keep my current time</a>
             </form>
+            <script>
+            // Picking a time brings the button into view, naming the new time.
+            (function () {
+                var btn = document.getElementById('move-btn');
+                var calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                document.querySelectorAll('input[name=pick]').forEach(function (r) {
+                    r.addEventListener('change', function () {
+                        btn.textContent = 'Move to ' + (r.dataset.when || 'this time');
+                        btn.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'center' });
+                    });
+                });
+            })();
+            </script>
             <?php endif; ?>
         <?php endif; ?>
     </div>

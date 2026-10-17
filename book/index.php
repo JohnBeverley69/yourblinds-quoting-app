@@ -198,7 +198,8 @@ $co = $company !== null ? ob_company_contact((int) $company['id']) : null;
                         <div class="day-name"><?= e($d['label']) ?></div>
                         <?php foreach ($d['slots'] as $k => $label): $val = $d['date'] . '|' . $k; ?>
                             <label class="slot" style="margin:0;font-weight:400">
-                                <input type="radio" name="pick" value="<?= e($val) ?>" required <?= $val === $picked ? 'checked' : '' ?>>
+                                <input type="radio" name="pick" value="<?= e($val) ?>" required <?= $val === $picked ? 'checked' : '' ?>
+                                       data-when="<?= e($d['label'] . ', ' . $label) ?>">
                                 <span><?= e($label) ?></span>
                             </label>
                         <?php endforeach; ?>
@@ -207,7 +208,9 @@ $co = $company !== null ? ob_company_contact((int) $company['id']) : null;
                 </div>
             </fieldset>
 
-            <h2 style="margin-top:22px">Your details</h2>
+            <h2 id="details" style="margin-top:22px;scroll-margin-top:12px">Your details</h2>
+            <p id="chosen" class="muted" hidden style="margin:0 0 4px">Your time: <strong id="chosen-when"></strong> ·
+                <a href="#" id="chosen-change">change</a></p>
             <label for="name">Name</label>
             <input type="text" id="name" name="name" autocomplete="name" maxlength="120" required value="<?= $v('name') ?>">
             <div class="row2">
@@ -253,6 +256,29 @@ $co = $company !== null ? ob_company_contact((int) $company['id']) : null;
             <p class="muted" style="margin-top:14px">We'll only use your details to arrange this appointment and your quote.</p>
             <button class="btn" type="submit"><?= (string) $settings['mode'] === 'instant' ? 'Book appointment' : 'Request appointment' ?></button>
         </form>
+        <script>
+        // Picking a time takes the customer straight down to "Your details",
+        // with the chosen time repeated there and a link back up to change it.
+        (function () {
+            var details = document.getElementById('details'), name = document.getElementById('name');
+            var chosen = document.getElementById('chosen'), when = document.getElementById('chosen-when');
+            var calm = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+            function show(r) { when.textContent = r.dataset.when || ''; chosen.hidden = false; }
+            document.querySelectorAll('input[name=pick]').forEach(function (r) {
+                if (r.checked) show(r);
+                r.addEventListener('change', function () {
+                    show(r);
+                    details.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'start' });
+                    if (name.value === '') setTimeout(function () { name.focus({ preventScroll: true }); }, calm ? 0 : 450);
+                });
+            });
+            document.getElementById('chosen-change').addEventListener('click', function (e) {
+                e.preventDefault();
+                var r = document.querySelector('input[name=pick]:checked');
+                (r ? r.closest('.day') : document.querySelector('.days')).scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'center' });
+            });
+        })();
+        </script>
         <?php if ($addrList): ?>
         <script>
         document.getElementById('addr-pick').addEventListener('change', function () {
