@@ -773,7 +773,7 @@ function billing_sync_feature_flags(int $clientId): void
     foreach (billing_plans() as $code => $plan) {
         if (!billing_plan_active_for($clientId, $code)) continue;
         foreach (($plan['features'] ?? []) as $f) $granted[$f] = true;
-        if (!empty($plan['grants_factory'])) $factory = true;
+        if (!empty($plan['grants_factory']) && billing_factory_hold_is_real($clientId, $code)) $factory = true;
     }
     if ($factory) billing_grant_factory_side($clientId);
 
@@ -794,6 +794,26 @@ function billing_sync_feature_flags(int $clientId): void
         } catch (Throwable $e) {
             // Column missing — skip silently.
         }
+    }
+}
+
+/**
+ * True if the client holds this factory-granting plan by a subscription or a
+ * comp, not merely a trial. The factory side is only ever switched ON, so a
+ * trial (e.g. the sign-up trial) must not be able to switch it on.
+ */
+function billing_factory_hold_is_real(int $clientId, string $planCode): bool
+{
+    if (billing_has_active_subscription_for($clientId, $planCode)) return true;
+    try {
+        $st = db()->prepare("SELECT COUNT(*) FROM client_plan_overrides
+                               WHERE client_id = ? AND plan_code = ? AND active = 1
+                                 AND override_type <> 'trial'
+                                 AND (expires_at IS NULL OR expires_at >= CURDATE())");
+        $st->execute([$clientId, $planCode]);
+        return (int) $st->fetchColumn() > 0;
+    } catch (Throwable $e) {
+        return false;
     }
 }
 
@@ -861,7 +881,9 @@ function billing_sync_feature_flags_force(int $clientId): void
     foreach ($compCodes as $code) {
         $p = billing_plan((string) $code);
         if ($p) foreach (($p['features'] ?? []) as $f) $granted[$f] = true;
-        if ($p && !empty($p['grants_factory'])) $factory = true;
+        // A TRIAL of the Factory tier never switches the factory side on: the
+        // switch is one-way, so a trial would leave a free factory behind.
+        if ($p && !empty($p['grants_factory']) && billing_factory_hold_is_real($clientId, (string) $code)) $factory = true;
     }
     foreach ($subs as $sub) {
         if (!billing_subscription_grants_access($sub)) continue;   // incl. paid-through grace
