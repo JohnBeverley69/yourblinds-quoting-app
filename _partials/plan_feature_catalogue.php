@@ -50,9 +50,15 @@ return [
     // ── The factory side (manufacturers) ────────────────────────────────
     'factory_pipeline' => ['Factory Pipeline',       'Every order from new to paid, with one button for the next step',          'factory'],
     'process_order'    => ['Process order',          'One click puts the blinds on the floor and orders the bought-in items',   'factory'],
-    'production_floor' => ['Production floor',       'Blinds on the floor by area, with barcode scanning at each stage',        'factory'],
+    'production_floor' => ['Production floor',       'Every blind on the floor by area, so you can see how far each one has got', 'factory'],
+    'scanning'         => ['Barcode scanning',       'Scan each blind in at every stage with a Wi-Fi scanner; progress updates itself', 'factory'],
     'worksheets'       => ['Worksheets and labels',  'Your own work tickets and roll labels, with cut sizes worked out',         'factory'],
     'build_rules'      => ['Build rules',            'Cut sizes and parts calculated for every blind you make',                 'factory'],
     'production_areas' => ['Production areas',       'Split the work across benches and routes',                                'factory'],
     'remakes'          => ['Remakes',                'Raise, approve and track remakes, and who pays for them',                 'factory'],
+    // NB (2026-10-17): the two below run on the MAIN factory's accounts pages
+    // (requireFactoryAccounts); a white-label factory doesn't have them yet —
+    // opening them up is part of the parked white-label work.
+    'dispatch'         => ['Dispatch and delivery notes', 'Tick the van run, print delivery notes and mark orders dispatched', 'factory'],
+    'auto_invoice'     => ['Auto-invoice on dispatch', 'Invoices raised and emailed the moment an order is dispatched',          'factory'],
 ];
