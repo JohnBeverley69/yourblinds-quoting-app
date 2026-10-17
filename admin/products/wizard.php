@@ -1608,7 +1608,7 @@ $activeNav = 'wizard';
                             Product, <?= (int) $systemCount ?>
                             system<?= $systemCount === 1 ? '' : 's' ?>,
                             <?= (int) $fabricCount ?>
-                            <?= strtolower((string) ($product['option_label'] ?? 'fabric')) ?><?= $fabricCount === 1 ? '' : 's' ?>,
+                            <?= e(strtolower((string) ($product['option_label'] ?? 'fabric'))) ?><?= $fabricCount === 1 ? '' : 's' ?>,
                             and all <?= (int) $totalTables ?>
                             price table<?= $totalTables === 1 ? '' : 's' ?> filled in.
                         </p>

@@ -1134,10 +1134,10 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
             <span class="cut-def">= <span class="m"><?= $e2($c['base']) ?></span> <?= $def ?></span>
             <span class="dirtag <?= $tagc ?>"><?= $e2($tag) ?></span>
             <span class="code-name">(<?= $e2($c['name']) ?>)</span>
-            <?php if ($bvHasLabel): ?><button type="button" class="lbbtn" onclick="lbVar(this,'<?= $e2($c['name']) ?>','<?= $e2($c['label']) ?>')">Label</button><?php endif; ?>
-            <button type="button" class="rnbtn" onclick="rnVar(this,'<?= $e2($c['name']) ?>')">Rename</button>
-            <?php if ($bvHasLabel): ?><button type="button" class="rnbtn" title="Move it to Working values — the floor never sees those" onclick="plVar(this,'<?= $e2($c['name']) ?>','1')">Hide</button><?php endif; ?>
-            <button type="button" class="rmbtn" onclick="rmVar(this,'<?= $e2($c['name']) ?>')">Remove</button>
+            <?php if ($bvHasLabel): ?><button type="button" class="lbbtn" onclick="lbVar(this,<?= $e2(json_encode((string) ($c['name']))) ?>,<?= $e2(json_encode((string) ($c['label']))) ?>)">Label</button><?php endif; ?>
+            <button type="button" class="rnbtn" onclick="rnVar(this,<?= $e2(json_encode((string) ($c['name']))) ?>)">Rename</button>
+            <?php if ($bvHasLabel): ?><button type="button" class="rnbtn" title="Move it to Working values — the floor never sees those" onclick="plVar(this,<?= $e2(json_encode((string) ($c['name']))) ?>,'1')">Hide</button><?php endif; ?>
+            <button type="button" class="rmbtn" onclick="rmVar(this,<?= $e2(json_encode((string) ($c['name']))) ?>)">Remove</button>
           </div>
           <div class="scroll">
           <table>
@@ -1178,7 +1178,7 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
         <div class="cut">
         <?php foreach ($calcs as $cc): ?>
           <div class="calcedit">
-            <div class="calcedit-head"><span class="cut-name"><?= $e2($cc['friendly']) ?></span> <span class="code-name">(<?= $e2($cc['name']) ?>)</span><?php if ($bvHasLabel): ?><button type="button" class="lbbtn" onclick="lbVar(this,'<?= $e2($cc['name']) ?>','<?= $e2($cc['label']) ?>')">Label</button><?php endif; ?><button type="button" class="rnbtn" onclick="rnVar(this,'<?= $e2($cc['name']) ?>')">Rename</button><?php if ($bvHasLabel): ?><button type="button" class="rnbtn" title="Move it to Working values — the floor never sees those" onclick="plVar(this,'<?= $e2($cc['name']) ?>','1')">Hide</button><?php endif; ?><button type="button" class="rmbtn" onclick="rmVar(this,'<?= $e2($cc['name']) ?>')">Remove</button></div>
+            <div class="calcedit-head"><span class="cut-name"><?= $e2($cc['friendly']) ?></span> <span class="code-name">(<?= $e2($cc['name']) ?>)</span><?php if ($bvHasLabel): ?><button type="button" class="lbbtn" onclick="lbVar(this,<?= $e2(json_encode((string) ($cc['name']))) ?>,<?= $e2(json_encode((string) ($cc['label']))) ?>)">Label</button><?php endif; ?><button type="button" class="rnbtn" onclick="rnVar(this,<?= $e2(json_encode((string) ($cc['name']))) ?>)">Rename</button><?php if ($bvHasLabel): ?><button type="button" class="rnbtn" title="Move it to Working values — the floor never sees those" onclick="plVar(this,<?= $e2(json_encode((string) ($cc['name']))) ?>,'1')">Hide</button><?php endif; ?><button type="button" class="rmbtn" onclick="rmVar(this,<?= $e2(json_encode((string) ($cc['name']))) ?>)">Remove</button></div>
             <?php foreach ($cc['rows'] as $ri => $r):
               $ctx = [];
               foreach ((array) ($r['cells'] ?? []) as $cv) { $cv = trim((string) $cv); if ($cv !== '') $ctx[] = $cv; }
@@ -1251,7 +1251,7 @@ $e2 = static fn ($s) => htmlspecialchars((string) $s, ENT_QUOTES, 'UTF-8');
         <summary>Show the internal plumbing (<?= (int) count($plumbing) ?> values)</summary>
         <?php foreach ($plumbing as $pl): ?>
           <div class="pl"><b><?= $e2($pl['friendly']) ?></b> <span class="code-name">(<?= $e2($pl['name']) ?>)</span>
-            <?php if ($bvHasLabel): ?><button type="button" class="lbbtn" onclick="lbVar(this,'<?= $e2($pl['name']) ?>','<?= $e2($pl['label']) ?>')">Label</button><button type="button" class="rnbtn" title="Put it back on the ticket" onclick="plVar(this,'<?= $e2($pl['name']) ?>','0')">Show</button><?php endif; ?>
+            <?php if ($bvHasLabel): ?><button type="button" class="lbbtn" onclick="lbVar(this,<?= $e2(json_encode((string) ($pl['name']))) ?>,<?= $e2(json_encode((string) ($pl['label']))) ?>)">Label</button><button type="button" class="rnbtn" title="Put it back on the ticket" onclick="plVar(this,<?= $e2(json_encode((string) ($pl['name']))) ?>,'0')">Show</button><?php endif; ?>
             — <?php
             $u = array_values(array_unique(array_filter($pl['results'])));
             echo $pl['bestfit'] ? 'from the Vogue chart, else <code>width ÷ spacing</code>' : $e2(implode(' · ', array_slice($u, 0, 3)));

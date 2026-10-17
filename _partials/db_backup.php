@@ -97,7 +97,9 @@ function pe_stream_tenant_dump(PDO $pdo, $handle, int $clientId, string $company
     $map = pe_tenant_scoping_map();
 
     $write("-- YourBlinds — PER-TENANT export\n");
-    $write('-- Tenant:    ' . $companyLabel . " (client_id=$clientId)\n");
+    // The company name is typed by the tenant: a line break in it would end this
+    // SQL comment and the rest would RUN when the dump is loaded. One line only.
+    $write('-- Tenant:    ' . preg_replace('/[\x00-\x1F\x7F]+/', ' ', $companyLabel) . " (client_id=$clientId)\n");
     $write('-- Generated: ' . date('c') . "\n");
     $write('-- DB:        ' . (string) $pdo->query('SELECT DATABASE()')->fetchColumn() . "\n");
     $write("--\n");
