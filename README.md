@@ -115,34 +115,47 @@ Requirements:
   `DB_HOST`, `DB_USER` and `DB_PASS` set.
 - The `mysql` client on the PATH, or `MYSQL=…`.
 
-It reads no `.env` and refuses any database host that isn't local.
+Safety:
+- It reads no `.env` and refuses any database host that isn't local.
+- Each run creates its own uniquely named scratch databases
+  (`yb_drill_<date>_<random>` and `yb_drillref_…`) and only ever drops those, so an
+  existing database is never touched.
+- It drops them at the end even if a step fails, because the dump holds real data.
+  Pass `--keep` to look around first.
+- The password reaches `mysql` through a private temporary option file, never on
+  the command line.
 
 ```sh
 php tests/tools/restore_drill.php /path/to/auto-daily-2026-10-17-030002.sql
 ```
 
 What it does:
-1. Loads the dump into a scratch `yb_restore_drill` database.
+1. Loads the dump.
 2. Runs every migration.
-3. Compares every table and column with `tests/schema.sql`.
+3. Compares the schema with `tests/schema.sql`, loaded on the same server. It
+   compares tables; columns (type, NULL, default); indexes (unique or not, and
+   column order); and foreign keys. Anything the code expects that is missing or
+   different counts as a FAIL. Items only in the backup are listed for information.
 4. Counts the key rows and checks that the factory company exists.
 5. Re-prices every saved quote line's base price with the current engine.
-6. Drops the scratch databases, because the dump holds real data. Pass `--keep` to
-   look around first.
 
 Exit code 0 means the drill passed. Expected output, from the drill run on 2026-10-17
 (the 13:15 live download, on XAMPP MariaDB 10.4):
 
 ```
-PASS 1. Loaded: 110 tables in 85s (MariaDB: collation swapped for the drill)
-PASS 2. Migrations: 123 of 123 ran clean
-PASS 3. Schema: every table and column the code expects is present
-     (info) only in the backup: tour_events.…   ← creates itself on first use; harmless
+PASS 1. Loaded: 110 tables in 78s (MariaDB: collation swapped for the drill)
+PASS 2. Migrations: 124 of 124 ran clean
+PASS 3. Schema: 109 tables, 1241 columns (type, NULL, default), 348 indexes, 63 foreign keys compared — all match
+     (info) only in the backup: table tour_events; …   ← creates itself on first use; harmless
 PASS 4. Data: 56 companies, 55 users, 1020 products, 15 quotes, 16 quote lines, 17 customers, 10 invoices; factory company #3 present
 PASS 5. Re-price: 16 saved quote line(s); 16 match to the penny
-6. Scratch databases dropped (the backup holds real data).
 RESULT: PASS
+Scratch databases dropped (the backup holds real data).
 ```
+
+Step 3's first run found a real drift: `client_users.role` was a stale ENUM in
+`tests/schema.sql`, without `fitter` or `factory`, while live has VARCHAR(32).
+`migrate_user_role_text.php` fixed it.
 
 How to read the result:
 - **Step 1:** live dumps use MySQL 8's `utf8mb4_0900_ai_ci` collation. On MariaDB

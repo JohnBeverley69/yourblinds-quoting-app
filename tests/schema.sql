@@ -387,7 +387,7 @@ CREATE TABLE `client_users` (
   `last_name` varchar(80) DEFAULT NULL,
   `email` varchar(150) DEFAULT NULL,
   `password_hash` varchar(255) NOT NULL,
-  `role` enum('admin','owner','office','sales','agent','readonly') NOT NULL DEFAULT 'sales',
+  `role` varchar(32) NOT NULL DEFAULT 'sales',
   `can_create_quotes` tinyint(1) NOT NULL DEFAULT 1,
   `can_create_orders` tinyint(1) NOT NULL DEFAULT 0,
   `can_factory_office` tinyint(1) NOT NULL DEFAULT 0,
